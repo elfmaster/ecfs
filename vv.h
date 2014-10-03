@@ -18,6 +18,8 @@
 #include <signal.h>
 #include <sys/user.h>
 #include <sys/procfs.h> /* struct elf_prstatus */
+#include "dwarf.h"
+#include "libdwarf.h"
 
 #define MAX_TID 256
 #define PT_ATTACHED 1
@@ -35,6 +37,11 @@
 #define PS_DEFUNCT 16
 #define PS_RUNNING 32
 #define PS_UNKNOWN 64
+
+struct fde_func_data { /* For eh_frame.c */ 
+        uint64_t addr;
+        size_t size;
+};
 
 struct list_head {
 	struct list_head *next;
@@ -164,4 +171,5 @@ memdesc_t * take_process_snapshot(pid_t);
 void * heapAlloc(size_t);
 char * xstrdup(const char *);
 char * xfmtstrdup(char *fmt, ...);
+size_t get_all_functions(const char *filepath, struct fde_func_data **funcs);
 

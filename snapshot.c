@@ -324,7 +324,7 @@ memdesc_t * take_process_snapshot(pid_t pid)
 
 int dump_process_snapshot(desc_t *desc, int partial)
 {
-	int fd, ofd, i = 0, j, k, text_index, data_index1, data_index2;
+	int fd, ofd, i = 0, j, k, text_index, data_index1, data_index2, text_shdr_index;
 	ElfW(Ehdr) *ehdr;
 	ElfW(Phdr) *phdr;
 	/* Values within the range of the executbale itself */
@@ -483,7 +483,7 @@ int dump_process_snapshot(desc_t *desc, int partial)
                                
 	size_t bytes_written = 0;
 	
-	nphdr = (ElfW(Phdr) *)heapAlloc(memdesc->mapcount * sizeof(ElfW(Phdr)));
+	nphdr = (ElfW(Phdr) *)heapAlloc((memdesc->mapcount + ehdr->e_phnum) * sizeof(ElfW(Phdr)));
 	for (i = 0; i < ehdr->e_phnum; i++)
 		memcpy((void *)&nphdr[i], (void *)&phdr[i], sizeof(ElfW(Phdr)));
 	for (k = 0, j = 0; j < memdesc->mapcount; j++) {
@@ -743,6 +743,7 @@ int dump_process_snapshot(desc_t *desc, int partial)
 	/*
 	 * .text
 	 */
+	text_shdr_index = scount;
 	shdr[scount].sh_type = SHT_PROGBITS;
 	shdr[scount].sh_offset = textOffset;
 	shdr[scount].sh_addr = textVaddr;
@@ -803,7 +804,6 @@ int dump_process_snapshot(desc_t *desc, int partial)
         shdr[scount].sh_link = 0;
         shdr[scount].sh_entsize = 0;
         shdr[scount].sh_size = (ElfW(Off))((ehframeVaddr + ehframeSiz) - textVaddr);
-	printf("size: %lx + %lx - %lx = %lx\n", ehframeVaddr + ehframeSiz - textVaddr);
         shdr[scount].sh_addralign = 16;
         shdr[scount].sh_name = stoffset;
         strcpy(&StringTable[stoffset], ".eh_frame");
@@ -1040,8 +1040,30 @@ int dump_process_snapshot(desc_t *desc, int partial)
 
         close(fd);
 
+	/*
+	 * Now that we have written a nearly complete file, with
+	 * an in-tact eh_frame and eh_frame_hdr section, we can
+	 * use libdwarf to parse the call frame data and build
+	 * a local symbol table of functions.
+	 */
+	struct fde_func_data *fndata, *fdp;
+	size_t fncount;
+	ElfW(Sym) *symtab = (ElfW(Sym) *)heapAlloc(sizeof(ElfW(Sym)));
 
+        if ((fncount = get_all_functions(filepath, &fndata)) < 0) {
+                printf("[!] get_all_functions() failed, cannot build .symtab");
+		goto done;
+        } 
+        fdp = (struct fde_func_data *)fndata; 
 	
+	for (i = 0; i < fncount; i++) {
+		symtab[i].st_value = fdp[i].addr;
+		symtab[i].st_size = fdp[i].size;
+	 	symtab[i].st_info = (((STB_GLOBAL) << 4) + ((STT_FUNC) & 0xf));
+		symtab[i].st_other = 0;
+		symtab[i].st_shndx = text_shdr_index;
+		
+	}
 done:
 	close(fd);
 	return 0;
