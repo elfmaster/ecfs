@@ -802,7 +802,8 @@ int dump_process_snapshot(desc_t *desc, int partial)
         shdr[scount].sh_info = 0;
         shdr[scount].sh_link = 0;
         shdr[scount].sh_entsize = 0;
-        shdr[scount].sh_size = 244;
+        shdr[scount].sh_size = (ElfW(Off))((ehframeVaddr + ehframeSiz) - textVaddr);
+	printf("size: %lx + %lx - %lx = %lx\n", ehframeVaddr + ehframeSiz - textVaddr);
         shdr[scount].sh_addralign = 16;
         shdr[scount].sh_name = stoffset;
         strcpy(&StringTable[stoffset], ".eh_frame");
