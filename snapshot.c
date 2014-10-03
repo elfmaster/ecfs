@@ -776,7 +776,7 @@ int dump_process_snapshot(desc_t *desc, int partial)
 	scount++;
 
 	/*
-	 * .eh_frame
+	 * .eh_frame_hdr
 	 */
 	shdr[scount].sh_type = SHT_PROGBITS;
 	shdr[scount].sh_offset = ehframeOff;
@@ -788,10 +788,27 @@ int dump_process_snapshot(desc_t *desc, int partial)
 	shdr[scount].sh_size = ehframeSiz;
 	shdr[scount].sh_addralign = 16;
 	shdr[scount].sh_name = stoffset;
-	strcpy(&StringTable[stoffset], ".eh_frame");
-	stoffset += strlen(".eh_frame") + 1;
+	strcpy(&StringTable[stoffset], ".eh_frame_hdr");
+	stoffset += strlen(".eh_frame_hdr") + 1;
 	scount++;
 	
+	/*
+	 * .eh_frame
+	 */
+        shdr[scount].sh_type = SHT_PROGBITS;
+        shdr[scount].sh_offset = ehframeOff + (ehframeSiz + 4);
+        shdr[scount].sh_addr = ehframeVaddr + ehframeSiz;
+        shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = 244;
+        shdr[scount].sh_addralign = 16;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".eh_frame");
+        stoffset += strlen(".eh_frame") + 1;
+        scount++;
+
 	/*
 	 * .dynamic 
 	 */
@@ -947,7 +964,6 @@ int dump_process_snapshot(desc_t *desc, int partial)
 	
 	scount++;
 
-	printf("scount: %d\n", scount);
 	int e_shstrndx = scount - 1;
 	
 	for (i = 0; i < scount; i++) 
@@ -979,7 +995,7 @@ int dump_process_snapshot(desc_t *desc, int partial)
 	ehdr->e_shoff = e_shoff;
 	ehdr->e_shstrndx = e_shstrndx;
 	ehdr->e_shnum = scount;
-	ehdr->e_type = ET_CORE;
+	ehdr->e_type = ET_NONE;
 
 	msync(mem, st.st_size, MS_SYNC);
 	munmap(mem, st.st_size);
