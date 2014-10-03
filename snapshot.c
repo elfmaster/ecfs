@@ -676,7 +676,7 @@ int dump_process_snapshot(desc_t *desc, int partial)
 	shdr[scount].sh_addr = dsymVaddr;
 	shdr[scount].sh_flags = SHF_ALLOC;
 	shdr[scount].sh_info = 0;
-	shdr[scount].sh_link = 0;
+	shdr[scount].sh_link = scount + 1;
 	shdr[scount].sh_entsize = sizeof(ElfW(Sym));
 	shdr[scount].sh_size = UNKNOWN_SHDR_SIZE;
 	shdr[scount].sh_addralign = sizeof(long);
@@ -947,6 +947,40 @@ int dump_process_snapshot(desc_t *desc, int partial)
 	scount++;
 
 	/*
+	 * .symtab
+	 */
+        shdr[scount].sh_type = SHT_SYMTAB;
+        shdr[scount].sh_offset = 0;
+        shdr[scount].sh_addr = 0;
+        shdr[scount].sh_flags = 0;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = scount + 1;
+        shdr[scount].sh_entsize = sizeof(ElfW(Sym));
+        shdr[scount].sh_size;
+        shdr[scount].sh_addralign = 4;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".symtab");
+        stoffset += strlen(".symtab") + 1;
+        scount++;
+
+	/*
+	 * .strtab
+	 */
+        shdr[scount].sh_type = SHT_STRTAB;
+        shdr[scount].sh_offset = 0;
+        shdr[scount].sh_addr = 0;
+        shdr[scount].sh_flags = 0;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = 0;
+        shdr[scount].sh_addralign = 4;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".strtab");
+        stoffset += strlen(".strtab") + 1;
+        scount++;
+
+	/*
  	 * .shstrtab
 	 */
 	shdr[scount].sh_type = SHT_STRTAB;
@@ -956,22 +990,23 @@ int dump_process_snapshot(desc_t *desc, int partial)
 	shdr[scount].sh_info = 0;
 	shdr[scount].sh_link = 0;
 	shdr[scount].sh_entsize = 0;
-	shdr[scount].sh_size = stoffset + strlen(".shstrtab") + 1;
+	shdr[scount].sh_size = stoffset + strlen(".shstrtab") + 1; 
 	shdr[scount].sh_addralign = 1;
 	shdr[scount].sh_name = stoffset;
-	
 	strcpy(&StringTable[stoffset], ".shstrtab");
 	stoffset += strlen(".shstrtab") + 1;
-	
 	scount++;
+	/*
+	 * We will add the actual sections for .symtab and .strtab
+	 * after we write out the current section headers first and
+	 * use them to retrieve symtab info from eh_frame
+	 */
 
 	int e_shstrndx = scount - 1;
-	
 	for (i = 0; i < scount; i++) 
 		write(fd, (char *)&shdr[i], sizeof(ElfW(Shdr)));
 	
 	write(fd, (char *)StringTable, stoffset);
-	
 	fsync(fd);
 	close(fd);
 	
@@ -1002,7 +1037,10 @@ int dump_process_snapshot(desc_t *desc, int partial)
 	munmap(mem, st.st_size);
 
 	close(fd);
- 
+
+	/*
+ 	 * Open one last time to add symtab
+	 */
        if ((fd = open(filepath, O_RDWR)) < 0) {
                 perror("open");
                 exit(-1);
@@ -1039,7 +1077,7 @@ int dump_process_snapshot(desc_t *desc, int partial)
         munmap(mem, st.st_size);
 
         close(fd);
-
+	
 	/*
 	 * Now that we have written a nearly complete file, with
 	 * an in-tact eh_frame and eh_frame_hdr section, we can
@@ -1048,24 +1086,86 @@ int dump_process_snapshot(desc_t *desc, int partial)
 	 */
 	struct fde_func_data *fndata, *fdp;
 	size_t fncount;
-	ElfW(Sym) *symtab = (ElfW(Sym) *)heapAlloc(sizeof(ElfW(Sym)));
 
         if ((fncount = get_all_functions(filepath, &fndata)) < 0) {
                 printf("[!] get_all_functions() failed, cannot build .symtab");
 		goto done;
         } 
+	ElfW(Sym) *symtab = (ElfW(Sym) *)alloca(sizeof(ElfW(Sym)) * fncount);
         fdp = (struct fde_func_data *)fndata; 
-	
+	char *strtab = alloca(8192);
+	char *sname;
+	int symstroff = 0;
+	int symcount = fncount;
+
 	for (i = 0; i < fncount; i++) {
 		symtab[i].st_value = fdp[i].addr;
 		symtab[i].st_size = fdp[i].size;
 	 	symtab[i].st_info = (((STB_GLOBAL) << 4) + ((STT_FUNC) & 0xf));
 		symtab[i].st_other = 0;
 		symtab[i].st_shndx = text_shdr_index;
+		symtab[i].st_name = symstroff;
+		sname = xfmtstrdup("sub_%lx", fdp[i].addr);
+		strcpy(&strtab[symstroff], sname);
+		symstroff += strlen(sname) + 1;
+		free(sname);	
 		
 	}
-done:
+	size_t symtab_size = fncount * sizeof(ElfW(Sym));
+	/*
+	 * We append symbol table sections last 
+	 */
+ 	if ((fd = open(filepath, O_RDWR)) < 0) {
+                perror("open");
+                exit(-1);
+        }
+
+        if (fstat(fd, &st) < 0) {
+                perror("fstat");
+                exit(-1);
+        }
+
+        /* This final time of open(), we map it in */
+        mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+        if (mem == MAP_FAILED) {
+                perror("mmap");
+                exit(-1);
+        }
+	ehdr = (ElfW(Ehdr) *)mem;
+
+        if (lseek(fd, 0, SEEK_END) < 0) {
+                perror("open");
+                exit(-1);
+        }
+	
+	uint64_t symtab_offset = lseek(fd, 0, SEEK_CUR);
+	for (i = 0; i < symcount; i++) 
+		write(fd, (char *)&symtab[i], sizeof(ElfW(Sym))); 
+			
+	StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
+	/* Write section hdr string table */
+	uint64_t stloff = lseek(fd, 0, SEEK_CUR);
+	write(fd, strtab, symstroff);
+	shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (!strcmp(&StringTable[shdr[i].sh_name], ".symtab")) {
+			shdr[i].sh_offset = symtab_offset;
+			shdr[i].sh_size = sizeof(ElfW(Sym)) * fncount;
+		} else
+		if (!strcmp(&StringTable[shdr[i].sh_name], ".strtab")) {
+			shdr[i].sh_offset = stloff;
+			shdr[i].sh_size = symstroff;
+		}
+	}
+	
+	
+	msync(mem, st.st_size, MS_SYNC); // just incase
+	munmap(mem, st.st_size);
 	close(fd);
+
+done:
+	if (fd > 2)
+		close(fd);
 	return 0;
 
 

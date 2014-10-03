@@ -80,7 +80,13 @@ int get_func_data(Dwarf_Debug dbg, Dwarf_Fde fde, int fdenum, struct fde_func_da
 		return -1;
 	}
 		
-	func_data->addr = lowpc;
+	/*
+	 * XXX
+	 * Workaround here; it should be func_data->addr = lowpc;
+	 * we add 4 though to offset a weird misalignment issue
+	 * in reconstructing the sections for eh_frame and eh_frame_hdr.
+	 */
+	func_data->addr = (lowpc + 4);
 	func_data->size = func_length;
 
 	return 0;
