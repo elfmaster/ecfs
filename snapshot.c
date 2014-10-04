@@ -511,6 +511,7 @@ int dump_process_snapshot(desc_t *desc, int partial)
 	/*
 	 * Write out ELF text/data segment
 	 */
+	size_t b;
 	for (i = 0; i < memdesc->mapcount; i++) {
 		if (!memdesc->maps[i].elfmap)
 			continue;
@@ -520,7 +521,8 @@ int dump_process_snapshot(desc_t *desc, int partial)
 			len = memdesc->maps[i].size;
 			do {
 				if (len < CHUNK_SIZE) {
-					write(fd, (char *)&memdesc->maps[i].mem[offset], len);
+					b = write(fd, (char *)&memdesc->maps[i].mem[offset], len);
+					bytes_written += b;
 					break;
 				}
 				write(fd, (char *)&memdesc->maps[i].mem[offset], CHUNK_SIZE);
@@ -532,10 +534,12 @@ int dump_process_snapshot(desc_t *desc, int partial)
 		if ((dataVaddr & ~(PAGE_SIZE - 1)) == memdesc->maps[i].base) {	
 			/* Write out ELF data segment */
 			offset = dataVaddr - memdesc->maps[i].base;
+
 			len = memdesc->maps[i].size;
 			do {
 				if (len < CHUNK_SIZE) {
-					write(fd, (char *)&memdesc->maps[i].mem[offset], len);
+					b = write(fd, (char *)&memdesc->maps[i].mem[offset], len);
+					bytes_written += b;
 					break;
 				}
 				write(fd, (char *)&memdesc->maps[i].mem[offset], CHUNK_SIZE);
@@ -548,7 +552,8 @@ int dump_process_snapshot(desc_t *desc, int partial)
 				len = memdesc->maps[i + 1].size;
 				do {
 					if (len < CHUNK_SIZE) {
-						write(fd, (char *)&memdesc->maps[i + 1].mem[offset], len);
+						b = write(fd, (char *)&memdesc->maps[i + 1].mem[offset], len);
+						bytes_written += b;
 						break;
 					}
 					write(fd, (char *)&memdesc->maps[i + 1].mem[offset], CHUNK_SIZE);
@@ -578,7 +583,8 @@ int dump_process_snapshot(desc_t *desc, int partial)
 		}
 		do {
 	   		if (len < CHUNK_SIZE) {
-                        	write(fd, (char *)&memdesc->maps[i + 1].mem[offset], len);
+                        	b = write(fd, (char *)&memdesc->maps[i + 1].mem[offset], len);
+				bytes_written += b;
                                 break;
                         }
                         write(fd, (char *)&memdesc->maps[i + 1].mem[offset], CHUNK_SIZE);
