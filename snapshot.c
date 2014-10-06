@@ -1,3 +1,9 @@
+/*
+ * ECFS (Extended core file snapshot) utility (C) 2014 Ryan O'Neill
+ * http://www.bitlackeys.org/#research
+ * elfmaster@zoho.com
+ */
+
 #include "vv.h"
 
 #define CHUNK_SIZE 40960
@@ -108,7 +114,7 @@ static int get_maps(pid_t pid, mappings_t *maps, const char *path)
 			maps[lc].anonmap_exe++; // executable anonymous mapping
 		
 		/* 	
-		 * Set segment permissions
+		 * Set segment permissions (Or is it a special file?)
 	 	 */
 		if (strstr(tmp, "r--p")) 
 			maps[lc].p_flags = PF_R;
@@ -130,8 +136,28 @@ static int get_maps(pid_t pid, mappings_t *maps, const char *path)
 		else
 		if (strstr(tmp, "rwxp"))
 			maps[lc].p_flags = PF_X|PF_W|PF_R;
-
-					
+		else
+		if (strstr(tmp, "r--s"))
+			maps[lc].special++;
+		else
+		if (strstr(tmp, "rw-s"))
+			maps[lc].special++;
+		else
+		if (strstr(tmp, "-w-s"))
+			maps[lc].special++;
+		else
+		if (strstr(tmp, "--xs"))
+			maps[lc].special++;
+		else
+		if (strstr(tmp, "r-xs"))
+			maps[lc].special++;
+		else
+		if (strstr(tmp, "-wxs"))
+			maps[lc].special++;
+		else
+		if (strstr(tmp, "rwxs"))
+			maps[lc].special++;
+		
 	}
 	fclose(fd);
 
@@ -309,13 +335,17 @@ memdesc_t * take_process_snapshot(pid_t pid)
 		} else
 		
 	for (i = 0; i < memdesc->mapcount; i++) {
-		if (memdesc->maps[i].padding)
+		if (memdesc->maps[i].padding || memdesc->maps[i].special)
 			continue;
 		memdesc->maps[i].mem = mmap(NULL, memdesc->maps[i].size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0); 
 		if (memdesc->maps[i].mem == MAP_FAILED) {
 			perror("mmap");
 			exit(-1);
 		}
+		if (madvise(memdesc->maps[i].mem, memdesc->maps[i].size, MADV_HUGEPAGE) < 0) {
+			printf("madvise failed; this may result in performance degradation during snapshot creation\n");
+		}
+
 		if (pid_read(pid, (void *)memdesc->maps[i].mem, (void *)memdesc->maps[i].base, memdesc->maps[i].size) < 0) 
 			printf("[!] Unable to read mapping region %lx: %s\n", memdesc->maps[i].base, strerror(errno));
 	}
@@ -516,6 +546,8 @@ int dump_process_snapshot(desc_t *desc)
 		if (memdesc->maps[j].padding)
 			continue;
 		if (memdesc->maps[j].elfmap)
+			continue;
+		if (memdesc->maps[j].special)
 			continue;
 		nphdr[i + k].p_type = PT_LOAD;
 		nphdr[i + k].p_vaddr = memdesc->maps[j].base;

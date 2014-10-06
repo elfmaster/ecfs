@@ -92,6 +92,7 @@ typedef struct mappings {
 	int heap;
 	int shlib;
 	int padding;
+	int special;
 	int anonmap_exe;
 	int filemap;
 	int filemap_exe;

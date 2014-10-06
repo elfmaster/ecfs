@@ -1,3 +1,10 @@
+/*
+ * ECFS (Extended core file snapshot) utility (C) 2014 Ryan O'Neill
+ * http://www.bitlackeys.org/#research
+ * elfmaster@zoho.com
+ */
+
+
 #include "vv.h"
 
 void * heapAlloc(size_t len)

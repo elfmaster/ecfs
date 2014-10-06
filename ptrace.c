@@ -1,3 +1,9 @@
+/*
+ * ECFS (Extended core file snapshot) utility (C) 2014 Ryan O'Neill
+ * http://www.bitlackeys.org/#research
+ * elfmaster@zoho.com
+ */
+
 #include "vv.h"
 
 int waitpid2(pid_t pid, int *status, int options)
