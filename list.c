@@ -1,6 +1,6 @@
 #include "vv.h"
 
-int insert_front(list_t **list, int item)
+int insert_front(list_t **list, desc_t *desc)
 {
 	node_t *new = malloc(sizeof(node_t));
 	if (new == NULL)
@@ -8,7 +8,9 @@ int insert_front(list_t **list, int item)
 
 	node_t *tmp;
 
-	new->item = item;
+	new->desc = (desc_t *)heapAlloc(sizeof(desc_t));
+	memcpy((void *)new->desc, (void *)desc, sizeof(desc_t));
+
 	if ((*list)->head == NULL) {
 		(*list)->head = new;
 		(*list)->head->prev = NULL;
@@ -25,14 +27,16 @@ int insert_front(list_t **list, int item)
 	return 0;
 }
 
-int insert_end(list_t **list, int item)
+int insert_end(list_t **list, desc_t *desc)
 {
 	node_t *new = malloc(sizeof(node_t));
 	if (new == NULL)
 		return -1;
 	node_t *tmp;
 	
-	new->item = item;
+	new->desc = (desc_t *)heapAlloc(sizeof(desc_t));
+        memcpy((void *)new->desc, (void *)desc, sizeof(desc_t));
+
 	if ((*list)->head == NULL) {
 		(*list)->head = new;
 		(*list)->head->prev = NULL;
@@ -51,6 +55,7 @@ int insert_end(list_t **list, int item)
 
 	return 0;
 }
+
 /*
 int main(void)
 {
@@ -59,10 +64,10 @@ int main(void)
 	list->head = NULL;
 	list->tail = NULL;
 
-	insert_end(&list, 1);
-	insert_end(&list, 2);
-	insert_end(&list, 3);
-	insert_end(&list, 4);
+	insert_front(&list, 1);
+	insert_front(&list, 2);
+	insert_front(&list, 3);
+	insert_front(&list, 4);
 	
 	for (current = list->tail; current != NULL; current = current->prev)
 		printf("%d\n", current->item);

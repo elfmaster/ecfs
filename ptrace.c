@@ -144,7 +144,9 @@ int pid_detach_direct(pid_t pid)
                         return -1;
                 }
         }
+#if DEBUG
         printf("[+] PT_TID_DETACHED -> %d\n", pid);
+#endif
         return 0;
 }
 
@@ -195,7 +197,9 @@ int pid_attach_direct(pid_t pid)
                         goto detach;
         } while(1);
 
+#if DEBUG
         printf("[+] PT_TID_ATTACHED -> %d\n", pid);
+#endif
         return 0;
 
 

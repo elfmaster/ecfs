@@ -44,9 +44,9 @@ static ElfW(Off) get_internal_sh_offset(memdesc_t *memdesc, int type)
 
 static int get_maps(pid_t pid, mappings_t *maps, const char *path)
 {
-	char mpath[256], buf[256], tmp[256], *p;
+	char mpath[256], buf[256], tmp[256], *p, *q = alloca(32);
 	FILE *fd;
-	int lc;
+	int lc, i;
 	
 	snprintf(mpath, sizeof(mpath), "/proc/%d/maps", pid);
 	
@@ -72,6 +72,13 @@ static int get_maps(pid_t pid, mappings_t *maps, const char *path)
 		else
 		if (strstr(tmp, "[stack]"))
 			maps[lc].stack++;
+		else
+		if (strstr(tmp, "[stack:")) { /* thread stack */
+			for (i = 0, p = strchr(tmp, ':') + 1; *p != ']'; p++, i++)
+				q[i] = *p;
+			maps[i].thread_stack++;
+			maps[i].stack_tid = atoi(q);
+		}
 		else 
 		if (strstr(tmp, "---p")) 
 			maps[lc].padding++;
@@ -146,6 +153,19 @@ static int get_map_count(pid_t pid)
 	return lc;
 }
 	
+/*
+ * After each is dumped lets free up the memory mappings
+ * before storing the snapshot descriptor in a linked list.
+ */
+int free_snapshot_maps(memdesc_t *memdesc)
+{
+	int i;
+	
+	for (i = 0; i < memdesc->mapcount; i++) 
+		if (memdesc->maps[i].mem) 
+			munmap(memdesc->maps[i].mem, memdesc->maps[i].size);
+}
+
 static int proc_status(pid_t pid, memdesc_t *memdesc)
 {
 	FILE *fd;
@@ -244,6 +264,8 @@ memdesc_t * take_process_snapshot(pid_t pid)
 	int i;
 	
 	memset((void *)memdesc, 0, sizeof(memdesc_t));
+	
+	printf("[+] Taking snapshot of process %d\n", pid);
 
 	memdesc->mapcount = get_map_count(pid);
 	if (memdesc->mapcount < 0) {
@@ -322,7 +344,7 @@ memdesc_t * take_process_snapshot(pid_t pid)
 }
 
 
-int dump_process_snapshot(desc_t *desc, int partial)
+int dump_process_snapshot(desc_t *desc)
 {
 	int fd, ofd, i = 0, j, k, text_index, data_index1, data_index2, text_shdr_index;
 	ElfW(Ehdr) *ehdr;
@@ -338,12 +360,12 @@ int dump_process_snapshot(desc_t *desc, int partial)
 	ElfW(Dyn) *dyn;
 	ElfW(Shdr) *shdr;
 	ElfW(Phdr) *nphdr;
-
+	
+	uint8_t *dynseg = alloca(8192);
 	struct stat st;
 	memdesc_t *memdesc = &desc->memory;
 	uint8_t *exemem;
 	unsigned long tmpval;
-
 	char *filepath = xfmtstrdup("%s/%s.%d", desc->snapdir, memdesc->comm, memdesc->pid);
 	
 	do {
@@ -355,6 +377,7 @@ int dump_process_snapshot(desc_t *desc, int partial)
 			
 	} while(1);
 		
+	printf("[+] Processing data and creating snapshot file: %s\n", filepath);
 	if ((fd = open(filepath, O_WRONLY|O_CREAT|O_TRUNC, S_IRWXU)) < 0) {
 		perror("open");
 		exit(-1);
@@ -369,7 +392,6 @@ int dump_process_snapshot(desc_t *desc, int partial)
 		data_index2 = text_index + 2;
 		break;
 	}
-	
 	switch(ehdr->e_type) {
                 case ET_EXEC:
                         desc->exe_type = ET_EXEC;
@@ -433,9 +455,13 @@ int dump_process_snapshot(desc_t *desc, int partial)
 			dynVaddr = phdr[i].p_vaddr + (desc->exe_type == ET_EXEC ? 0 : textVaddr);
 			dynOff = phdr[i].p_offset;
 			dynSiz = phdr[i].p_filesz;
-			dyn = (ElfW(Dyn) *)&memdesc->maps[data_index1].mem[phdr[i].p_offset];
+			pid_attach_direct(memdesc->pid); 
+			ElfW(Addr) dvaddr = phdr[i].p_vaddr + (desc->exe_type == ET_EXEC ? 0 : textVaddr);
+			pid_read(memdesc->pid, (void *)dynseg, (void *)dvaddr, phdr[i].p_memsz);
+			pid_detach_direct(memdesc->pid);
+			dyn = (ElfW(Dyn) *)dynseg;
 		        for (j = 0; dyn[j].d_tag != DT_NULL; j++) {
-				 switch(dyn[j].d_tag) {
+				switch(dyn[j].d_tag) {
 					case DT_REL:
 						relVaddr = dyn[j].d_un.d_val;
 						relOff = relVaddr - textVaddr;
@@ -566,9 +592,10 @@ int dump_process_snapshot(desc_t *desc, int partial)
 		} 
 	}
 	
-	if (partial) 
-		goto done;
-	
+	/*
+	 * Write out rest of memory mappings:
+	 * heap, stack, shared libraries, etc.
+	 */
 	for (i = 0; i < memdesc->mapcount; i++) {
 		if (memdesc->maps[i].elfmap)
 			continue;
@@ -684,7 +711,7 @@ int dump_process_snapshot(desc_t *desc, int partial)
 	shdr[scount].sh_info = 0;
 	shdr[scount].sh_link = scount + 1;
 	shdr[scount].sh_entsize = sizeof(ElfW(Sym));
-	shdr[scount].sh_size = UNKNOWN_SHDR_SIZE;
+	shdr[scount].sh_size = dstrOff - dsymOff;
 	shdr[scount].sh_addralign = sizeof(long);
 	shdr[scount].sh_name = stoffset;
 	strcpy(&StringTable[stoffset], ".dynsym");
@@ -1091,19 +1118,20 @@ int dump_process_snapshot(desc_t *desc, int partial)
 	 * a local symbol table of functions.
 	 */
 	struct fde_func_data *fndata, *fdp;
-	size_t fncount;
-
+	int fncount;
+	
         if ((fncount = get_all_functions(filepath, &fndata)) < 0) {
                 printf("[!] get_all_functions() failed, cannot build .symtab");
-		goto done;
-        } 
+        	goto done; 
+	} 
 	ElfW(Sym) *symtab = (ElfW(Sym) *)alloca(sizeof(ElfW(Sym)) * fncount);
         fdp = (struct fde_func_data *)fndata; 
 	char *strtab = alloca(8192);
 	char *sname;
 	int symstroff = 0;
 	int symcount = fncount;
-
+	int dsymcount = 0;
+	
 	for (i = 0; i < fncount; i++) {
 		symtab[i].st_value = fdp[i].addr;
 		symtab[i].st_size = fdp[i].size;
@@ -1138,7 +1166,7 @@ int dump_process_snapshot(desc_t *desc, int partial)
                 exit(-1);
         }
 	ehdr = (ElfW(Ehdr) *)mem;
-
+	
         if (lseek(fd, 0, SEEK_END) < 0) {
                 perror("open");
                 exit(-1);
@@ -1147,7 +1175,7 @@ int dump_process_snapshot(desc_t *desc, int partial)
 	uint64_t symtab_offset = lseek(fd, 0, SEEK_CUR);
 	for (i = 0; i < symcount; i++) 
 		write(fd, (char *)&symtab[i], sizeof(ElfW(Sym))); 
-			
+				
 	StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
 	/* Write section hdr string table */
 	uint64_t stloff = lseek(fd, 0, SEEK_CUR);
@@ -1161,10 +1189,25 @@ int dump_process_snapshot(desc_t *desc, int partial)
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".strtab")) {
 			shdr[i].sh_offset = stloff;
 			shdr[i].sh_size = symstroff;
+		} else
+		if (!strcmp(&StringTable[shdr[i].sh_name], ".dynsym")) 
+			dsymcount = shdr[i].sh_size / sizeof(ElfW(Sym));
+			
+	}
+	/*
+	 * We resize the global offset table now that we know how many dynamic
+	 * symbols there are. The GOT has the first 3 entries reserved (Which is sizeof(long) * 3)
+	 * plus the size of dsymcount longwords.
+	 */
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (!strcmp(&StringTable[shdr[i].sh_name], ".got.plt")) {
+			shdr[i].sh_size = (dsymcount * sizeof(ElfW(Addr))) + (3 * sizeof(ElfW(Addr)));
+			break;
 		}
 	}
 	
 	
+mid_failure:
 	msync(mem, st.st_size, MS_SYNC); // just incase
 	munmap(mem, st.st_size);
 	close(fd);

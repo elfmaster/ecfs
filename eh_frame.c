@@ -93,7 +93,7 @@ int get_func_data(Dwarf_Debug dbg, Dwarf_Fde fde, int fdenum, struct fde_func_da
 }
 
 
-size_t get_all_functions(const char *filepath, struct fde_func_data **funcs)
+int get_all_functions(const char *filepath, struct fde_func_data **funcs)
 {
 	int fd;
 	int i;
@@ -129,19 +129,19 @@ size_t get_all_functions(const char *filepath, struct fde_func_data **funcs)
 	
 	res = dwarf_get_fde_list_eh(dbg, &cie_data, &cie_element_count, &fde_data, &fde_element_count, &error);
         if(res == DW_DLV_NO_ENTRY) {
-                fprintf(stderr, "eh_frame parsing: No frame data present ");
+                fprintf(stderr, "eh_frame parsing err1: No frame data present\n");
                 return -1;
         }
 	
 	if ((*funcs = parse_frame_data(dbg)) == NULL) {
-		fprintf(stderr, "eh_frame parsing: parse_frame_data() failed\n");
+		fprintf(stderr, "eh_frame parsing err2: parse_frame_data() failed\n");
 		return -1;
 	}
 	fndata = *funcs;
 	
 	res = dwarf_finish(dbg, &error);
 	if(res != DW_DLV_OK) 
-        	fprintf(stderr, "eh_frame parsing: dwarf_finish failed!\n");
+        	fprintf(stderr, "eh_frame parsing err3: dwarf_finish failed!\n");
 
 	close(fd);
     	

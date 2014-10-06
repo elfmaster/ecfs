@@ -88,6 +88,7 @@ typedef struct mappings {
 	size_t size;
 	int elfmap;
 	int stack;
+	int thread_stack;
 	int heap;
 	int shlib;
 	int padding;
@@ -96,6 +97,7 @@ typedef struct mappings {
 	int filemap_exe;
 	int vdso;
 	int vsyscall;
+	int stack_tid;
 	size_t sh_offset;
 	uint32_t p_flags;
 } mappings_t;
@@ -156,7 +158,6 @@ typedef struct descriptor {
 typedef struct node {
         struct node *next;
         struct node *prev;
-        pid_t item;
         desc_t *desc;
 } node_t;
 
@@ -171,5 +172,5 @@ memdesc_t * take_process_snapshot(pid_t);
 void * heapAlloc(size_t);
 char * xstrdup(const char *);
 char * xfmtstrdup(char *fmt, ...);
-size_t get_all_functions(const char *filepath, struct fde_func_data **funcs);
+int get_all_functions(const char *filepath, struct fde_func_data **funcs);
 
