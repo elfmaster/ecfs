@@ -324,6 +324,11 @@ memdesc_t * take_process_snapshot(pid_t pid)
 		return NULL;
 	}
 	
+	if (ptrace(PTRACE_GETREGS, pid, 0, (void *)&memdesc->pt_regs) < 0) {
+		printf("[!] Unable to get register state-> ptrace(): %s\n", strerror(errno));
+		return NULL;
+	}
+		
  	for (i = 0; i < memdesc->mapcount; i++)
 		if (memdesc->maps[i].stack) {
 			memdesc->stack.base = memdesc->maps[i].base;	
@@ -342,6 +347,9 @@ memdesc_t * take_process_snapshot(pid_t pid)
 			perror("mmap");
 			exit(-1);
 		}
+		/*
+	 	 * Is this madvise really helping?
+	 	 */
 		if (madvise(memdesc->maps[i].mem, memdesc->maps[i].size, MADV_HUGEPAGE) < 0) {
 			printf("madvise failed; this may result in performance degradation during snapshot creation\n");
 		}
