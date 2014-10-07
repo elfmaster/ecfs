@@ -38,25 +38,46 @@
 #define PS_RUNNING 32
 #define PS_UNKNOWN 64
 
+#define MAX_THREADS 256 // for each threads prstatus
+
+#define ELFNOTE_NAME(_n_) ((char*)(_n_) + sizeof(*(_n_)))
+#define ELFNOTE_ALIGN(_n_) (((_n_)+3)&~3)
+#define ELFNOTE_NAME(_n_) ((char*)(_n_) + sizeof(*(_n_)))
+#define ELFNOTE_DESC(_n_) (ELFNOTE_NAME(_n_) + ELFNOTE_ALIGN((_n_)->namesz))
+#define ELFNOTE_NEXT(_n_) ((ElfW(Note) *)(ELFNOTE_DESC(_n_) + ELFNOTE_ALIGN((_n_)->descsz)))
+
+typedef struct {
+        Elf64_Word namesz;
+        Elf64_Word descsz;
+        Elf64_Word type;
+} ElfW(Note);
+
 struct fde_func_data { /* For eh_frame.c */ 
         uint64_t addr;
         size_t size;
 };
 
-struct list_head {
-	struct list_head *next;
-	struct list_head *prev;
+
+
+struct memelfnote
+{
+        const char *name;
+        int type;
+        unsigned int datasz;
+        void *data;
+};
+
+struct elf_thread_core_info {
+        struct elf_thread_core_info *next;
+        struct elf_prstatus prstatus;
+        struct memelfnote notes[0];
 };
 
 struct elf_note_info {
         struct memelfnote *notes;
         struct elf_prstatus *prstatus;  /* NT_PRSTATUS */
         struct elf_prpsinfo *psinfo;    /* NT_PRPSINFO */
-        struct list_head thread_list;
         elf_fpregset_t *fpu;
-//#ifdef ELF_CORE_COPY_XFPREGS
-//        elf_fpxregset_t *xfpu;
-//#endif
         int thread_status_size;
         int numnote;
 };
@@ -143,6 +164,8 @@ typedef struct memdesc {
 	} task;
 	mappings_t *maps;
 	struct user_regs_struct pt_regs;
+	char *stack_args;
+	size_t stack_args_len;
 } memdesc_t;
 	
 		
@@ -150,6 +173,7 @@ typedef struct memdesc {
 typedef struct descriptor {
 	elfdesc_t binary;
 	memdesc_t memory;
+	struct elf_note_info info[MAX_THREADS];
 	int exe_type;
 	int dynlinking;
 	char *snapdir;
