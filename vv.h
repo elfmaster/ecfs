@@ -46,6 +46,13 @@
 #define ELFNOTE_DESC(_n_) (ELFNOTE_NAME(_n_) + ELFNOTE_ALIGN((_n_)->namesz))
 #define ELFNOTE_NEXT(_n_) ((ElfW(Note) *)(ELFNOTE_DESC(_n_) + ELFNOTE_ALIGN((_n_)->descsz)))
 
+struct opts {
+        int coretype;
+        int all;
+        int pid;
+        char *snapdir;
+};
+
 typedef struct {
         Elf64_Word namesz;
         Elf64_Word descsz;
@@ -56,7 +63,6 @@ struct fde_func_data { /* For eh_frame.c */
         uint64_t addr;
         size_t size;
 };
-
 
 
 struct memelfnote
@@ -131,7 +137,7 @@ typedef struct memdesc {
 	char *comm; //name of executable
 	int mapcount; // overall # of memory maps
 	int type; // ET_EXEC or ET_DYN
-	
+	ElfW(Addr) base, data_base;
 	struct {
 		unsigned long sh_offset;
 		unsigned long base;
@@ -166,6 +172,7 @@ typedef struct memdesc {
 	struct user_regs_struct pt_regs;
 	char *stack_args;
 	size_t stack_args_len;
+	uint8_t *saved_auxv;
 } memdesc_t;
 	
 		

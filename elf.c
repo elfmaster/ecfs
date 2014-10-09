@@ -1,5 +1,8 @@
 #include "vv.h"
 
+
+#define MAX_NOTES 256
+
 /*
  * Modified version of the kernel macro
  * we copy struct user_regs_struct to pr_regs
@@ -45,6 +48,30 @@ static size_t sizeof_note(const char *name, int descsz)
             ELFNOTE_ALIGN(descsz));
 }
 
+static int notesize(struct memelfnote *en)
+{
+        int sz;
+
+        sz = sizeof(ElfW(Note));
+        sz += ELFNOTE_ALIGN(strlen(en->name) + 1);
+        sz += ELFNOTE_ALIGN(en->datasz);
+
+        return sz;
+}
+
+
+static size_t get_note_info_size(struct elf_note_info *info)
+{
+        int sz = 0;
+        int i;
+
+        for (i = 0; i < info->numnote; i++)
+                sz += notesize(info->notes + i);
+
+        //sz += info->thread_status_size;
+
+        return sz;
+}
 
 static int do_write(int fd, void *data, size_t len, loff_t *offset)
 {
@@ -57,7 +84,7 @@ static int do_write(int fd, void *data, size_t len, loff_t *offset)
 }
 
 #define DUMP_WRITE(fd, data, len, offset) \
-        do { if (!do_write(fd, (data), len, (offset))) return 0; *offset += (len); } while(0)
+        do { if (!do_write(fd, data, len, offset)) return 0; *offset += (len); } while(0)
 
 static int writenote(struct memelfnote *men, int fd,
                         loff_t *foffset)
@@ -66,10 +93,11 @@ static int writenote(struct memelfnote *men, int fd,
         en.namesz = strlen(men->name) + 1;
         en.descsz = men->datasz;
         en.type = men->type;
-
+	
+	printf("Dumping note at %lx\n", *foffset);
         DUMP_WRITE(fd, &en, sizeof(en), foffset);
-        DUMP_WRITE(fd, men->name, en.namesz, foffset);
-        DUMP_WRITE(fd, men->data, en.descsz, foffset);
+        DUMP_WRITE(fd, (char *)men->name, en.namesz, foffset);
+	DUMP_WRITE(fd, men->data, en.descsz, foffset);
 	
         return 1;
 }
@@ -84,34 +112,30 @@ static void fill_note(struct memelfnote *note, const char *name, int type,
         return;
 }
 
-void setup_note(ElfW(Note) *n, const char *name, int type, const void *desc, int descsz)
-{
-        int l = strlen(name) + 1;
-        n->namesz = l;
-        strcpy(ELFNOTE_NAME(n), name);
-        
-        n->descsz = descsz;
-        memcpy((void *)ELFNOTE_DESC(n), desc, descsz);
-        
-        n->type = type;
-	return;
-
-}
-
-
 void elf_note_info_init(struct elf_note_info *ni)
 {
 	memset((struct elf_note_info *)ni, 0, sizeof(struct elf_note_info) * MAX_THREADS);
-	ni->notes = (struct memelfnote *)heapAlloc(sizeof(struct memelfnote));
+	ni->notes = (struct memelfnote *)heapAlloc(sizeof(struct memelfnote) * MAX_NOTES);
 	ni->psinfo = (struct elf_prpsinfo *)heapAlloc(sizeof(struct elf_prpsinfo));
 	ni->prstatus = (struct elf_prstatus *)heapAlloc(sizeof(struct elf_prstatus));
 	ni->fpu = (elf_fpregset_t *)heapAlloc(sizeof(elf_fpregset_t));
 }
 
+static void fill_auxv_note(struct memelfnote *note, memdesc_t *memdesc)
+{
+        ElfW(Addr) *auxv = (ElfW(Addr) *) memdesc->saved_auxv;
+        int i = 0;
+
+        do {
+                i += 2;
+        } while (auxv[i - 2] != AT_NULL);
+        fill_note(note, "CORE", NT_AUXV, i * sizeof(ElfW(Addr)), auxv);
+}
+
 void fill_psinfo(struct elf_prpsinfo *psinfo, memdesc_t *memdesc)
 {
 	char *args; // stack args
-	int i, len;
+	int i, len = memdesc->stack_args_len;
 
 	memset(psinfo, 0, sizeof(struct elf_prpsinfo));
 	memcpy(psinfo->pr_psargs, memdesc->stack_args, memdesc->stack_args_len);
@@ -138,12 +162,11 @@ void fill_prstatus(struct elf_prstatus *prstatus, memdesc_t *memdesc)
 }
 
 		
-int fill_note_info(desc_t *desc, long signr, struct pt_regs *regs)
+size_t fill_note_info(desc_t *desc, struct user_regs_struct *regs, int thread_count)
 {	
 	elfdesc_t *elf = &desc->binary;
 	memdesc_t *memdesc = &desc->memory;
-	struct elf_note_info *info = desc->info;
-	
+	struct elf_note_info *info = &desc->info[thread_count];
 	
 	elf_note_info_init(info);
 	
@@ -155,22 +178,25 @@ int fill_note_info(desc_t *desc, long signr, struct pt_regs *regs)
                   sizeof(*info->prstatus), info->prstatus);
         fill_note(info->notes + 1, "CORE", NT_PRPSINFO,
                   sizeof(*info->psinfo), info->psinfo);
-
+	fill_auxv_note(info->notes + 2, memdesc);
+	info->numnote += 3;
 	
+	return get_note_info_size(info);
 }
 
 	
 	
-int build_notes_area(const char *filepath, struct elf_note_info *ni)
+loff_t build_notes_area(const char *filepath, desc_t *desc)
 {
 	int fd;
 	uint8_t *mem;
 	ElfW(Ehdr) *ehdr;
 	ElfW(Phdr) *phdr;
-	ElfW(Note) *np, *notes;
+	ElfW(Note) *np;
 	size_t len = 0, noteSize;
 	struct stat st;
 	int i;
+	loff_t notes_offset;
 
 	fd = open(filepath, O_RDWR);
 	fstat(fd, &st);
@@ -179,24 +205,41 @@ int build_notes_area(const char *filepath, struct elf_note_info *ni)
 		perror("mmap");
 		exit(-1);
 	}
+	notes_offset = lseek(fd, 0, SEEK_END);
+	if (notes_offset < 0) {
+		perror("lseek");
+		exit(-1);
+	}
+
 	ehdr = (ElfW(Ehdr) *)mem;
 	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
 	
+	int thread_count = 0;
+	noteSize = fill_note_info(desc, &desc->memory.pt_regs, thread_count);
+        struct memelfnote *notes = desc->info[thread_count].notes;
+	
+        for (i = 0; i < desc->info[thread_count].numnote ; i++)  {
+		printf("Writing notes\n");
+                writenote(notes + i, fd, &notes_offset);
+	}
+
 	for (i = 0; i < ehdr->e_phnum; i++) {
 		if (phdr[i].p_type == PT_NOTE) {
-			np = (ElfW(Note) *)&mem[phdr[i].p_offset];
-			noteSize = phdr[i].p_filesz;
+			phdr[i].p_vaddr = desc->memory.data_base + st.st_size;
+			phdr[i].p_paddr = desc->memory.data_base + st.st_size;
+			phdr[i].p_filesz = phdr[i].p_memsz = noteSize;
+			loff_t notes_offset = phdr[i].p_offset = st.st_size;
 			break;
 		}
 	}
 	
-	notes = (ElfW(Note) *)heapAlloc(sizeof(ElfW(Note)) * 256);
+	//notes = (ElfW(Note) *)heapAlloc(sizeof(ElfW(Note)) * 256);
+	munmap(mem, st.st_size);
+	close(fd);
+		
+	printf("size: %x\n", noteSize);
+	return notes_offset;
 	
-	
-	for (i = 0; i < noteSize; i += len) {
-			
-
-	}
 }
 
 

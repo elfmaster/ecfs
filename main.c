@@ -1,12 +1,7 @@
 #include "vv.h"
 #include <dirent.h>
 
-struct {
-	int coretype;
-	int all;
-	int pid;
-	char *snapdir;
-} opts;
+struct opts opts; 
 
 struct linux_dirent {
         long d_ino;

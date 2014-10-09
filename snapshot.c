@@ -10,6 +10,8 @@
 
 #define MAX_SECTIONS 1024
 
+struct opts opts;
+
 static ElfW(Off) get_internal_sh_offset(memdesc_t *memdesc, int type)
 {
 #define HEAP 0
@@ -321,6 +323,9 @@ memdesc_t * take_process_snapshot(pid_t pid)
 	
 	if (pid_attach_direct(pid) < 0) {
 		printf("[!] Unable to attach to %d: %s\n", pid, strerror(errno));
+		if (memdesc->task.state & PS_TRACED) 
+			printf("[!] Process %d is already being traced by process %d. Kill the tracing process and try again\n", 
+				memdesc->task.pid, memdesc->task.tracer);
 		return NULL;
 	}
 	
@@ -328,7 +333,14 @@ memdesc_t * take_process_snapshot(pid_t pid)
 		printf("[!] Unable to get register state-> ptrace(): %s\n", strerror(errno));
 		return NULL;
 	}
-		
+	
+	/*
+	 * XXX Set these to real values!
+	 */
+	memdesc->saved_auxv = (uint8_t *)heapAlloc(256);
+	memdesc->stack_args = heapAlloc(80);
+	memdesc->stack_args_len = 0;
+
  	for (i = 0; i < memdesc->mapcount; i++)
 		if (memdesc->maps[i].stack) {
 			memdesc->stack.base = memdesc->maps[i].base;	
@@ -446,7 +458,7 @@ int dump_process_snapshot(desc_t *desc)
                 if (phdr[i].p_type == PT_LOAD) {
                         if (phdr[i].p_offset == 0 && (phdr[i].p_flags & PF_X)) {
                                 /* text segment */
-                                o_textVaddr = textVaddr = phdr[i].p_vaddr;
+                                memdesc->base = o_textVaddr = textVaddr = phdr[i].p_vaddr;
                                 textOffset = phdr[i].p_offset;
                                 textSize = phdr[i].p_memsz;
                                 if (desc->exe_type == ET_DYN) 
@@ -459,6 +471,7 @@ int dump_process_snapshot(desc_t *desc)
                                 dataSize = phdr[i].p_memsz;
                                 if (desc->exe_type == ET_DYN)
                                         dataVaddr += memdesc->maps[text_index].base;
+				memdesc->data_base = dataVaddr;
 				bssOff = dataOffset + dataSize;
 				bssVaddr = dataVaddr + dataSize;
 				bssSiz = phdr[i].p_memsz - phdr[i].p_filesz;
@@ -1104,7 +1117,7 @@ int dump_process_snapshot(desc_t *desc)
 	ehdr->e_shoff = e_shoff;
 	ehdr->e_shstrndx = e_shstrndx;
 	ehdr->e_shnum = scount;
-	ehdr->e_type = ET_NONE;
+	ehdr->e_type = opts.coretype ? ET_CORE : ET_NONE;
 
 	msync(mem, st.st_size, MS_SYNC);
 	munmap(mem, st.st_size);
@@ -1124,7 +1137,6 @@ int dump_process_snapshot(desc_t *desc)
                 exit(-1);
         }
 
-        /* This final time of open(), we map it in */
         mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (mem == MAP_FAILED) {
                 perror("mmap");
@@ -1199,7 +1211,6 @@ int dump_process_snapshot(desc_t *desc)
                 exit(-1);
         }
 
-        /* This final time of open(), we map it in */
         mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (mem == MAP_FAILED) {
                 perror("mmap");
@@ -1246,12 +1257,49 @@ int dump_process_snapshot(desc_t *desc)
 		}
 	}
 	
+	msync(mem, st.st_size, MS_SYNC);
+	munmap(mem, st.st_size);
+	close(fd);
+
+	/*
+	 * We add a new PT_NOTE area and point the old PT_NOTE towards it
+	 * so that gdb can read core file process status info
+	 */
+	loff_t notes_offset = build_notes_area(filepath, desc);
 	
+        if ((fd = open(filepath, O_RDWR)) < 0) {
+                perror("open");
+                exit(-1);
+        }
+
+        if (fstat(fd, &st) < 0) {
+                perror("fstat");
+                exit(-1);
+        }
+
+        /* This final time of open(), we map it in */
+        mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+        if (mem == MAP_FAILED) {
+                perror("mmap");
+                exit(-1);
+        }
+	/*
+	ehdr = (ElfW(Ehdr) *)mem;	
+	shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
+	StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (!strncmp(&StringTable[shdr[i].sh_name], ".note", 4)) {
+			shdr[i].sh_offset = notes_offset;
+			shdr[i].sh_size = 0x234;
+			break;
+		}
+	}  */
 mid_failure:
 	msync(mem, st.st_size, MS_SYNC); // just incase
 	munmap(mem, st.st_size);
 	close(fd);
-
+	return 0;
+	
 done:
 	if (fd > 2)
 		close(fd);
