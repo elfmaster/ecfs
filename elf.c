@@ -1,4 +1,4 @@
-#include "vv.h"
+#include "ecfs.h"
 
 
 #define MAX_NOTES 256
@@ -219,7 +219,6 @@ loff_t build_notes_area(const char *filepath, desc_t *desc)
         struct memelfnote *notes = desc->info[thread_count].notes;
 	
         for (i = 0; i < desc->info[thread_count].numnote ; i++)  {
-		printf("Writing notes\n");
                 writenote(notes + i, fd, &notes_offset);
 	}
 
@@ -237,7 +236,6 @@ loff_t build_notes_area(const char *filepath, desc_t *desc)
 	munmap(mem, st.st_size);
 	close(fd);
 		
-	printf("size: %x\n", noteSize);
 	return notes_offset;
 	
 }
