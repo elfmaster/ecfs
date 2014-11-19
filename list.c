@@ -34,6 +34,36 @@ int insert_front(list_t **list, desc_t *desc)
 	return 0;
 }
 
+int delete_node_by_pid(list_t **list, pid_t pid)
+{
+	node_t *current;
+	for (current = (*list)->head; current != NULL; current = current->next) {
+		if (current->desc->memory.pid) {
+			if ((*list)->head == current)
+				(*list)->head = current->next;
+			current->prev->next = current->next;
+			current->next->prev = current->prev;
+		}
+	}
+	
+	return 0;
+}
+
+int reverse_list(list_t **list)
+{
+	node_t *tmp = NULL;
+	node_t *current = (*list)->head;
+	while (current != NULL) {
+		tmp = current->prev;
+		current->prev = current->next;
+		current->next = tmp;
+		current = current->prev;
+	}
+	if (tmp != NULL)
+		(*list)->head = tmp->prev; //incase the list is only 1 node
+}
+
+		
 int insert_end(list_t **list, desc_t *desc)
 {
 	node_t *new = malloc(sizeof(node_t));
@@ -63,28 +93,6 @@ int insert_end(list_t **list, desc_t *desc)
 	return 0;
 }
 
-/*
-int main(void)
-{
-	list_t *list;
-	node_t *current;
-	list->head = NULL;
-	list->tail = NULL;
-
-	insert_front(&list, 1);
-	insert_front(&list, 2);
-	insert_front(&list, 3);
-	insert_front(&list, 4);
-	
-	for (current = list->tail; current != NULL; current = current->prev)
-		printf("%d\n", current->item);
-	
-	
-	
-}
-*/
-			
-		
 
 
 

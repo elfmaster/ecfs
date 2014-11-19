@@ -62,7 +62,7 @@ static int get_maps(pid_t pid, mappings_t *maps, const char *path)
 		return -1;
 
 	for (lc = 0; (fgets(buf, sizeof(buf), fd) != NULL); lc++) {
-		strcpy(tmp, buf);
+		strcpy(tmp, buf); //tmp and buf are same sized buffers
 		p = strchr(buf, '-');
 		*p = '\0';
 		p++;
@@ -705,6 +705,20 @@ int dump_process_snapshot(desc_t *desc)
 	char *StringTable = (char *)alloca(512);
 	unsigned int stoffset = 0;
 	int scount = 0;
+	
+	shdr[scount].sh_type = SHT_NULL;
+	shdr[scount].sh_offset = 0;
+	shdr[scount].sh_addr = 0;
+	shdr[scount].sh_flags = 0;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_entsize = 0;
+	shdr[scount].sh_size = 0;
+	shdr[scount].sh_addralign = 0;
+	shdr[scount].sh_name = 0;
+	strcpy(&StringTable[stoffset], "");
+	stoffset += 1;
+	scount++;
+
 	/*
 	 * .interp
 	 */
@@ -717,6 +731,7 @@ int dump_process_snapshot(desc_t *desc)
 	shdr[scount].sh_entsize = 0;
 	shdr[scount].sh_size = interpSiz;
 	shdr[scount].sh_addralign = 1;
+	shdr[scount].sh_name = stoffset;
 	strcpy(&StringTable[stoffset], ".interp");
 	stoffset += strlen(".interp") + 1;
 	scount++;
@@ -795,7 +810,7 @@ int dump_process_snapshot(desc_t *desc)
 	shdr[scount].sh_addr = (__ELF_NATIVE_CLASS == 64) ? relaVaddr : relVaddr;
 	shdr[scount].sh_flags = SHF_ALLOC;
 	shdr[scount].sh_info = 0;
-	shdr[scount].sh_link = 0;
+	shdr[scount].sh_link = scount - 1;
 	shdr[scount].sh_entsize = (__ELF_NATIVE_CLASS == 64) ? sizeof(Elf64_Rela) : sizeof(Elf32_Rel);
 	shdr[scount].sh_size = UNKNOWN_SHDR_SIZE;
 	shdr[scount].sh_addralign = sizeof(long); 
@@ -905,7 +920,7 @@ int dump_process_snapshot(desc_t *desc)
 	shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
 	shdr[scount].sh_info = 0;
 	shdr[scount].sh_link = 0;
-	shdr[scount].sh_entsize = sizeof(long);
+	shdr[scount].sh_entsize = (__ELF_NATIVE_CLASS == 64) ? 16 : 8;
 	shdr[scount].sh_size = dynSiz;
 	shdr[scount].sh_addralign = sizeof(long);
 	shdr[scount].sh_name = stoffset;

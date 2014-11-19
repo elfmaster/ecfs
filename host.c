@@ -12,7 +12,6 @@ int main(void)
 	for (i = 0; i < 500; i++)
 		array[i] = rand() % 500;
 	printf("hi\n");
-	fork();
 	pause();
 }
 

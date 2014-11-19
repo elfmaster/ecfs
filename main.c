@@ -107,10 +107,13 @@ int main(int argc, char **argv)
 		                dump_process_snapshot((desc_t *)&desc);
 				free_snapshot_maps(memdesc);
 				insert_front(&list, &desc);
+				sleep(1);
 			}
 		} 
 		for (current = list->tail; current != NULL; current = current->prev) 
 			printf("Successfully dumped process %d\n", current->desc->memory.pid);		
+	  	
+
 	}
 				
 }
