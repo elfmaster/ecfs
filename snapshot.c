@@ -411,7 +411,7 @@ int dump_process_snapshot(desc_t *desc)
 	ElfW(Shdr) *shdr;
 	ElfW(Phdr) *nphdr;
 	
-	uint8_t *dynseg = alloca(8192);
+	uint8_t *dynseg; // XXX changed this to heap alloc below
 	struct stat st;
 	memdesc_t *memdesc = &desc->memory;
 	uint8_t *exemem;
@@ -508,6 +508,7 @@ int dump_process_snapshot(desc_t *desc)
 			dynSiz = phdr[i].p_filesz;
 			pid_attach_direct(memdesc->pid); 
 			ElfW(Addr) dvaddr = phdr[i].p_vaddr + (desc->exe_type == ET_EXEC ? 0 : textVaddr);
+			dynseg = (uint8_t *)heapAlloc(phdr[i].p_memsz);
 			pid_read(memdesc->pid, (void *)dynseg, (void *)dvaddr, phdr[i].p_memsz);
 			pid_detach_direct(memdesc->pid);
 			dyn = (ElfW(Dyn) *)dynseg;

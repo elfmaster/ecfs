@@ -94,7 +94,7 @@ static int writenote(struct memelfnote *men, int fd,
         en.descsz = men->datasz;
         en.type = men->type;
 	
-	printf("Dumping note at %lx\n", *foffset);
+	//printf("Dumping note at %lx\n", *foffset);
         DUMP_WRITE(fd, &en, sizeof(en), foffset);
         DUMP_WRITE(fd, (char *)men->name, en.namesz, foffset);
 	DUMP_WRITE(fd, men->data, en.descsz, foffset);

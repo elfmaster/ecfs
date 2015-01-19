@@ -10,6 +10,26 @@ struct linux_dirent {
         char d_name[];
 };
 
+static int get_pid_uid(pid_t pid)
+{
+	FILE *fd;
+	char *path = alloca(128);
+	char tmp[32], buf[256];
+	int uid, t1, t2, t3;
+
+	snprintf(path, 128, "/proc/%d/status", pid);
+	if ((fd = fopen(path, "r")) == NULL) 
+		return -1;
+	while (!(feof(fd))) {
+		fgets(buf, sizeof(buf), fd);
+		if (strncasecmp(buf, "Uid:", 4) == 0) {
+			sscanf(buf, "%s %d %d %d %d", tmp, &uid, &t1, &t2, &t3);
+			return uid;
+		}
+	}
+	return -1;	
+}
+
 int main(int argc, char **argv)
 {
 	desc_t desc;
@@ -64,6 +84,7 @@ int main(int argc, char **argv)
 	} else
 	if (opts.all) {
 		pid_t pid;
+		int myuid;
 		size_t nread;
 		int dd, bpos;
 		char buf[4096], *p;
@@ -98,6 +119,11 @@ int main(int argc, char **argv)
 						continue; //we are only interested in pid directories
 				
 				pid = atoi(d->d_name);
+				if ((myuid = getuid()) != 0) 
+					if (get_pid_uid(pid) != myuid) {
+						printf("[!] pid %d not owned by uid: %d, continuing...\n", pid, myuid);
+						continue;		
+					}
 		                memdesc_t *memdesc = (memdesc_t *)take_process_snapshot(pid);
                 		if (memdesc == NULL) {
                         		printf("[!] Taking process snapshot of %d failed; check process ownership?\n", pid);
