@@ -144,9 +144,14 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 				memcpy(notedesc->siginfo, desc, notes->n_descsz);
 				break;
 			case NT_AUXV:
-				
+				notedesc->auxv = heapAlloc(notes->n_descsz);
+				memcpy((void *)notedesc->auxv, (void *)desc, notes->n_descsz);
 				break;
 			case NT_FILE:
+				/*
+				 * No real need to get these since we have these from
+				 * /proc/pid/maps
+				 */
 				break;
 		}
 		/*
@@ -389,7 +394,70 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 	
 }
 
+static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc)
+{
+	int pid = memdesc->task.pid;
+	uint8_t *mem = alloca(8192);
+	ElfW(Ehdr) *ehdr;
+	ElfW(Phdr) *phdr;
+	ElfW(Addr) text_base = 0;
+	int i;
 
+	for (i = 0; i < memdesc->mapcount; i++)
+		if (memdesc->maps[i].filemap_exe)
+			text_base = memdesc->maps[i].base;
+	
+	if (text_base == 0) {
+		printf("Unable to locate executable base necessary to find phdr's\n");
+		return -1;
+	}
+	
+	if (pid_attach_direct(pid) < 0)
+		return -1;
+	
+	if (pid_read(pid, (void *)mem, (void *)text_base, 4096) < 0)
+		return -1;
+	
+	ehdr = (ElfW(Ehdr) *)mem;
+	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
+	
+	for (i = 0; i < ehdr->e_phnum; i++) {
+		switch(phdr[i].p_type) {
+			case PT_LOAD:
+				switch(!(!phdr[i].p_offset)) {
+					case 0:
+						/* text segment */
+						elfdesc->textVaddr = phdr[i].p_vaddr;
+						elfdesc->textSize = phdr[i].p_memsz;
+						break;
+					case 1:
+						elfdesc->dataVaddr = phdr[i].p_vaddr;
+						elfdesc->dataSize = phdr[i].p_memsz;
+						break;
+				}
+				break;
+			case PT_DYNAMIC:
+				elfdesc->dynVaddr = phdr[i].p_vaddr;
+				elfdesc->dynSize = phdr[i].p_memsz;
+				break;
+			case PT_GNU_EH_FRAME:
+				elfdesc->ehframe_Vaddr = phdr[i].p_vaddr;
+				elfdesc->ehframe_Size = phdr[i].p_memsz;
+				break;
+			case PT_NOTE:
+				elfdesc->noteVaddr = phdr[i].p_vaddr;
+				elfdesc->noteSize = phdr[i].p_filesz;
+				break;
+		}
+	}
+}
+
+int core2ecfs(const char *outfile, memdesc_t *memdesc, elfdesc_t *elfdesc, notedesc_t *notedesc)
+{
+
+
+
+}
 	
 int main(int argc, char **argv)
 {
@@ -449,7 +517,14 @@ int main(int argc, char **argv)
                                 memdesc->maps[j].has_pt_load++;
         }
 
+	int ret = core2ecfs(argv[2], memdesc, elfdesc, notedesc);
+	if (ret < 0) {
+		fprintf(stderr, "Failed to transform core file '%s' into ecfs\n", argv[2]);
+		exit(-1);
+	}
+
 }
+
 
 
 

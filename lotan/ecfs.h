@@ -78,6 +78,11 @@ typedef struct notedesc {
         ElfW(Nhdr) *notes;
         struct elf_prstatus *prstatus;  /* NT_PRSTATUS */
         struct elf_prpsinfo *psinfo;    /* NT_PRPSINFO */
+#if __x86_64__
+	Elf64_auxv_t *auxv;
+#else
+	Elf32_auxv_t *auxv;
+#endif
 	struct siginfo_t *siginfo;
         struct elf_thread_core_info thread_core_info[MAX_THREADS];
 	elf_fpregset_t *fpu;
@@ -101,12 +106,20 @@ typedef struct elfdesc {
 	ElfW(Nhdr) *nhdr;
 	ElfW(Addr) textVaddr;
 	ElfW(Addr) dataVaddr;
+	ElfW(Addr) dynVaddr;
+	ElfW(Addr) ehframe_Vaddr;
+	ElfW(Addr) noteVaddr;
 	ElfW(Off) textOffset;
 	ElfW(Off) dataOffset;
 	ElfW(Off) dynamicOffset;
 	char *StringTable;
 	size_t size;
 	size_t noteSize;
+	size_t gnu_noteSize;
+	size_t textSize;
+	size_t dataSize;
+	size_t dynSize;
+	size_t ehframe_Size;
 } elfdesc_t;
 
 typedef struct mappings {
