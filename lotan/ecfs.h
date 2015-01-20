@@ -22,6 +22,9 @@
 #include "dwarf.h"
 #include "libdwarf.h"
 
+#define PAGE_ALIGN(x) (x & ~(PAGE_SIZE - 1))
+#define PAGE_ALIGN_UP(x) (PAGE_ALIGN(x) + PAGE_SIZE) 
+
 #define MAX_TID 256
 #define PT_ATTACHED 1
 #define PT_DETACHED 2
@@ -120,6 +123,8 @@ typedef struct elfdesc {
 	size_t dataSize;
 	size_t dynSize;
 	size_t ehframe_Size;
+	int dynlinked;
+	int pie;
 } elfdesc_t;
 
 typedef struct mappings {
@@ -192,6 +197,7 @@ typedef struct memdesc {
 	char *stack_args;
 	size_t stack_args_len;
 	uint8_t *saved_auxv;
+	int pie;
 } memdesc_t;
 	
 		

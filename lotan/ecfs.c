@@ -422,6 +422,8 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc)
 	
 	ehdr = (ElfW(Ehdr) *)mem;
 	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
+	if (ehdr->e_type == ET_DYN)
+		elfdesc->pie++;
 	
 	for (i = 0; i < ehdr->e_phnum; i++) {
 		switch(phdr[i].p_type) {
@@ -453,6 +455,9 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc)
 				elfdesc->noteVaddr = phdr[i].p_vaddr;
 				elfdesc->noteSize = phdr[i].p_filesz;
 				break;
+			case PT_INTERP:
+				elfdesc->dynlinked++;
+				break;
 		}
 	}
 
@@ -474,22 +479,44 @@ static void update_corefile_phdrs(memdesc_t *memdesc, elfdesc_t *elfdesc)
 	int i;
 
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
-		if (phdr[i].p_vaddr == elfdesc->dynVaddr)
+		if (phdr[i].p_vaddr == elfdesc->dynVaddr) {
 			phdr[i].p_type = PT_DYNAMIC;
+#if DEBUG
+			printf("Found PT_DYNAMIC and marking it in core file\n");
+#endif
+		}
 		else
-		if (phdr[i].p_vaddr = elfdesc->ehframe_Vaddr)
+		if (phdr[i].p_vaddr == elfdesc->ehframe_Vaddr) {
 			phdr[i].p_type = PT_GNU_EH_FRAME;
+#if DEBUG
+			printf("Found PT_GNU_EH_FRAME and marking it in core file\n");
+#endif
+		}
 		else
-		if (phdr[i].p_vaddr = elfdesc->noteVaddr)
+		if (phdr[i].p_vaddr == elfdesc->noteVaddr) {
 			phdr[i].p_type = PT_NOTE;
+#if DEBUG
+			printf("Found PT_NOTE and am marking it in core file\n");
+#endif
+		}
 	}	
 }
 
 
 int core2ecfs(const char *outfile, memdesc_t *memdesc, elfdesc_t *elfdesc, notedesc_t *notedesc)
 {
-
-
+	int i, j, no_dynamic = 0;
+	ElfW(Dyn) *dyn = NULL;
+	ElfW(Ehdr) *ehdr = elfdesc->ehdr;
+	ElfW(Phdr) *phdr = elfdesc->phdr;
+	uint8_t *mem = elfdesc->mem;
+	
+	for (i = 0; i < ehdr->e_phnum; i++) {
+		if (phdr[i].p_vaddr == PAGE_ALIGN(elfdesc->dataVaddr)) {
+			dyn = (ElfW(Dyn) *)&mem[elfdesc->dynVaddr - PAGE_ALIGN(elfdesc->dataVaddr)];
+			break;
+		}
+	}
 	return 0;
 }
 	
@@ -542,6 +569,7 @@ int main(int argc, char **argv)
                 exit(-1);
         }
 
+		
 	/*
 	 * Which mappings are stored in actual phdr segments?
 	 */
@@ -551,13 +579,19 @@ int main(int argc, char **argv)
                                 memdesc->maps[j].has_pt_load++;
         }
 	
+	/*
+	 * attach to process with ptrace and parse original phdr table
+	 * to get more granular segment information.
+	 */
 	if (parse_orig_phdrs(elfdesc, memdesc) < 0) {
 		fprintf(stderr, "Failed to parse program headers in memory\n");
 		exit(-1);
 	}
 
-	update_corefile_phdrs(memdesc, elfdesc);
-
+	/*
+	 * Convert the core file into an actual ECFS file and write it
+	 * to disk.
+	 */
 	ret = core2ecfs(argv[2], memdesc, elfdesc, notedesc);
 	if (ret < 0) {
 		fprintf(stderr, "Failed to transform core file '%s' into ecfs\n", argv[2]);
@@ -565,6 +599,7 @@ int main(int argc, char **argv)
 	}
 
 }
+
 
 
 
