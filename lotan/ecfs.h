@@ -128,6 +128,7 @@ typedef struct mappings {
 	unsigned long base;
 	size_t size;
 	int elfmap;
+	int textbase; // is the text segment base of the processes exe
 	int stack;
 	int thread_stack;
 	int heap;

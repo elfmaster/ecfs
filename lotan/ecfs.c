@@ -194,6 +194,8 @@ static int get_maps(pid_t pid, mappings_t *maps, const char *path)
                         if (!strstr(tmp, "---p"))
                                 maps[lc].filename = xstrdup(strchr(tmp, '/'));
                                 maps[lc].elfmap++;
+				if (strstr(tmp, "r-xp") || strstr(tmp, "rwxp"))
+					maps[lc].textbase++;
                 }
                 else
                 if (strstr(tmp, "[heap]")) 
@@ -404,7 +406,7 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc)
 	int i;
 
 	for (i = 0; i < memdesc->mapcount; i++)
-		if (memdesc->maps[i].filemap_exe)
+		if (memdesc->maps[i].textbase)
 			text_base = memdesc->maps[i].base;
 	
 	if (text_base == 0) {
@@ -424,6 +426,9 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc)
 	for (i = 0; i < ehdr->e_phnum; i++) {
 		switch(phdr[i].p_type) {
 			case PT_LOAD:
+#if DEBUG
+				printf("Found PT_LOAD segments\n");
+#endif
 				switch(!(!phdr[i].p_offset)) {
 					case 0:
 						/* text segment */
@@ -450,6 +455,8 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc)
 				break;
 		}
 	}
+
+	return 0;
 }
 
 int core2ecfs(const char *outfile, memdesc_t *memdesc, elfdesc_t *elfdesc, notedesc_t *notedesc)
@@ -516,6 +523,11 @@ int main(int argc, char **argv)
                         if (memdesc->maps[j].base == (elfdesc->phdr + i)->p_vaddr)
                                 memdesc->maps[j].has_pt_load++;
         }
+	
+	if (parse_orig_phdrs(elfdesc, memdesc) < 0) {
+		fprintf(stderr, "Failed to parse program headers in memory\n");
+		exit(-1);
+	}
 
 	int ret = core2ecfs(argv[2], memdesc, elfdesc, notedesc);
 	if (ret < 0) {
