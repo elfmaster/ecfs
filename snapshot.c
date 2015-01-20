@@ -341,7 +341,7 @@ memdesc_t * take_process_snapshot(pid_t pid)
 	memdesc->stack_args = heapAlloc(80);
 	memdesc->stack_args_len = 0;
 
- 	for (i = 0; i < memdesc->mapcount; i++)
+ 	for (i = 0; i < memdesc->mapcount; i++) {
 		if (memdesc->maps[i].stack) {
 			memdesc->stack.base = memdesc->maps[i].base;	
 			memdesc->stack.size = memdesc->maps[i].size;
@@ -349,8 +349,9 @@ memdesc_t * take_process_snapshot(pid_t pid)
 		if (memdesc->maps[i].heap) {
 			memdesc->heap.base = memdesc->maps[i].base;
 			memdesc->heap.size = memdesc->maps[i].size;
-		} else
+		} 
 		
+	}
 	for (i = 0; i < memdesc->mapcount; i++) {
 		if (memdesc->maps[i].padding || memdesc->maps[i].special)
 			continue;

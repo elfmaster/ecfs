@@ -44,8 +44,8 @@
 #define ELFNOTE_NAME(_n_) ((char*)(_n_) + sizeof(*(_n_)))
 #define ELFNOTE_ALIGN(_n_) (((_n_)+3)&~3)
 #define ELFNOTE_NAME(_n_) ((char*)(_n_) + sizeof(*(_n_)))
-#define ELFNOTE_DESC(_n_) (ELFNOTE_NAME(_n_) + ELFNOTE_ALIGN((_n_)->namesz))
-#define ELFNOTE_NEXT(_n_) ((ElfW(Note) *)(ELFNOTE_DESC(_n_) + ELFNOTE_ALIGN((_n_)->descsz)))
+#define ELFNOTE_DESC(_n_) (ELFNOTE_NAME(_n_) + ELFNOTE_ALIGN((_n_)->n_namesz))
+#define ELFNOTE_NEXT(_n_) ((ElfW(Nhdr) *)(ELFNOTE_DESC(_n_) + ELFNOTE_ALIGN((_n_)->n_descsz)))
 
 struct opts {
         int coretype;
@@ -66,28 +66,25 @@ struct fde_func_data { /* For eh_frame.c */
 };
 
 
-struct memelfnote
-{
-        const char *name;
-        int type;
-        unsigned int datasz;
-        void *data;
-};
-
 struct elf_thread_core_info {
-        struct elf_thread_core_info *next;
-        struct elf_prstatus prstatus;
-        struct memelfnote notes[0];
+        struct elf_prstatus *prstatus;
+	struct elf_prpsinfo *psinfo;
+	siginfo_t *siginfo;
+	ElfW(Nhdr) *notes;
 };
 
-struct elf_note_info {
-        struct memelfnote *notes;
+
+typedef struct notedesc {
+        ElfW(Nhdr) *notes;
         struct elf_prstatus *prstatus;  /* NT_PRSTATUS */
         struct elf_prpsinfo *psinfo;    /* NT_PRPSINFO */
-        elf_fpregset_t *fpu;
+	struct siginfo_t *siginfo;
+        struct elf_thread_core_info thread_core_info[MAX_THREADS];
+	elf_fpregset_t *fpu;
+	int thread_count;
         int thread_status_size;
         int numnote;
-};
+} notedesc_t;
 
 struct coredump_params {
         siginfo_t *siginfo;
@@ -101,12 +98,15 @@ typedef struct elfdesc {
 	ElfW(Ehdr) *ehdr;
 	ElfW(Phdr) *phdr;
 	ElfW(Shdr) *shdr;
+	ElfW(Nhdr) *nhdr;
 	ElfW(Addr) textVaddr;
 	ElfW(Addr) dataVaddr;
 	ElfW(Off) textOffset;
 	ElfW(Off) dataOffset;
 	ElfW(Off) dynamicOffset;
 	char *StringTable;
+	size_t size;
+	size_t noteSize;
 } elfdesc_t;
 
 typedef struct mappings {
@@ -129,6 +129,7 @@ typedef struct mappings {
 	int stack_tid;
 	size_t sh_offset;
 	uint32_t p_flags;
+	int has_pt_load;
 } mappings_t;
 
 typedef struct memdesc {
@@ -162,8 +163,11 @@ typedef struct memdesc {
 	struct { 
 		int fds[MAXFD];
 		int pid;
-		int uid, gid; 
+		int ppid;
+		int uid;
+		int gid;
 		int tidcount;
+		int exit_signal;
 		pid_t tid[MAX_TID];
 		pid_t leader;
 		pid_t tracer; // the pid of the tracer
@@ -181,7 +185,7 @@ typedef struct memdesc {
 typedef struct descriptor {
 	elfdesc_t binary;
 	memdesc_t memory;
-	struct elf_note_info info[MAX_THREADS];
+	notedesc_t info[MAX_THREADS];
 	int exe_type;
 	int dynlinking;
 	char *snapdir;
