@@ -459,11 +459,38 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc)
 	return 0;
 }
 
+/*
+ * ET_CORE files have all phdr segments as type PT_LOAD (except for 1 single PT_NOTE)
+ * but this causes us some problems since we need to specifically know where PT_DYNAMIC,
+ * PT_GNU_EH_FRAME, and PT_NOTE(from original executable) are located in the core file.
+ * To solve this we briefly use ptrace to retrive and parse the phdr table from the actual
+ * process image, which has the original in-tact phdr before it was dumped into a core phdr
+ * table. We then go through in this next function and mark up our core file phdr's with
+ * the proper p_type's.
+ */
+static void update_corefile_phdrs(memdesc_t *memdesc, elfdesc_t *elfdesc)
+{
+	ElfW(Phdr) *phdr = elfdesc->phdr;
+	int i;
+
+	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
+		if (phdr[i].p_vaddr == elfdesc->dynVaddr)
+			phdr[i].p_type = PT_DYNAMIC;
+		else
+		if (phdr[i].p_vaddr = elfdesc->ehframe_Vaddr)
+			phdr[i].p_type = PT_GNU_EH_FRAME;
+		else
+		if (phdr[i].p_vaddr = elfdesc->noteVaddr)
+			phdr[i].p_type = PT_NOTE;
+	}	
+}
+
+
 int core2ecfs(const char *outfile, memdesc_t *memdesc, elfdesc_t *elfdesc, notedesc_t *notedesc)
 {
 
 
-
+	return 0;
 }
 	
 int main(int argc, char **argv)
@@ -474,7 +501,7 @@ int main(int argc, char **argv)
 	elfdesc_t *elfdesc;
 	notedesc_t *notedesc = NULL;
 	pid_t pid;
-	int i, j;
+	int i, j, ret;
 	
 	if (argc < 3) {
 		fprintf(stderr, "Usage: %s <corefile(input)> <ecfsfile(output)> <pid(optional)>\n", argv[0]);
@@ -529,7 +556,9 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 
-	int ret = core2ecfs(argv[2], memdesc, elfdesc, notedesc);
+	update_corefile_phdrs(memdesc, elfdesc);
+
+	ret = core2ecfs(argv[2], memdesc, elfdesc, notedesc);
 	if (ret < 0) {
 		fprintf(stderr, "Failed to transform core file '%s' into ecfs\n", argv[2]);
 		exit(-1);
