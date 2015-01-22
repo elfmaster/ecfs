@@ -129,14 +129,11 @@ void parse_nt_files(struct nt_file_struct **nt_files, void *data, size_t size)
 		file_maps[i].end = fmp->end;
 		file_maps[i].file_ofs = fmp->file_ofs;
 	}
-
 	name_offset = (2 + 3 * (int)ptr[0]) * sizeof(ptr[0]); //sizeof(struct file_map_range) * i;
 	char *StringTable = (char *)&cp[name_offset];
 	for (i = 0; i < (*nt_files)->fcount; i++) {
-		printf("offset: %d\n", offset);
 		for (j = 0, p = &StringTable[offset]; *p != '\0'; p++, j++) 
 			(*nt_files)->files[i].path[j] = *p;
-			printf("path: %s\n", (*nt_files)->files[i].path);
 		offset += j + 1;
 	}	
 	fmp = (struct file_map_range *)(long *)(ptr + 2);
@@ -241,7 +238,75 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 	return notedesc;
 }
 
+/*
+ * Can only be called after the notes file has been parsed.
+ * We really only need these for PIE executables since getting
+ * the base address data and text can only otherwise be gotten
+ * from maps. The phdr's of a PIE executable won't reflect the
+ * actual load addresses.
+ */
+static ElfW(Addr) lookup_text_base(memdesc_t *memdesc, struct nt_file_struct *fmaps)
+{	
+	int i;
+	char *p;
 
+	for (i = 0; i < fmaps->fcount; i++) {
+		p = strrchr(fmaps->files[i].path, '/') + 1;
+		if (!strcmp(memdesc->path, p))
+			return fmaps->files[i].addr;
+	}
+	return 0;
+}
+
+static ElfW(Addr) lookup_text_size(memdesc_t *memdesc, struct nt_file_struct *fmaps)
+{
+        int i;
+        char *p;
+
+        for (i = 0; i < fmaps->fcount; i++) {
+                p = strrchr(fmaps->files[i].path, '/') + 1;
+                if (!strcmp(memdesc->path, p))
+                        return fmaps->files[i].size;
+        }
+        return 0;
+}
+
+/*
+ * Same as previous function but for data segment mapping base.
+ */
+static ElfW(Addr) lookup_data_base(memdesc_t *memdesc, struct nt_file_struct *fmaps)
+{
+	int i;
+	char *p;
+
+        for (i = 0; i < fmaps->fcount; i++) {
+                p = strrchr(fmaps->files[i].path, '/') + 1;
+                if (!strcmp(memdesc->path, p)) {
+			p = strrchr(fmaps->files[i + 1].path, '/') + 1;
+			if (!strcmp(memdesc->path, p))
+				return fmaps->files[i + 1].addr;
+        	}
+	}
+        return 0;
+}
+
+static ElfW(Addr) lookup_data_size(memdesc_t *memdesc, struct nt_file_struct *fmaps)
+{
+        int i;
+        char *p;
+
+        for (i = 0; i < fmaps->fcount; i++) {
+                p = strrchr(fmaps->files[i].path, '/') + 1;
+                if (!strcmp(memdesc->path, p)) {
+                        p = strrchr(fmaps->files[i + 1].path, '/') + 1;
+                        if (!strcmp(memdesc->path, p))
+                                return fmaps->files[i + 1].size;
+                }
+        }
+        return 0;
+}
+
+			
 /*
  * Since the process is paused, all /proc data is still available.
  * get_maps() simply extracts all of the memory mapping information
@@ -473,7 +538,7 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 	
 }
 
-static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc)
+static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *notedesc)
 {
 	int pid = memdesc->task.pid;
 	uint8_t *mem = alloca(8192);
@@ -482,10 +547,20 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc)
 	ElfW(Addr) text_base = 0;
 	int i;
 
+	/*
+	 * For debugging purposes since the core file on disk isn't
+	 * going to match the exact one in the process image for PIE
+	 * executables (Since we technically have to kill the process
+	 * to get the core, then restart the process again)
+	 * we won't use lookup_text_base() but instead get it from
+	 * the maps. We can change this much later on.
+	 */
+	//text_base = lookup_text_base(memdesc, notedesc->nt_files);
+	
 	for (i = 0; i < memdesc->mapcount; i++)
 		if (memdesc->maps[i].textbase)
 			text_base = memdesc->maps[i].base;
-	
+
 	if (text_base == 0) {
 		printf("Unable to locate executable base necessary to find phdr's\n");
 		return -1;
@@ -497,6 +572,12 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc)
 	if (pid_read(pid, (void *)mem, (void *)text_base, 4096) < 0)
 		return -1;
 	
+	/*
+	 * Now get text_base again but from the core file. During a real crashdump
+	 * these values will be the exact same either way.
+	 */
+	text_base = lookup_text_base(memdesc, notedesc->nt_files);
+
 	ehdr = (ElfW(Ehdr) *)mem;
 	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
 	if (ehdr->e_type == ET_DYN)
@@ -511,12 +592,12 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc)
 				switch(!(!phdr[i].p_offset)) {
 					case 0:
 						/* text segment */
-						elfdesc->textVaddr = phdr[i].p_vaddr + (elfdesc->pie ? text_base : 0);
-						elfdesc->textSize = phdr[i].p_memsz;
+						elfdesc->textVaddr = text_base;
+						elfdesc->textSize = lookup_text_size(memdesc, notedesc->nt_files);
 						break;
 					case 1:
-						elfdesc->dataVaddr = phdr[i].p_vaddr + (elfdesc->pie ? text_base : 0);
-						elfdesc->dataSize = phdr[i].p_memsz;
+						elfdesc->dataVaddr = lookup_data_base(memdesc, notedesc->nt_files);
+						elfdesc->dataSize = lookup_data_size(memdesc, notedesc->nt_files);
 						printf("dataVaddr: %lx\n", elfdesc->dataVaddr);
 						break;
 				}
@@ -661,7 +742,7 @@ int main(int argc, char **argv)
 	 * attach to process with ptrace and parse original phdr table
 	 * to get more granular segment information.
 	 */
-	if (parse_orig_phdrs(elfdesc, memdesc) < 0) {
+	if (parse_orig_phdrs(elfdesc, memdesc, notedesc) < 0) {
 		fprintf(stderr, "Failed to parse program headers in memory\n");
 		exit(-1);
 	}
