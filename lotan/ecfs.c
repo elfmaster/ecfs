@@ -130,7 +130,7 @@ void parse_nt_files(struct nt_file_struct **nt_files, void *data, size_t size)
 		file_maps[i].file_ofs = fmp->file_ofs;
 	}
 	name_offset = sizeof(struct file_map_range) * i;
-	
+	printf("name_offset: %lx\n", name_offset);
 	char *StringTable = (char *)&cp[name_offset];
 	for (i = 0; i < (*nt_files)->fcount; i++) {
 		for (j = 0, p = &StringTable[offset]; *p != '\0'; p++, j++) 
