@@ -598,7 +598,6 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 					case 1:
 						elfdesc->dataVaddr = lookup_data_base(memdesc, notedesc->nt_files);
 						elfdesc->dataSize = lookup_data_size(memdesc, notedesc->nt_files);
-						printf("dataVaddr: %lx\n", elfdesc->dataVaddr);
 						break;
 				}
 				break;
@@ -672,7 +671,7 @@ int core2ecfs(const char *outfile, memdesc_t *memdesc, elfdesc_t *elfdesc, noted
 	
 	for (i = 0; i < ehdr->e_phnum; i++) {
 		if (phdr[i].p_vaddr == PAGE_ALIGN(elfdesc->dataVaddr)) {
-			dyn = (ElfW(Dyn) *)&mem[elfdesc->dynVaddr - PAGE_ALIGN(elfdesc->dataVaddr)];
+			dyn = (ElfW(Dyn) *)&mem[elfdesc->dynVaddr - elfdesc->dataVaddr];
 			break;
 		}
 	}
