@@ -85,6 +85,80 @@ elfdesc_t * load_core_file(const char *path)
 }
 
 /*
+ * This function does the opposite of how the kernel packs files into
+ * the notes entry. We do the opposite to extract the info out of the
+ * core files NT_FILE note.
+ */
+/* comment taken from kernel: */
+/*
+ * Format of NT_FILE note:
+ *
+ * long count     -- how many files are mapped
+ * long page_size -- units for file_ofs
+ * array of [COUNT] elements of
+ *   long start
+ *   long end
+ *   long file_ofs
+ * followed by COUNT filenames in ASCII: "FILE1" NUL "FILE2" NUL...
+ */
+
+void parse_nt_files(struct nt_file_struct **nt_files, void *data, size_t size)
+{
+	long *ptr = (long *)data;
+	int offset = 0; // for strtab
+	int i, j, name_offset;
+	char *p, *cp = (char *)data;
+	
+	struct file_map_range {
+		long start;
+		long end;
+		long file_ofs;
+	} __attribute((packed));
+	
+	struct file_map_range *file_maps;
+	*nt_files = (struct nt_file_struct *)heapAlloc(sizeof(struct nt_file_struct));
+
+	(*nt_files)->fcount = ptr[0]; // filecount is stored here
+	file_maps = (struct file_map_range *)heapAlloc((*nt_files)->fcount * sizeof(struct nt_file_struct));
+	
+	(*nt_files)->page_size = ptr[1];
+	
+	struct file_map_range *fmp = (struct file_map_range *)((long *)(ptr + 2));
+	for (i = 0; i < (*nt_files)->fcount; i++, fmp++) {
+		file_maps[i].start = fmp->start;	
+		file_maps[i].end = fmp->end;
+		file_maps[i].file_ofs = fmp->file_ofs;
+	}
+	name_offset = sizeof(struct file_map_range) * i;
+	
+	char *StringTable = (char *)&cp[name_offset];
+	for (i = 0; i < (*nt_files)->fcount; i++) {
+		for (j = 0, p = &StringTable[offset]; *p != '\0'; p++, j++) 
+			(*nt_files)->files[i].path[j] = *p;
+			offset += j;
+	}	
+	fmp = (struct file_map_range *)(long *)(ptr + 2);
+	for (i = 0; i < (*nt_files)->fcount; i++) {
+		(*nt_files)->files[i].addr = fmp->start;
+		(*nt_files)->files[i].size = fmp->start - fmp->end;
+		(*nt_files)->files[i].pgoff = fmp->file_ofs;
+		fmp++;
+	}
+
+}
+
+static void print_nt_files(struct nt_file_struct *file_maps)
+{
+	int i;
+	for (i = 0; i < file_maps->fcount; i++) {
+		printf("%lx  %lx  %lx\n", file_maps->files[i].addr, 
+					  file_maps->files[i].addr + file_maps->files[i].size, 
+					  file_maps->files[i].pgoff);
+		printf("\t%s\n", file_maps->files[i].path);
+	}
+}
+
+/*
  * Parse the ELF notes to extract info such as struct prpsinfo
  * and struct prstatus. These structs hold information about the
  * process, and task state.
@@ -93,8 +167,9 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 {
 	notedesc_t *notedesc = (notedesc_t *)heapAlloc(sizeof(notedesc_t));
 	size_t i, j, len;
-	int tc;
+	int tc, ret;
 	uint8_t *desc;
+	struct nt_file_struct *nt_files; // for parsing NT_FILE in corefile
 	ElfW(Nhdr) *notes = elfdesc->nhdr;
 
 	for (i = 0; i < elfdesc->noteSize; i += len) {
@@ -148,10 +223,10 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 				memcpy((void *)notedesc->auxv, (void *)desc, notes->n_descsz);
 				break;
 			case NT_FILE:
-				/*
-				 * No real need to get these since we have these from
-				 * /proc/pid/maps
-				 */
+				parse_nt_files(&nt_files, (void *)desc, notes->n_descsz);
+				print_nt_files(nt_files);
+				notedesc->nt_files = (struct nt_file_struct *)heapAlloc(sizeof(struct nt_file_struct));
+				memcpy(notedesc->nt_files, nt_files, sizeof(struct nt_file_struct));
 				break;
 		}
 		/*
@@ -434,25 +509,26 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc)
 				switch(!(!phdr[i].p_offset)) {
 					case 0:
 						/* text segment */
-						elfdesc->textVaddr = phdr[i].p_vaddr;
+						elfdesc->textVaddr = phdr[i].p_vaddr + (elfdesc->pie ? text_base : 0);
 						elfdesc->textSize = phdr[i].p_memsz;
 						break;
 					case 1:
-						elfdesc->dataVaddr = phdr[i].p_vaddr;
+						elfdesc->dataVaddr = phdr[i].p_vaddr + (elfdesc->pie ? text_base : 0);
 						elfdesc->dataSize = phdr[i].p_memsz;
+						printf("dataVaddr: %lx\n", elfdesc->dataVaddr);
 						break;
 				}
 				break;
 			case PT_DYNAMIC:
-				elfdesc->dynVaddr = phdr[i].p_vaddr;
+				elfdesc->dynVaddr = phdr[i].p_vaddr + (elfdesc->pie ? text_base : 0);
 				elfdesc->dynSize = phdr[i].p_memsz;
 				break;
 			case PT_GNU_EH_FRAME:
-				elfdesc->ehframe_Vaddr = phdr[i].p_vaddr;
+				elfdesc->ehframe_Vaddr = phdr[i].p_vaddr + (elfdesc->pie ? text_base : 0);
 				elfdesc->ehframe_Size = phdr[i].p_memsz;
 				break;
 			case PT_NOTE:
-				elfdesc->noteVaddr = phdr[i].p_vaddr;
+				elfdesc->noteVaddr = phdr[i].p_vaddr + (elfdesc->pie ? text_base : 0);
 				elfdesc->noteSize = phdr[i].p_filesz;
 				break;
 			case PT_INTERP:

@@ -77,6 +77,17 @@ struct elf_thread_core_info {
 };
 
 
+struct nt_file_struct {
+	struct {
+		unsigned long addr;
+		size_t size;
+		size_t pgoff;
+		char path[512];
+	} files[2048];
+	int fcount;
+	int page_size;
+};
+
 typedef struct notedesc {
         ElfW(Nhdr) *notes;
         struct elf_prstatus *prstatus;  /* NT_PRSTATUS */
@@ -92,6 +103,7 @@ typedef struct notedesc {
 	int thread_count;
         int thread_status_size;
         int numnote;
+	struct nt_file_struct *nt_files;
 } notedesc_t;
 
 struct coredump_params {
