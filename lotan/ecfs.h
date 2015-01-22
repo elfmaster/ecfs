@@ -68,7 +68,7 @@ struct fde_func_data {		/* For eh_frame.c */
 	size_t size;
 };
 
-struct section_meta_data {
+struct section_meta {
 	ElfW(Addr) bssVaddr, dynVaddr, relVaddr, relaVaddr, ehframeVaddr,
 	    textVaddr, o_textVaddr, dataVaddr, o_dataVaddr, gotVaddr, noteVaddr,
 	    hashVaddr, initVaddr, finiVaddr, pltVaddr, dsymVaddr, dstrVaddr,
@@ -130,6 +130,7 @@ typedef struct elfdesc {
 	 ElfW(Phdr) * phdr;
 	 ElfW(Shdr) * shdr;
 	 ElfW(Nhdr) * nhdr;
+	 ElfW(Dyn)  *dyn;
 	 ElfW(Addr) textVaddr;
 	 ElfW(Addr) dataVaddr;
 	 ElfW(Addr) dynVaddr;

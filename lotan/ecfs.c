@@ -25,6 +25,14 @@
 
 #include "ecfs.h"
 
+typedef struct handle {
+	elfdesc_t *elfdesc;
+	memdesc_t *memdesc;
+	notedesc_t *notedesc;
+	struct nt_file_struct *nt_files;
+	struct section_meta smeta;
+} handle_t;
+
 /*
  * This function simply mmap's the core file into memory
  * and sets up pointers to the ELF header, and the program
@@ -623,6 +631,83 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 }
 
 /*
+ * Parse the dynamic segment to get 
+ * a whole lot of needed information
+ */
+
+int extract_dyntag_info(handle_t *handle)
+{
+	int i, j;
+	elfdesc_t *elfdesc = handle->elfdesc;
+	memdesc_t *memdesc = handle->memdesc;
+	notedesc_t *notedesc = handle->notedesc;
+	ElfW(Phdr) *phdr = elfdesc->phdr;
+	ElfW(Dyn) *dyn;
+	ElfW(Off) dataOffset;
+	elfdesc->dyn = NULL;
+	struct section_meta smeta;
+
+	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
+		if (phdr[i].p_vaddr = elfdesc->dataVaddr) {
+			elfdesc->dyn = &elfdesc->mem[phdr[i].p_offset + (elfdesc->dynVaddr - elfdesc->dataVaddr)];
+			break;
+		}
+	}
+
+	if (elfdesc->dyn == NULL) {
+		fprintf(stderr, "Unable to find dynamic segment in core file, exiting...\n");
+		return -1;
+	}
+	dyn = elfdesc->dyn;
+	for (j = 0; dyn[j].d_tag != DT_NULL; j++) {
+        	switch(dyn[j].d_tag) {
+			case DT_REL:
+                        	smeta.relVaddr = dyn[j].d_un.d_val;
+                                smeta.relOff = smeta.relVaddr - elfdesc->textVaddr;
+                        	break;
+                        case DT_RELA:
+                        	smeta.relaVaddr = dyn[j].d_un.d_val;
+                                smeta.relaOff = smeta.relaVaddr - elfdesc->textVaddr;
+                        	break;
+                        case DT_PLTGOT:
+                        	smeta.gotVaddr = dyn[j].d_un.d_val;
+                                smeta.gotOff = dyn[j].d_un.d_val - elfdesc->dataVaddr;
+                                smeta.gotOff += (ElfW(Off))dataOffset;
+                                break;
+                        case DT_GNU_HASH:
+                                smeta.hashVaddr = dyn[j].d_un.d_val;
+                                smeta.hashOff = smeta.hashVaddr - elfdesc->textVaddr;
+                                break;
+                        case DT_INIT: 
+                                smeta.initVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
+                                smeta.initOff = smeta.initVaddr - elfdesc->textVaddr;
+                                break;
+                        case DT_FINI:
+                                smeta.finiVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
+                                smeta.finiOff = smeta.finiVaddr - elfdesc->textVaddr;
+                                break;
+                        case DT_STRSZ:
+                                smeta.strSiz = dyn[j].d_un.d_val;
+                                break;  
+                        case DT_PLTRELSZ:
+                                smeta.pltSiz = dyn[j].d_un.d_val;
+                                break;
+                        case DT_SYMTAB:
+                                smeta.dsymVaddr = dyn[j].d_un.d_ptr;
+                                smeta.dsymOff = smeta.dsymVaddr - elfdesc->textVaddr;
+                                break;
+                        case DT_STRTAB:
+                                smeta.dstrVaddr = dyn[j].d_un.d_ptr;
+                                smeta.dstrOff = smeta.dstrVaddr - elfdesc->textVaddr;
+                                break;
+
+		}
+	}
+	memcpy((void *)&handle->smeta, (void *)&smeta, sizeof(struct section_meta));
+	return 0;
+}
+
+/*
  * ET_CORE files have all phdr segments as type PT_LOAD (except for 1 single PT_NOTE)
  * but this causes us some problems since we need to specifically know where PT_DYNAMIC,
  * PT_GNU_EH_FRAME, and PT_NOTE(from original executable) are located in the core file.
@@ -685,6 +770,7 @@ int main(int argc, char **argv)
 	memdesc_t *memdesc;
 	elfdesc_t *elfdesc;
 	notedesc_t *notedesc = NULL;
+	handle_t *handle = alloca(sizeof(handle_t));
 	pid_t pid;
 	int i, j, ret;
 	
@@ -746,6 +832,12 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 
+	handle->elfdesc = elfdesc;
+	handle->memdesc = memdesc;
+	handle->notedesc = notedesc;
+	
+	ret = extract_dyntag_info(handle);
+	
 	/*
 	 * Convert the core file into an actual ECFS file and write it
 	 * to disk.
