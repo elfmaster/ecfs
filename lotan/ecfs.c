@@ -738,19 +738,14 @@ static void xref_phdrs_for_offsets(memdesc_t *memdesc, elfdesc_t *elfdesc)
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
 		if (elfdesc->interpVaddr >= phdr[i].p_vaddr && elfdesc->interpVaddr < phdr[i].p_vaddr + phdr[i].p_memsz)
 			elfdesc->interpOffset = phdr[i].p_offset + elfdesc->interpVaddr - phdr[i].p_vaddr;
-		else
 		if (elfdesc->dynVaddr >= phdr[i].p_vaddr && elfdesc->dynVaddr < phdr[i].p_vaddr + phdr[i].p_memsz)
 			elfdesc->dynOffset = phdr[i].p_offset + elfdesc->dynVaddr - phdr[i].p_vaddr;
-		else
 		if (elfdesc->ehframe_Vaddr >= phdr[i].p_vaddr && elfdesc->ehframe_Vaddr < phdr[i].p_vaddr + phdr[i].p_memsz)
 			elfdesc->ehframeOffset = phdr[i].p_offset + elfdesc->ehframe_Vaddr - phdr[i].p_vaddr;
-		else
 		if (elfdesc->noteVaddr >= phdr[i].p_vaddr && elfdesc->noteVaddr < phdr[i].p_vaddr + phdr[i].p_memsz)
 			elfdesc->noteOffset = phdr[i].p_offset + elfdesc->noteVaddr - phdr[i].p_vaddr;
-		else
 		if (elfdesc->textVaddr == phdr[i].p_vaddr) 
 			elfdesc->textOffset = phdr[i].p_offset;
-		else
 		if (elfdesc->dataVaddr == phdr[i].p_vaddr) {
 			elfdesc->dataOffset = phdr[i].p_offset;
 			elfdesc->bssOffset = phdr[i].p_offset + elfdesc->bssVaddr - elfdesc->dataVaddr;
@@ -758,7 +753,45 @@ static void xref_phdrs_for_offsets(memdesc_t *memdesc, elfdesc_t *elfdesc)
 	}
 }
 
-int build_section_headers(int fd, const char *outfile, handle_t *handle, ecfs_file_t *ecfs_file)
+static ElfW(Off) get_internal_sh_offset(memdesc_t *memdesc, int type)
+{
+#define HEAP 0
+#define STACK 1
+#define VDSO 2
+#define VSYSCALL 3
+
+        int i;
+        mappings_t *maps = memdesc->maps;
+
+        switch(type) {
+                case HEAP:
+                        for (i = 0; i < memdesc->mapcount; i++)
+                                if (maps[i].heap)
+                                        return maps[i].sh_offset;
+                        break;
+                case STACK:
+                         for (i = 0; i < memdesc->mapcount; i++)
+                                if (maps[i].stack)
+                                        return maps[i].sh_offset;
+                        break;
+                case VDSO:
+                         for (i = 0; i < memdesc->mapcount; i++)
+                                if (maps[i].vdso) {
+                                        return maps[i].sh_offset;
+                                }
+                        break;
+                case VSYSCALL:
+                         for (i = 0; i < memdesc->mapcount; i++)
+                                if (maps[i].vsyscall)
+                                        return maps[i].sh_offset;
+                        break;
+                default:
+                        return 0;
+        }
+        return 0;
+}
+
+static int build_section_headers(int fd, const char *outfile, handle_t *handle, ecfs_file_t *ecfs_file)
 {
 	elfdesc_t *elfdesc = handle->elfdesc;
         memdesc_t *memdesc = handle->memdesc;
@@ -766,9 +799,15 @@ int build_section_headers(int fd, const char *outfile, handle_t *handle, ecfs_fi
         struct section_meta *smeta = &handle->smeta;
 	ElfW(Shdr) *shdr = alloca(sizeof(ElfW(Shdr)) * 512);
         char *StringTable = (char *)alloca(512);
+	struct stat st;
         unsigned int stoffset = 0;
-        int scount = 0;
-	
+        int scount = 0, text_shdr_index;
+	int i; 
+	/*
+	 * Get the offset of where the shdrs are being written
+	 */
+	loff_t e_shoff = lseek(fd, 0, SEEK_CUR);
+
 	shdr[scount].sh_type = SHT_NULL;
         shdr[scount].sh_offset = 0;
         shdr[scount].sh_addr = 0;
@@ -833,7 +872,380 @@ int build_section_headers(int fd, const char *outfile, handle_t *handle, ecfs_fi
         stoffset += strlen(".hash") + 1;
         scount++;
 	
+	 /*
+         * .dynsym
+         */
+        shdr[scount].sh_type = SHT_DYNSYM;
+        shdr[scount].sh_offset = smeta->dsymOff;
+        shdr[scount].sh_addr = smeta->dsymVaddr;
+        shdr[scount].sh_flags = SHF_ALLOC;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = scount + 1;
+        shdr[scount].sh_entsize = sizeof(ElfW(Sym));
+        shdr[scount].sh_size = smeta->dstrOff - smeta->dsymOff;
+        shdr[scount].sh_addralign = sizeof(long);
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".dynsym");
+        stoffset += strlen(".dynsym") + 1;
+        scount++;
+
+        /*
+         * .dynstr
+         */
+        shdr[scount].sh_type = SHT_STRTAB;
+        shdr[scount].sh_offset = smeta->dstrOff;
+        shdr[scount].sh_addr = smeta->dstrVaddr;
+        shdr[scount].sh_flags = SHF_ALLOC;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = sizeof(ElfW(Sym));
+        shdr[scount].sh_size = smeta->strSiz;
+        shdr[scount].sh_addralign = 1;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".dynstr");
+        stoffset += strlen(".dynstr") + 1;
+        scount++;
 	
+	/*
+         * rela.dyn
+         */
+        shdr[scount].sh_type = (__ELF_NATIVE_CLASS == 64) ? SHT_RELA : SHT_REL;
+        shdr[scount].sh_offset = (__ELF_NATIVE_CLASS == 64) ? smeta->relaOff : smeta->relOff;
+        shdr[scount].sh_addr = (__ELF_NATIVE_CLASS == 64) ? smeta->relaVaddr : smeta->relVaddr;
+        shdr[scount].sh_flags = SHF_ALLOC;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = scount - 1;
+        shdr[scount].sh_entsize = (__ELF_NATIVE_CLASS == 64) ? sizeof(Elf64_Rela) : sizeof(Elf32_Rel);
+        shdr[scount].sh_size = UNKNOWN_SHDR_SIZE;
+        shdr[scount].sh_addralign = sizeof(long); 
+        shdr[scount].sh_name = stoffset;
+        if (__ELF_NATIVE_CLASS == 64) {
+                strcpy(&StringTable[stoffset], ".rela.dyn");
+                stoffset += strlen(".rela.dyn") + 1;
+        } else {
+                strcpy(&StringTable[stoffset], ".rel.dyn");
+                stoffset += strlen(".rel.dyn") + 1;
+        }
+        scount++;
+
+        /*
+         * .init
+         */
+        shdr[scount].sh_type = SHT_PROGBITS;
+        shdr[scount].sh_offset = smeta->initOff;
+        shdr[scount].sh_addr = smeta->initVaddr;
+        shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = UNKNOWN_SHDR_SIZE;
+        shdr[scount].sh_addralign = sizeof(long);
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".init");
+        stoffset += strlen(".init") + 1;
+        scount++;
+	
+	 /*
+         * .text
+         */
+        text_shdr_index = scount;
+        shdr[scount].sh_type = SHT_PROGBITS;
+        shdr[scount].sh_offset = elfdesc->textOffset;
+        shdr[scount].sh_addr = elfdesc->textVaddr;
+        shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = elfdesc->textSize;
+        shdr[scount].sh_addralign = 16;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".text");
+        stoffset += strlen(".text") + 1;
+        scount++;
+
+        
+        /*
+         * .fini
+         */
+        shdr[scount].sh_type = SHT_PROGBITS;
+        shdr[scount].sh_offset = smeta->finiOff;
+        shdr[scount].sh_addr = smeta->finiVaddr;
+        shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = UNKNOWN_SHDR_SIZE;
+        shdr[scount].sh_addralign = 16;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".fini");
+        stoffset += strlen(".fini") + 1;
+        scount++;
+
+	/*
+         * .eh_frame_hdr
+         */
+        shdr[scount].sh_type = SHT_PROGBITS;
+        shdr[scount].sh_offset = elfdesc->ehframeOffset;
+        shdr[scount].sh_addr = elfdesc->ehframe_Vaddr;    
+        shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = elfdesc->ehframe_Size;
+        shdr[scount].sh_addralign = 16;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".eh_frame_hdr");
+        stoffset += strlen(".eh_frame_hdr") + 1;
+        scount++;
+        
+        /*
+         * .eh_frame
+         */
+        shdr[scount].sh_type = SHT_PROGBITS;
+        shdr[scount].sh_offset = elfdesc->ehframeOffset + (elfdesc->ehframe_Size + 4);
+        shdr[scount].sh_addr = elfdesc->ehframe_Vaddr + elfdesc->ehframe_Size;
+        shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = (ElfW(Off))((elfdesc->ehframe_Vaddr + elfdesc->ehframe_Size) - elfdesc->textVaddr);
+        shdr[scount].sh_addralign = 16;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".eh_frame");
+        stoffset += strlen(".eh_frame") + 1;
+        scount++;
+
+	 /*
+         * .dynamic 
+         */
+        shdr[scount].sh_type = SHT_DYNAMIC;
+        shdr[scount].sh_offset = elfdesc->dynOffset;
+        shdr[scount].sh_addr = elfdesc->dynVaddr;
+        shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = (__ELF_NATIVE_CLASS == 64) ? 16 : 8;
+        shdr[scount].sh_size = elfdesc->dynSize;
+        shdr[scount].sh_addralign = sizeof(long);
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".dynamic");
+        stoffset += strlen(".dynamic") + 1;
+        scount++;
+
+        /*
+         * .got.plt
+         */
+        shdr[scount].sh_type = SHT_PROGBITS;
+        shdr[scount].sh_offset = smeta->gotOff;
+        shdr[scount].sh_addr = smeta->gotVaddr;
+        shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = sizeof(long);
+        shdr[scount].sh_size = UNKNOWN_SHDR_SIZE;
+        shdr[scount].sh_addralign = sizeof(long);
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".got.plt");
+        stoffset += strlen(".got.plt") + 1;
+        scount++;
+	
+	/*
+	 * .data
+         */
+        shdr[scount].sh_type = SHT_PROGBITS;
+        shdr[scount].sh_offset = elfdesc->dataOffset;
+        shdr[scount].sh_addr = elfdesc->dataVaddr;
+        shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = elfdesc->dataSize;
+        shdr[scount].sh_addralign = sizeof(long);
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".data");
+        stoffset += strlen(".data") + 1;
+        scount++;
+
+        /*
+         * .bss
+         */
+        shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
+        shdr[scount].sh_offset = elfdesc->bssOffset;
+        shdr[scount].sh_addr = elfdesc->bssVaddr;
+        shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = elfdesc->bssSize;
+        shdr[scount].sh_addralign = sizeof(long);
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".bss");
+        stoffset += strlen(".bss") + 1;
+        scount++;
+
+        /*
+         * .heap
+         */
+        shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
+        shdr[scount].sh_offset = get_internal_sh_offset(memdesc, HEAP);
+        shdr[scount].sh_addr = memdesc->heap.base;
+        shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = memdesc->heap.size;
+        shdr[scount].sh_addralign = sizeof(long);
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".heap");
+        stoffset += strlen(".heap") + 1;
+        scount++;
+
+	 /*
+         * .stack
+         */
+        shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
+        shdr[scount].sh_offset = get_internal_sh_offset(memdesc, STACK);
+        shdr[scount].sh_addr = memdesc->stack.base;
+        shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = memdesc->stack.size;
+        shdr[scount].sh_addralign = sizeof(long);
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".stack");
+        stoffset += strlen(".stack") + 1;
+        scount++;
+
+        /*
+         * .vdso
+         */
+        shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
+        shdr[scount].sh_offset = get_internal_sh_offset(memdesc, VDSO);
+        shdr[scount].sh_addr = memdesc->vdso.base;
+        shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = memdesc->vdso.size;
+        shdr[scount].sh_addralign = sizeof(long);
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".vdso");
+        stoffset += strlen(".vdso") + 1;
+        scount++;
+
+        /*
+         * .vsyscall
+         */
+        shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
+        shdr[scount].sh_offset = get_internal_sh_offset(memdesc, VSYSCALL);
+        shdr[scount].sh_addr = memdesc->vsyscall.base;
+        shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = memdesc->vsyscall.size;
+        shdr[scount].sh_addralign = sizeof(long);
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".vsyscall");
+        stoffset += strlen(".vsyscall") + 1;
+        scount++;
+
+	 /*
+         * .symtab
+         */
+        shdr[scount].sh_type = SHT_SYMTAB;
+        shdr[scount].sh_offset = 0;
+        shdr[scount].sh_addr = 0;
+        shdr[scount].sh_flags = 0;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = scount + 1;
+        shdr[scount].sh_entsize = sizeof(ElfW(Sym));
+        shdr[scount].sh_size;
+        shdr[scount].sh_addralign = 4;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".symtab");
+        stoffset += strlen(".symtab") + 1;
+        scount++;
+
+        /*
+         * .strtab
+         */
+        shdr[scount].sh_type = SHT_STRTAB;
+        shdr[scount].sh_offset = 0;
+        shdr[scount].sh_addr = 0;
+        shdr[scount].sh_flags = 0;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = 0;
+        shdr[scount].sh_addralign = 4;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".strtab");
+        stoffset += strlen(".strtab") + 1;
+        scount++;
+
+        /*
+         * .shstrtab
+         */
+        shdr[scount].sh_type = SHT_STRTAB;
+        shdr[scount].sh_offset = e_shoff + (sizeof(ElfW(Shdr)) * (scount  + 1));
+        shdr[scount].sh_addr = 0;
+        shdr[scount].sh_flags = 0;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = stoffset + strlen(".shstrtab") + 1; 
+        shdr[scount].sh_addralign = 1;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".shstrtab");
+        stoffset += strlen(".shstrtab") + 1;
+        scount++;
+
+	 /* We will add the actual sections for .symtab and .strtab
+         * after we write out the current section headers first and
+         * use them to retrieve symtab info from eh_frame
+         */
+	const char *filepath = outfile;
+        int e_shstrndx = scount - 1;
+        for (i = 0; i < scount; i++) 
+                write(fd, (char *)&shdr[i], sizeof(ElfW(Shdr)));
+        
+        write(fd, (char *)StringTable, stoffset);
+        fsync(fd);
+        close(fd);
+        
+        if ((fd = open(filepath, O_RDWR)) < 0) {
+                perror("open");
+                exit(-1);
+        }
+        
+        if (fstat(fd, &st) < 0) {
+                perror("fstat");
+                exit(-1);
+        }
+
+        uint8_t *mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+        if (mem == MAP_FAILED) {
+                perror("mmap");
+                exit(-1);
+        }
+
+        ElfW(Ehdr *)ehdr = (ElfW(Ehdr) *)mem;
+        ehdr->e_shoff = e_shoff;
+        ehdr->e_shstrndx = e_shstrndx;
+        ehdr->e_shnum = scount;
+        ehdr->e_type = ET_CORE;
+
+	msync(mem, st.st_size, MS_SYNC);
+        munmap(mem, st.st_size);
+
+        close(fd);
+
+
+
+	
+	return scount;
 }
 
 
@@ -867,9 +1279,25 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	for (i = 0; i < notedesc->thread_count; i++)	
 		write(fd, notedesc->thread_core_info[i].prstatus, sizeof(struct elf_prstatus));
 	
-	build_section_headers(fd, outfile, handle, &ecfs_file);
-
+	int shnum = build_section_headers(fd, outfile, handle, &ecfs_file);
+	
 	close(fd);
+
+	/*
+	 * Now remap our new file to make further edits.
+	 */
+	fd = xopen(outfile, O_RDWR);
+	stat(outfile, &st);
+	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	if (mem == MAP_FAILED) {
+		perror("mmap");
+		return -1;
+	}
+
+	ehdr = (ElfW(Ehdr) *)mem;
+	ehdr->e_shoff = ecfs_file.stb_offset;
+	ehdr->e_shnum = shnum;
+	munmap(mem, st.st_size);
 	return 0;
 }
 	
