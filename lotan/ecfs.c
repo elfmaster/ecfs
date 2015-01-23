@@ -1234,16 +1234,17 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         ElfW(Ehdr *)ehdr = (ElfW(Ehdr) *)mem;
         ehdr->e_shoff = e_shoff;
         ehdr->e_shstrndx = e_shstrndx;
+	ehdr->e_shentsize = sizeof(ElfW(Shdr));
         ehdr->e_shnum = scount;
         ehdr->e_type = ET_CORE;
-
+	
 	msync(mem, st.st_size, MS_SYNC);
         munmap(mem, st.st_size);
 
         close(fd);
 
 
-
+	
 	
 	return scount;
 }
