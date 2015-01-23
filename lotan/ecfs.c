@@ -545,7 +545,19 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 	return memdesc;
 	
 }
-
+/*
+ * This function parses the original phdr's which it must get using
+ * ptrace. This is the only part where we use ptrace() and we should
+ * possibly change this to using /proc/self/mem instead. In any case
+ * we get the original phdr locations so that we can then find them
+ * in relation to the corefile that was dumped.
+ *
+ * NOTE:
+ * The dataVaddr is taken from the core file which gives the page aligned
+ * segment address, which is not the same as the original data segment address.
+ * In our case we use the page aligned dataVaddr which we retrieve with our
+ * lookup_data_base() function.
+ */
 static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *notedesc)
 {
 	int pid = memdesc->task.pid;
@@ -606,6 +618,9 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 					case 1:
 						elfdesc->dataVaddr = lookup_data_base(memdesc, notedesc->nt_files);
 						elfdesc->dataSize = lookup_data_size(memdesc, notedesc->nt_files);
+						elfdesc->bssVaddr = phdr[i].p_vaddr + phdr[i].p_filesz;
+						elfdesc->bssSize = phdr[i].p_memsz - phdr[i].p_filesz;
+						elfdesc->bssOffset = phdr[i].p_offset + elfdesc->bssVaddr - elfdesc->dataVaddr;
 						break;
 				}
 				break;

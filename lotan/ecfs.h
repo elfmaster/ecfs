@@ -145,9 +145,11 @@ typedef struct elfdesc {
 	 ElfW(Addr) dynVaddr;
 	 ElfW(Addr) ehframe_Vaddr;
 	 ElfW(Addr) noteVaddr;
+	 ElfW(Addr) bssVaddr;
 	 ElfW(Off) textOffset;
 	 ElfW(Off) dataOffset;
 	 ElfW(Off) dynamicOffset;
+	 ElfW(Off) bssOffset;
 	char *StringTable;
 	size_t size;
 	size_t noteSize;
@@ -156,6 +158,7 @@ typedef struct elfdesc {
 	size_t dataSize;
 	size_t dynSize;
 	size_t ehframe_Size;
+	size_t bssSize;
 	int dynlinked;
 	int pie;
 } elfdesc_t;
