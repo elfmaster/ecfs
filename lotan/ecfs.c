@@ -745,6 +745,9 @@ static void xref_phdrs_for_offsets(memdesc_t *memdesc, elfdesc_t *elfdesc)
 		if (elfdesc->ehframe_Vaddr >= phdr[i].p_vaddr && elfdesc->ehframe_Vaddr < phdr[i].p_vaddr + phdr[i].p_memsz)
 			elfdesc->ehframeOffset = phdr[i].p_offset + elfdesc->ehframe_Vaddr - phdr[i].p_vaddr;
 		else
+		if (elfdesc->noteVaddr >= phdr[i].p_vaddr && elfdesc->noteVaddr < phdr[i].p_vaddr + phdr[i].p_memsz)
+			elfdesc->noteOffset = phdr[i].p_offset + elfdesc->noteVaddr - phdr[i].p_vaddr;
+		else
 		if (elfdesc->textVaddr == phdr[i].p_vaddr) 
 			elfdesc->textOffset = phdr[i].p_offset;
 		else
@@ -795,6 +798,42 @@ int build_section_headers(int fd, const char *outfile, handle_t *handle, ecfs_fi
         strcpy(&StringTable[stoffset], ".interp");
         stoffset += strlen(".interp") + 1;
         scount++;
+
+	 /*
+         * .note
+         */
+        shdr[scount].sh_type = SHT_NOTE;
+        shdr[scount].sh_offset = elfdesc->noteOffset;
+        shdr[scount].sh_addr = elfdesc->noteVaddr;
+        shdr[scount].sh_flags = SHF_ALLOC;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = elfdesc->noteSize;
+        shdr[scount].sh_addralign = 4;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".note");
+        stoffset += strlen(".note") + 1;
+        scount++;
+
+        /*
+         * .hash
+         */
+        shdr[scount].sh_type = SHT_GNU_HASH; // use SHT_HASH?
+        shdr[scount].sh_offset = smeta->hashOff; 
+        shdr[scount].sh_addr = smeta->hashVaddr;
+        shdr[scount].sh_flags = SHF_ALLOC;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = UNKNOWN_SHDR_SIZE;
+        shdr[scount].sh_addralign = 4;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".hash");
+        stoffset += strlen(".hash") + 1;
+        scount++;
+	
+	
 }
 
 
@@ -850,6 +889,9 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 	
+	/*
+	 * Don't allow itself to core in the event of a bug.
+	 */
     	if (setrlimit(RLIMIT_CORE, &limit_core) < 0) {
 		perror("setrlimit");
 		exit(-1);
@@ -863,6 +905,12 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 
+	/*
+	 * Retrieve 'struct elf_prstatus' and other structures
+	 * that contain vital information (Such as registers).
+	 * These are all stored in the ELF notes area of the
+	 * core file.
+	 */
 	notedesc = (notedesc_t *)parse_notes_area(elfdesc);
 	if (notedesc == NULL) {
 		fprintf(stderr, "Failed to parse ELF notes segment\n");
@@ -910,6 +958,20 @@ int main(int argc, char **argv)
 	handle->memdesc = memdesc;
 	handle->notedesc = notedesc;
 	
+	/*
+	 * Figure out where the offsets to certain parts of the
+	 * file are, such as .dynamic, .interp, etc.
+	 * in such cases where we got the original info from
+	 * the original phdr table. The offsets will be different
+	 * since the phdr's are all page aligned in the corefile.
+	 */
+	xref_phdrs_for_offsets(memdesc, elfdesc);
+
+	/*
+	 * We get a plethora of information about where certain
+	 * data and code is from the dynamic segment by parsing
+	 * it by D_TAG values.
+	 */
 	ret = extract_dyntag_info(handle);
 	if (ret < 0) {
 		fprintf(stderr, "Failed to extract dynamic segment information\n");
@@ -925,7 +987,6 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 
-	
 
 }
 

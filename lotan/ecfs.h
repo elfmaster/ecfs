@@ -22,6 +22,7 @@
 #include "dwarf.h"
 #include "libdwarf.h"
 
+#define UNKNOWN_SHDR_SIZE 64
 #define PAGE_ALIGN(x) (x & ~(PAGE_SIZE - 1))
 #define PAGE_ALIGN_UP(x) (PAGE_ALIGN(x) + PAGE_SIZE)
 
@@ -154,6 +155,7 @@ typedef struct elfdesc {
 	 ElfW(Off) dynOffset;
 	 ElfW(Off) bssOffset;
 	 ElfW(Off) interpOffset;
+	 ElfW(Off) noteOffset;
 	char *StringTable;
 	size_t size;
 	size_t noteSize;
