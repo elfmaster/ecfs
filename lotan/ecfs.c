@@ -649,7 +649,7 @@ int extract_dyntag_info(handle_t *handle)
 
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
 		if (phdr[i].p_vaddr = elfdesc->dataVaddr) {
-			elfdesc->dyn = &elfdesc->mem[phdr[i].p_offset + (elfdesc->dynVaddr - elfdesc->dataVaddr)];
+			elfdesc->dyn = (ElfW(Dyn) *)&elfdesc->mem[phdr[i].p_offset + (elfdesc->dynVaddr - elfdesc->dataVaddr)];
 			break;
 		}
 	}
@@ -748,18 +748,34 @@ static void update_corefile_phdrs(memdesc_t *memdesc, elfdesc_t *elfdesc)
 
 int core2ecfs(const char *outfile, memdesc_t *memdesc, elfdesc_t *elfdesc, notedesc_t *notedesc)
 {
+	struct stat st;
 	int i, j, no_dynamic = 0;
 	ElfW(Dyn) *dyn = NULL;
 	ElfW(Ehdr) *ehdr = elfdesc->ehdr;
 	ElfW(Phdr) *phdr = elfdesc->phdr;
 	uint8_t *mem = elfdesc->mem;
-	
-	for (i = 0; i < ehdr->e_phnum; i++) {
-		if (phdr[i].p_vaddr == PAGE_ALIGN(elfdesc->dataVaddr)) {
-			dyn = (ElfW(Dyn) *)&mem[elfdesc->dynVaddr - elfdesc->dataVaddr];
-			break;
-		}
+	ecfs_file_t ecfs_file;
+	int fd;
+
+	fd = xopen(outfile, O_CREAT|O_TRUNC|O_RDWR);
+	stat(memdesc->path, &st);
+	ecfs_file.prstatus_offset = st.st_size;
+	ecfs_file.prstatus_size = notedesc->thread_count * sizeof(struct elf_prstatus);
+	ecfs_file.prpsinfo_offset = ecfs_file.prstatus_offset + notedesc->thread_count * sizeof(struct elf_prstatus);
+	ecfs_file.prpsinfo_size = notedesc->thread_count * sizeof(struct elf_prpsinfo);
+		
+	if (write(fd, elfdesc->mem, st.st_size) != st.st_size) {
+		perror("write");
+		exit(-1);
 	}
+
+	write(fd, notedesc->prstatus, sizeof(struct elf_prstatus));
+	for (i = 0; i < notedesc->thread_count; i++)	
+		write(fd, notedesc->thread_core_info[i].prstatus, sizeof(struct elf_prstatus));
+
+
+
+	close(fd);
 	return 0;
 }
 	
@@ -832,12 +848,18 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 
+	/*
+	 * Combine all handles into 1 (Should work this into the code earlier on)
+	 */
 	handle->elfdesc = elfdesc;
 	handle->memdesc = memdesc;
 	handle->notedesc = notedesc;
 	
 	ret = extract_dyntag_info(handle);
-	
+	if (ret < 0) {
+		fprintf(stderr, "Failed to extract dynamic segment information\n");
+		exit(-1);
+	}
 	/*
 	 * Convert the core file into an actual ECFS file and write it
 	 * to disk.
@@ -847,6 +869,8 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Failed to transform core file '%s' into ecfs\n", argv[2]);
 		exit(-1);
 	}
+
+	
 
 }
 

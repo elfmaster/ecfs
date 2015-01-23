@@ -39,3 +39,23 @@ char * xfmtstrdup(char *fmt, ...)
         return s;
 }
 
+int xopen(const char *path, int flags)
+{
+	int fd = open(path, flags);
+	if (fd < 0) {
+		fprintf(stderr, "opening path: %s failed\n", path);
+		exit(-1);
+	}
+	return fd;
+}
+
+int xfstat(int fd, struct stat *st)
+{
+	int ret = fstat(fd, st);
+	if (ret < 0) {
+		perror("fstat");
+		exit(-1);
+	}
+	return 0;
+}
+

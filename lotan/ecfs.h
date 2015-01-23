@@ -84,9 +84,18 @@ struct section_meta {
 struct elf_thread_core_info {
 	struct elf_prstatus *prstatus;
 	struct elf_prpsinfo *psinfo;
+	struct user_regs_struct *regs;
 	siginfo_t *siginfo;
 	 ElfW(Nhdr) * notes;
 };
+
+typedef struct ecfs_file_fmt {
+	loff_t prstatus_offset; 
+	loff_t prpsinfo_offset;
+	size_t prstatus_size;
+	size_t prpsinfo_size;
+	int thread_count;
+} ecfs_file_t;
 
 struct nt_file_struct {
 	struct {
