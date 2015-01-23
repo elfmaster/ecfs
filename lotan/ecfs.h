@@ -92,6 +92,7 @@ struct elf_thread_core_info {
 typedef struct ecfs_file_fmt {
 	loff_t prstatus_offset; 
 	loff_t prpsinfo_offset;
+	loff_t stb_offset;
 	size_t prstatus_size;
 	size_t prpsinfo_size;
 	int thread_count;
@@ -146,10 +147,13 @@ typedef struct elfdesc {
 	 ElfW(Addr) ehframe_Vaddr;
 	 ElfW(Addr) noteVaddr;
 	 ElfW(Addr) bssVaddr;
+	 ElfW(Addr) interpVaddr;
 	 ElfW(Off) textOffset;
 	 ElfW(Off) dataOffset;
-	 ElfW(Off) dynamicOffset;
+	 ElfW(Off) ehframeOffset;
+	 ElfW(Off) dynOffset;
 	 ElfW(Off) bssOffset;
+	 ElfW(Off) interpOffset;
 	char *StringTable;
 	size_t size;
 	size_t noteSize;
@@ -159,6 +163,7 @@ typedef struct elfdesc {
 	size_t dynSize;
 	size_t ehframe_Size;
 	size_t bssSize;
+	size_t interpSize;
 	int dynlinked;
 	int pie;
 } elfdesc_t;

@@ -620,7 +620,6 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 						elfdesc->dataSize = lookup_data_size(memdesc, notedesc->nt_files);
 						elfdesc->bssVaddr = phdr[i].p_vaddr + phdr[i].p_filesz;
 						elfdesc->bssSize = phdr[i].p_memsz - phdr[i].p_filesz;
-						elfdesc->bssOffset = phdr[i].p_offset + elfdesc->bssVaddr - elfdesc->dataVaddr;
 						break;
 				}
 				break;
@@ -638,6 +637,8 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 				break;
 			case PT_INTERP:
 				elfdesc->dynlinked++;
+				elfdesc->interpVaddr = phdr[i].p_vaddr;
+				elfdesc->interpSize = phdr[i].p_memsz ? phdr[i].p_memsz : phdr[i].p_filesz;
 				break;
 		}
 	}
@@ -723,49 +724,89 @@ int extract_dyntag_info(handle_t *handle)
 }
 
 /*
- * ET_CORE files have all phdr segments as type PT_LOAD (except for 1 single PT_NOTE)
- * but this causes us some problems since we need to specifically know where PT_DYNAMIC,
- * PT_GNU_EH_FRAME, and PT_NOTE(from original executable) are located in the core file.
- * To solve this we briefly use ptrace to retrive and parse the phdr table from the actual
- * process image, which has the original in-tact phdr before it was dumped into a core phdr
- * table. We then go through in this next function and mark up our core file phdr's with
- * the proper p_type's.
+ * The offsets from when a file is an executable to a corefile
+ * change durastically because the phdr table is so much bigger
+ * pushing everything else forward. We must find the offsets of
+ * certain old phdr's like PT_DYNAMIC and figure out what the offset
+ * is in the core file for it. That way we can build appropriate shdrs.
  */
-static void update_corefile_phdrs(memdesc_t *memdesc, elfdesc_t *elfdesc)
+static void xref_phdrs_for_offsets(memdesc_t *memdesc, elfdesc_t *elfdesc)
 {
 	ElfW(Phdr) *phdr = elfdesc->phdr;
 	int i;
 
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
-		if (phdr[i].p_vaddr == elfdesc->dynVaddr) {
-			phdr[i].p_type = PT_DYNAMIC;
-#if DEBUG
-			printf("Found PT_DYNAMIC and marking it in core file\n");
-#endif
-		}
+		if (elfdesc->interpVaddr >= phdr[i].p_vaddr && elfdesc->interpVaddr < phdr[i].p_vaddr + phdr[i].p_memsz)
+			elfdesc->interpOffset = phdr[i].p_offset + elfdesc->interpVaddr - phdr[i].p_vaddr;
 		else
-		if (phdr[i].p_vaddr == elfdesc->ehframe_Vaddr) {
-			phdr[i].p_type = PT_GNU_EH_FRAME;
-#if DEBUG
-			printf("Found PT_GNU_EH_FRAME and marking it in core file\n");
-#endif
-		}
+		if (elfdesc->dynVaddr >= phdr[i].p_vaddr && elfdesc->dynVaddr < phdr[i].p_vaddr + phdr[i].p_memsz)
+			elfdesc->dynOffset = phdr[i].p_offset + elfdesc->dynVaddr - phdr[i].p_vaddr;
 		else
-		if (phdr[i].p_vaddr == elfdesc->noteVaddr) {
-			phdr[i].p_type = PT_NOTE;
-#if DEBUG
-			printf("Found PT_NOTE and am marking it in core file\n");
-#endif
+		if (elfdesc->ehframe_Vaddr >= phdr[i].p_vaddr && elfdesc->ehframe_Vaddr < phdr[i].p_vaddr + phdr[i].p_memsz)
+			elfdesc->ehframeOffset = phdr[i].p_offset + elfdesc->ehframe_Vaddr - phdr[i].p_vaddr;
+		else
+		if (elfdesc->textVaddr == phdr[i].p_vaddr) 
+			elfdesc->textOffset = phdr[i].p_offset;
+		else
+		if (elfdesc->dataVaddr == phdr[i].p_vaddr) {
+			elfdesc->dataOffset = phdr[i].p_offset;
+			elfdesc->bssOffset = phdr[i].p_offset + elfdesc->bssVaddr - elfdesc->dataVaddr;
 		}
-	}	
+	}
+}
+
+int build_section_headers(int fd, const char *outfile, handle_t *handle, ecfs_file_t *ecfs_file)
+{
+	elfdesc_t *elfdesc = handle->elfdesc;
+        memdesc_t *memdesc = handle->memdesc;
+        notedesc_t *notedesc = handle->notedesc;
+        struct section_meta *smeta = &handle->smeta;
+	ElfW(Shdr) *shdr = alloca(sizeof(ElfW(Shdr)) * 512);
+        char *StringTable = (char *)alloca(512);
+        unsigned int stoffset = 0;
+        int scount = 0;
+	
+	shdr[scount].sh_type = SHT_NULL;
+        shdr[scount].sh_offset = 0;
+        shdr[scount].sh_addr = 0;
+        shdr[scount].sh_flags = 0;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = 0;
+        shdr[scount].sh_addralign = 0;
+        shdr[scount].sh_name = 0;
+        strcpy(&StringTable[stoffset], "");
+        stoffset += 1;
+        scount++;
+
+ 	/*
+         * .interp
+         */
+        shdr[scount].sh_type = SHT_PROGBITS;
+        shdr[scount].sh_offset = elfdesc->interpOffset;
+        shdr[scount].sh_addr = elfdesc->interpVaddr;
+        shdr[scount].sh_flags = SHF_ALLOC;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = smeta->interpSiz;
+        shdr[scount].sh_addralign = 1;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".interp");
+        stoffset += strlen(".interp") + 1;
+        scount++;
 }
 
 
-int core2ecfs(const char *outfile, memdesc_t *memdesc, elfdesc_t *elfdesc, notedesc_t *notedesc)
+int core2ecfs(const char *outfile, handle_t *handle)
 {
 	struct stat st;
 	int i, j, no_dynamic = 0;
 	ElfW(Dyn) *dyn = NULL;
+	elfdesc_t *elfdesc = handle->elfdesc;
+	memdesc_t *memdesc = handle->memdesc;
+	notedesc_t *notedesc = handle->notedesc;
+	struct section_meta *smeta = &handle->smeta;
 	ElfW(Ehdr) *ehdr = elfdesc->ehdr;
 	ElfW(Phdr) *phdr = elfdesc->phdr;
 	uint8_t *mem = elfdesc->mem;
@@ -776,8 +817,7 @@ int core2ecfs(const char *outfile, memdesc_t *memdesc, elfdesc_t *elfdesc, noted
 	stat(memdesc->path, &st);
 	ecfs_file.prstatus_offset = st.st_size;
 	ecfs_file.prstatus_size = notedesc->thread_count * sizeof(struct elf_prstatus);
-	ecfs_file.prpsinfo_offset = ecfs_file.prstatus_offset + notedesc->thread_count * sizeof(struct elf_prstatus);
-	ecfs_file.prpsinfo_size = notedesc->thread_count * sizeof(struct elf_prpsinfo);
+	ecfs_file.stb_offset = ecfs_file.prstatus_offset + notedesc->thread_count * sizeof(struct elf_prstatus);
 		
 	if (write(fd, elfdesc->mem, st.st_size) != st.st_size) {
 		perror("write");
@@ -787,8 +827,8 @@ int core2ecfs(const char *outfile, memdesc_t *memdesc, elfdesc_t *elfdesc, noted
 	write(fd, notedesc->prstatus, sizeof(struct elf_prstatus));
 	for (i = 0; i < notedesc->thread_count; i++)	
 		write(fd, notedesc->thread_core_info[i].prstatus, sizeof(struct elf_prstatus));
-
-
+	
+	build_section_headers(fd, outfile, handle, &ecfs_file);
 
 	close(fd);
 	return 0;
@@ -879,7 +919,7 @@ int main(int argc, char **argv)
 	 * Convert the core file into an actual ECFS file and write it
 	 * to disk.
 	 */
-	ret = core2ecfs(argv[2], memdesc, elfdesc, notedesc);
+	ret = core2ecfs(argv[2], handle);
 	if (ret < 0) {
 		fprintf(stderr, "Failed to transform core file '%s' into ecfs\n", argv[2]);
 		exit(-1);
