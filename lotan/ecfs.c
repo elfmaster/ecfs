@@ -1250,6 +1250,23 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 		xfree(str);
 	}
 		
+	/*
+	 * .prstatus
+	 */
+	shdr[scount].sh_type = SHT_NOTE;
+	shdr[scount].sh_offset = ecfs_file->prstatus_offset;
+	shdr[scount].sh_addr = 0;
+	shdr[scount].sh_flags = 0;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = sizeof(struct elf_prstatus);
+	shdr[scount].sh_size = ecfs_file->prstatus_size;
+	shdr[scount].sh_addralign = 4;
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".prstatus");
+	stoffset += strlen(".prstatus") + 1;
+	scount++;
+	
 	 /*
          * .stack
          */
@@ -1583,7 +1600,6 @@ int main(int argc, char **argv)
 	
 
 }
-
 
 
 
