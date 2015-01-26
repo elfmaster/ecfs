@@ -913,6 +913,124 @@ static ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, 
         return 0;
 }
 
+/*
+ * XXX this gets set by build_section_headers()
+ * ugly way to do this and at last minute.
+ */
+static int text_shdr_index;
+
+static int build_local_symtab(const char *outfile, handle_t *handle)
+{
+	elfdesc_t *elfdesc = handle->elfdesc;
+        memdesc_t *memdesc = handle->memdesc;
+        notedesc_t *notedesc = handle->notedesc;
+        struct section_meta *smeta = &handle->smeta;
+	struct fde_func_data *fndata, *fdp;
+        int fncount, i, fd;
+        struct stat st;
+	uint8_t *mem;
+	ElfW(Ehdr) *ehdr;
+	ElfW(Shdr) *shdr;
+
+	char *StringTable;
+        if ((fncount = get_all_functions(outfile, &fndata)) < 0) {
+                printf("[!] get_all_functions() failed, cannot build .symtab");
+                return -1;
+        } 
+
+#if DEBUG
+	printf("Found %d local functions from .eh_frame\n", fncount);
+#endif
+        ElfW(Sym) *symtab = (ElfW(Sym) *)alloca(sizeof(ElfW(Sym)) * fncount);
+        fdp = (struct fde_func_data *)fndata; 
+        char *strtab = alloca(8192);
+        char *sname;
+        int symstroff = 0;
+        int symcount = fncount;
+        int dsymcount = 0;
+        
+        for (i = 0; i < fncount; i++) {
+                symtab[i].st_value = fdp[i].addr;
+                symtab[i].st_size = fdp[i].size;
+                symtab[i].st_info = (((STB_GLOBAL) << 4) + ((STT_FUNC) & 0xf));
+                symtab[i].st_other = 0;
+                symtab[i].st_shndx = text_shdr_index;
+                symtab[i].st_name = symstroff;
+                sname = xfmtstrdup("sub_%lx", fdp[i].addr);
+                strcpy(&strtab[symstroff], sname);
+                symstroff += strlen(sname) + 1;
+                free(sname);    
+                
+        }
+        size_t symtab_size = fncount * sizeof(ElfW(Sym));
+ 	 /*
+         * We append symbol table sections last 
+         */
+        if ((fd = open(outfile, O_RDWR)) < 0) {
+                perror("open");
+                exit(-1);
+        }
+
+        if (fstat(fd, &st) < 0) {
+                perror("fstat");
+                exit(-1);
+        }
+
+        mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+        if (mem == MAP_FAILED) {
+                perror("mmap");
+                exit(-1);
+        }
+        ehdr = (ElfW(Ehdr) *)mem;
+        shdr = (ElfW(Shdr) *)&mem[ehdr->e_shoff];
+
+        if (lseek(fd, 0, SEEK_END) < 0) {
+                perror("open");
+                exit(-1);
+        }
+	
+        uint64_t symtab_offset = lseek(fd, 0, SEEK_CUR);
+        for (i = 0; i < symcount; i++) 
+                write(fd, (char *)&symtab[i], sizeof(ElfW(Sym))); 
+        
+      	StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
+        /* Write section hdr string table */
+        uint64_t stloff = lseek(fd, 0, SEEK_CUR);
+        write(fd, strtab, symstroff);
+        shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
+	
+        for (i = 0; i < ehdr->e_shnum; i++) {
+                if (!strcmp(&StringTable[shdr[i].sh_name], ".symtab")) {
+                        shdr[i].sh_offset = symtab_offset;
+                        shdr[i].sh_size = sizeof(ElfW(Sym)) * fncount;
+                } else
+                if (!strcmp(&StringTable[shdr[i].sh_name], ".strtab")) {
+                        shdr[i].sh_offset = stloff;
+                        shdr[i].sh_size = symstroff;
+                } else
+                if (!strcmp(&StringTable[shdr[i].sh_name], ".dynsym")) 
+                        dsymcount = shdr[i].sh_size / sizeof(ElfW(Sym));
+                        
+        }
+	  /*
+         * We resize the global offset table now that we know how many dynamic
+         * symbols there are. The GOT has the first 3 entries reserved (Which is sizeof(long) * 3)
+         * plus the size of dsymcount longwords.
+         */
+        for (i = 0; i < ehdr->e_shnum; i++) {
+                if (!strcmp(&StringTable[shdr[i].sh_name], ".got.plt")) {
+                        shdr[i].sh_size = (dsymcount * sizeof(ElfW(Addr))) + (3 * sizeof(ElfW(Addr)));
+                        break;
+                }
+        }
+        
+        msync(mem, st.st_size, MS_SYNC);
+        munmap(mem, st.st_size);
+        close(fd);
+
+	return 0;
+}
+
 static int build_section_headers(int fd, const char *outfile, handle_t *handle, ecfs_file_t *ecfs_file)
 {
 	elfdesc_t *elfdesc = handle->elfdesc;
@@ -923,7 +1041,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         char *StringTable = (char *)alloca(512);
 	struct stat st;
         unsigned int stoffset = 0;
-        int scount = 0, text_shdr_index;
+        int scount = 0;
 	int i; 
 	/*
 	 * Get the offset of where the shdrs are being written
@@ -1413,8 +1531,6 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 
         close(fd);
 
-
-	
 	
 	return scount;
 }
@@ -1433,7 +1549,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	ElfW(Phdr) *phdr = elfdesc->phdr;
 	uint8_t *mem = elfdesc->mem;
 	ecfs_file_t ecfs_file;
-	int fd;
+	int fd, ret;
 
 	fd = xopen(outfile, O_CREAT|O_TRUNC|O_RDWR);
  	
@@ -1475,6 +1591,19 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	ehdr->e_shoff = ecfs_file.stb_offset;
 	ehdr->e_shnum = shnum;
 	munmap(mem, st.st_size);
+	close(fd);
+
+	/*
+	 * Now we remap our file one last time to fill in the .symtab
+	 * section with our .eh_frame based symtab reconstruction
+	 * technique which is a big part of the draw to ECFS format.
+	 */
+	
+	ret = build_local_symtab(outfile, handle);
+	if (ret < 0) 
+#if DEBUG
+		fprintf(stderr, "local symtab reconstruction failed\n");
+#endif	
 	return 0;
 }
 	
