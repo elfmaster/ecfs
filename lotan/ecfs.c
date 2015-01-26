@@ -150,7 +150,7 @@ void parse_nt_files(struct nt_file_struct **nt_files, void *data, size_t size)
 	fmp = (struct file_map_range *)(long *)(ptr + 2);
 	for (i = 0; i < (*nt_files)->fcount; i++) {
 		(*nt_files)->files[i].addr = fmp->start;
-		(*nt_files)->files[i].size = fmp->start - fmp->end;
+		(*nt_files)->files[i].size = fmp->end - fmp->start;
 		(*nt_files)->files[i].pgoff = fmp->file_ofs;
 		fmp++;
 	}
@@ -258,6 +258,18 @@ static ElfW(Addr) get_mapping_flags(ElfW(Addr) addr, memdesc_t *memdesc)
 	return -1;
 }
 
+static ElfW(Off) get_mapping_offset(ElfW(Addr) addr, elfdesc_t *elfdesc)
+{
+	ElfW(Ehdr) *ehdr = elfdesc->ehdr;
+	ElfW(Phdr) *phdr = elfdesc->phdr;
+	int i;
+
+	for (i = 0; i < ehdr->e_phnum; i++)
+		if (phdr[i].p_vaddr == addr)
+			return phdr[i].p_offset;
+	return 0;
+}
+
 /*
  * Can only be called after the notes file has been parsed.
  * We really only need these for PIE executables since getting
@@ -331,7 +343,7 @@ static ElfW(Addr) lookup_data_size(memdesc_t *memdesc, struct nt_file_struct *fm
  * There should be 3 mappings for each lib
  * .text, relro, and .data.
  */
-static void lookup_lib_maps(memdesc_t *memdesc, struct nt_file_struct *fmaps, struct lib_mappings *lm)
+static void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_file_struct *fmaps, struct lib_mappings *lm)
 {
 	int i, j;
 	char *p, *tmp = alloca(256);
@@ -348,6 +360,7 @@ static void lookup_lib_maps(memdesc_t *memdesc, struct nt_file_struct *fmaps, st
 		lm->libs[lm->libcount].addr = fmaps->files[i].addr;
 		lm->libs[lm->libcount].size = fmaps->files[i].size;
 		lm->libs[lm->libcount].flags = get_mapping_flags(lm->libs[lm->libcount].addr, memdesc);
+		lm->libs[lm->libcount].offset = get_mapping_offset(lm->libs[lm->libcount].addr, elfdesc);
 		lm->libcount++;
 	}
 		
@@ -1182,7 +1195,41 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         strcpy(&StringTable[stoffset], ".heap");
         stoffset += strlen(".heap") + 1;
         scount++;
-
+	
+	int data_count;
+	char *str = NULL;
+	for (data_count = 0, i = 0; i < notedesc->lm_files->libcount; i++) {
+		shdr[scount].sh_type = SHT_PROGBITS;
+		shdr[scount].sh_offset = notedesc->lm_files->libs[i].offset;
+		shdr[scount].sh_addr = notedesc->lm_files->libs[i].addr;
+		shdr[scount].sh_flags = SHF_ALLOC;
+		shdr[scount].sh_info = 0;
+		shdr[scount].sh_link = 0;
+		shdr[scount].sh_entsize = 0;
+		shdr[scount].sh_size = notedesc->lm_files->libs[i].size;
+		shdr[scount].sh_addralign = 8;
+		shdr[scount].sh_name = stoffset;
+		switch(notedesc->lm_files->libs[i].flags) {
+			case PF_R|PF_X:
+				/* .text of library; i.e libc.so.text */
+				str = xfmtstrdup("%s.text", notedesc->lm_files->libs[i].name);
+				break;
+			case PF_R|PF_W:
+				str = xfmtstrdup("%s.data.%d", notedesc->lm_files->libs[i].name, data_count++);
+				break;
+			case PF_R:
+				str = xfmtstrdup("%s.relro", notedesc->lm_files->libs[i].name);
+				break;
+			default:
+				str = xfmtstrdup("%s.undef", notedesc->lm_files->libs[i].name);
+				break;
+		}
+		strcpy(&StringTable[stoffset], str);
+		stoffset += strlen(str) + 1;
+		scount += 1;
+		xfree(str);
+	}
+		
 	 /*
          * .stack
          */
@@ -1488,7 +1535,7 @@ int main(int argc, char **argv)
 	 * shared libraries so we can create shdrs for them.
 	 */
 	notedesc->lm_files = (struct lib_mappings *)heapAlloc(sizeof(struct lib_mappings));
-	lookup_lib_maps(memdesc, notedesc->nt_files, notedesc->lm_files);
+	lookup_lib_maps(elfdesc, memdesc, notedesc->nt_files, notedesc->lm_files);
 	
 #if DEBUG
 	for (i = 0; i < notedesc->lm_files->libcount; i++)

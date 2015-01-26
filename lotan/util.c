@@ -78,3 +78,10 @@ int xfstat(int fd, struct stat *st)
 	return 0;
 }
 
+void xfree(void *p)
+{
+	if (p)
+		free(p);
+}
+
+

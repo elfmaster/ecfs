@@ -113,6 +113,7 @@ struct nt_file_struct {
 struct lib_mappings {
 	struct {
 		unsigned long addr;
+		unsigned long offset;
 		size_t size;
 		uint32_t flags; // PF_W|PF_R etc.
 		char name[255];
