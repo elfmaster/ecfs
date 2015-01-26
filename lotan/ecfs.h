@@ -179,6 +179,7 @@ typedef struct elfdesc {
 	size_t ehframe_Size;
 	size_t bssSize;
 	size_t interpSize;
+	size_t o_datafsize; // data filesz of executable (not core)
 	int dynlinked;
 	int pie;
 } elfdesc_t;

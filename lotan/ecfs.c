@@ -653,7 +653,7 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 	ehdr = (ElfW(Ehdr) *)mem;
 	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
 	if (ehdr->e_type == ET_DYN)
-		elfdesc->pie++;
+		memdesc->pie = ++elfdesc->pie;
 	
 	for (i = 0; i < ehdr->e_phnum; i++) {
 		switch(phdr[i].p_type) {
@@ -670,8 +670,10 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 					case 1:
 						elfdesc->dataVaddr = lookup_data_base(memdesc, notedesc->nt_files);
 						elfdesc->dataSize = lookup_data_size(memdesc, notedesc->nt_files);
-						elfdesc->bssVaddr = phdr[i].p_vaddr + phdr[i].p_filesz;
 						elfdesc->bssSize = phdr[i].p_memsz - phdr[i].p_filesz;
+						elfdesc->o_datafsize = phdr[i].p_filesz;
+						if (elfdesc->pie == 0)
+							elfdesc->bssVaddr = phdr[i].p_vaddr + phdr[i].p_filesz;
 						break;
 				}
 				break;
@@ -805,7 +807,8 @@ static void xref_phdrs_for_offsets(memdesc_t *memdesc, elfdesc_t *elfdesc)
 {
 	ElfW(Phdr) *phdr = elfdesc->phdr;
 	int i;
-
+	
+	printf("elfdesc->dataVaddr: %lx\n", elfdesc->dataVaddr);
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
 		if (elfdesc->interpVaddr >= phdr[i].p_vaddr && elfdesc->interpVaddr < phdr[i].p_vaddr + phdr[i].p_memsz) {
 			elfdesc->interpOffset = phdr[i].p_offset + elfdesc->interpVaddr - phdr[i].p_vaddr;
@@ -840,6 +843,9 @@ static void xref_phdrs_for_offsets(memdesc_t *memdesc, elfdesc_t *elfdesc)
 		}
 		if (elfdesc->dataVaddr == phdr[i].p_vaddr) {
 			elfdesc->dataOffset = phdr[i].p_offset;
+			if (elfdesc->pie)
+				elfdesc->bssVaddr = elfdesc->dataVaddr + elfdesc->o_datafsize;
+			printf("bssVaddr is: %lx\n", elfdesc->bssVaddr);
 			elfdesc->bssOffset = phdr[i].p_offset + elfdesc->bssVaddr - elfdesc->dataVaddr;
 #if DEBUG
 			printf("bssOffset: %lx\n"
