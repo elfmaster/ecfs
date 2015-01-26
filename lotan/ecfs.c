@@ -754,21 +754,21 @@ int extract_dyntag_info(handle_t *handle)
                                 break;
                         case DT_GNU_HASH:
                                 smeta.hashVaddr = dyn[j].d_un.d_val;
-                                smeta.hashOff = smeta.hashVaddr - elfdesc->textVaddr;
+                                smeta.hashOff = elfdesc->textOffset + smeta.hashVaddr - elfdesc->textVaddr;
 #if DEBUG
 				printf("hashVaddr: %lx hashOff: %lx\n", smeta.hashVaddr, smeta.hashOff);
 #endif
                                 break;
                         case DT_INIT: 
                                 smeta.initVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
-                                smeta.initOff = smeta.initVaddr - elfdesc->textVaddr;
+                                smeta.initOff = elfdesc->textOffset + smeta.initVaddr - elfdesc->textVaddr;
 #if DEBUG
 				printf("initVaddr: %lx initOff: %lx\n", smeta.initVaddr, smeta.initOff);
 #endif
                                 break;
                         case DT_FINI:
                                 smeta.finiVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
-                                smeta.finiOff = smeta.finiVaddr - elfdesc->textVaddr;
+                                smeta.finiOff = elfdesc->textOffset + smeta.finiVaddr - elfdesc->textVaddr;
 #if DEBUG
 				printf("finiVaddr: %lx finiOff: %lx\n", smeta.finiVaddr, smeta.finiOff);
 #endif
@@ -781,11 +781,11 @@ int extract_dyntag_info(handle_t *handle)
                                 break;
                         case DT_SYMTAB:
                                 smeta.dsymVaddr = dyn[j].d_un.d_ptr;
-                                smeta.dsymOff = smeta.dsymVaddr - elfdesc->textVaddr;
+                                smeta.dsymOff = elfdesc->textOffset + smeta.dsymVaddr - elfdesc->textVaddr;
                                 break;
                         case DT_STRTAB:
                                 smeta.dstrVaddr = dyn[j].d_un.d_ptr;
-                                smeta.dstrOff = smeta.dstrVaddr - elfdesc->textVaddr;
+                                smeta.dstrOff = elfdesc->textOffset + smeta.dstrVaddr - elfdesc->textVaddr;
                                 break;
 
 		}
