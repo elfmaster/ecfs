@@ -157,6 +157,7 @@ typedef struct elfdesc {
 	 ElfW(Off) interpOffset;
 	 ElfW(Off) noteOffset;
 	char *StringTable;
+	char *path;
 	size_t size;
 	size_t noteSize;
 	size_t gnu_noteSize;

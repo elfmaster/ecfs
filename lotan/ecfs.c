@@ -49,6 +49,8 @@ elfdesc_t * load_core_file(const char *path)
 	uint8_t *mem;
 	struct stat st;
 	int i, j, fd;
+	
+	elfdesc->path = xstrdup(path);
 
 	if ((fd = open(path, O_RDONLY)) < 0) {
 		perror("open");
@@ -665,6 +667,7 @@ int extract_dyntag_info(handle_t *handle)
 
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
 		if (phdr[i].p_vaddr = elfdesc->dataVaddr) {
+			printf("data vaddr: %lx dynvaddr: %lx\n", phdr[i].p_vaddr, elfdesc->dynVaddr);
 			elfdesc->dyn = (ElfW(Dyn) *)&elfdesc->mem[phdr[i].p_offset + (elfdesc->dynVaddr - elfdesc->dataVaddr)];
 			break;
 		}
@@ -736,19 +739,43 @@ static void xref_phdrs_for_offsets(memdesc_t *memdesc, elfdesc_t *elfdesc)
 	int i;
 
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
-		if (elfdesc->interpVaddr >= phdr[i].p_vaddr && elfdesc->interpVaddr < phdr[i].p_vaddr + phdr[i].p_memsz)
+		if (elfdesc->interpVaddr >= phdr[i].p_vaddr && elfdesc->interpVaddr < phdr[i].p_vaddr + phdr[i].p_memsz) {
 			elfdesc->interpOffset = phdr[i].p_offset + elfdesc->interpVaddr - phdr[i].p_vaddr;
-		if (elfdesc->dynVaddr >= phdr[i].p_vaddr && elfdesc->dynVaddr < phdr[i].p_vaddr + phdr[i].p_memsz)
+#if DEBUG
+			printf("interpOffset: %lx\n", elfdesc->interpOffset);
+#endif
+		}
+		if (elfdesc->dynVaddr >= phdr[i].p_vaddr && elfdesc->dynVaddr < phdr[i].p_vaddr + phdr[i].p_memsz) {
 			elfdesc->dynOffset = phdr[i].p_offset + elfdesc->dynVaddr - phdr[i].p_vaddr;
-		if (elfdesc->ehframe_Vaddr >= phdr[i].p_vaddr && elfdesc->ehframe_Vaddr < phdr[i].p_vaddr + phdr[i].p_memsz)
+#if DEBUG
+			printf("dynOffset: %lx\n", elfdesc->dynOffset);
+#endif
+		}
+		if (elfdesc->ehframe_Vaddr >= phdr[i].p_vaddr && elfdesc->ehframe_Vaddr < phdr[i].p_vaddr + phdr[i].p_memsz) {
 			elfdesc->ehframeOffset = phdr[i].p_offset + elfdesc->ehframe_Vaddr - phdr[i].p_vaddr;
-		if (elfdesc->noteVaddr >= phdr[i].p_vaddr && elfdesc->noteVaddr < phdr[i].p_vaddr + phdr[i].p_memsz)
-			elfdesc->noteOffset = phdr[i].p_offset + elfdesc->noteVaddr - phdr[i].p_vaddr;
-		if (elfdesc->textVaddr == phdr[i].p_vaddr) 
+#if DEBUG
+			printf("ehframeOffset: %lx\n", elfdesc->ehframeOffset);
+#endif
+		}
+		if (elfdesc->noteVaddr >= phdr[i].p_vaddr && elfdesc->noteVaddr < phdr[i].p_vaddr + phdr[i].p_memsz) {
+			elfdesc->noteOffset = phdr[i].p_offset + elfdesc->noteVaddr - phdr[i].p_vaddr; 
+#if DEBUG
+			printf("noteOffset: %lx\n", elfdesc->noteOffset);
+#endif
+		}
+		if (elfdesc->textVaddr == phdr[i].p_vaddr) {
 			elfdesc->textOffset = phdr[i].p_offset;
+#if DEBUG
+			printf("noteOffset: %lx\n", elfdesc->textOffset);
+#endif
+		}
 		if (elfdesc->dataVaddr == phdr[i].p_vaddr) {
 			elfdesc->dataOffset = phdr[i].p_offset;
 			elfdesc->bssOffset = phdr[i].p_offset + elfdesc->bssVaddr - elfdesc->dataVaddr;
+#if DEBUG
+			printf("bssOffset: %lx\n"
+			       "dataOffset: %lx\n", elfdesc->bssOffset, elfdesc->dataOffset);
+#endif
 		}
 	}
 }
@@ -1215,10 +1242,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         fsync(fd);
         close(fd);
         
-        if ((fd = open(filepath, O_RDWR)) < 0) {
-                perror("open");
-                exit(-1);
-        }
+	fd = xopen(filepath, O_RDWR);
         
         if (fstat(fd, &st) < 0) {
                 perror("fstat");
@@ -1266,7 +1290,13 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	int fd;
 
 	fd = xopen(outfile, O_CREAT|O_TRUNC|O_RDWR);
-	stat(memdesc->path, &st);
+ 	
+	if (chmod(outfile, S_IRWXU | S_IRWXG | S_IROTH) < 0) {
+                perror("chmod");
+                exit(-1);
+        }
+	
+	stat(elfdesc->path, &st);
 	ecfs_file.prstatus_offset = st.st_size;
 	ecfs_file.prstatus_size = notedesc->thread_count * sizeof(struct elf_prstatus);
 	ecfs_file.stb_offset = ecfs_file.prstatus_offset + notedesc->thread_count * sizeof(struct elf_prstatus);
@@ -1415,7 +1445,7 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Failed to transform core file '%s' into ecfs\n", argv[2]);
 		exit(-1);
 	}
-
+	
 
 }
 
