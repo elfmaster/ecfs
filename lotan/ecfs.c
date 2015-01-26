@@ -317,6 +317,32 @@ static ElfW(Addr) lookup_data_size(memdesc_t *memdesc, struct nt_file_struct *fm
         return 0;
 }
 
+#define MAX_LIB_LEN 255
+/*
+ * There should be 3 mappings for each lib
+ * .text, relro, and .data.
+ */
+static void lookup_lib_maps(memdesc_t *memdesc, struct nt_file_struct *fmaps, struct lib_mappings *lm)
+{
+	int i, j;
+	char *p, *tmp = alloca(256);
+	memset(lm, 0, sizeof(struct lib_mappings));
+
+	for (i = 0; i < fmaps->fcount; i++) {
+		p = strrchr(fmaps->files[i].path, '/') + 1;
+		if (!strstr(p, ".so"))
+			continue;
+		for (j = 0; j < strlen(p); j++)
+			tmp[j] = p[j];
+		tmp[j] = '\0';
+		strncpy(lm->libs[lm->libcount].name, tmp, MAX_LIB_LEN - 1);
+		lm->libs[lm->libcount].addr = fmaps->files[i].addr;
+		lm->libs[lm->libcount].size = fmaps->files[i].size;
+		lm->libcount++;
+	}
+		
+}
+
 			
 /*
  * Since the process is paused, all /proc data is still available.
@@ -679,7 +705,7 @@ int extract_dyntag_info(handle_t *handle)
 			printf("%lx - %lx\n", elfdesc->dynVaddr, elfdesc->dataVaddr);
 			printf("offset of dyn: %lx\n", phdr[i].p_offset + (elfdesc->dynVaddr - elfdesc->dataVaddr));
 			elfdesc->dyn = (ElfW(Dyn) *)&elfdesc->mem[phdr[i].p_offset + (elfdesc->dynVaddr - elfdesc->dataVaddr)];
-			p = elfdesc->dyn;
+			p = (char *)elfdesc->dyn;
 			for (j = 0; j < 32; j++)
 				printf("%02x ", p[j] & 0xff);
 			printf("\n");
@@ -1458,14 +1484,24 @@ int main(int argc, char **argv)
 	 * since the phdr's are all page aligned in the corefile.
 	 */
 	xref_phdrs_for_offsets(memdesc, elfdesc);
+	
 
+	/*
+	 * Out of the parsed NT_FILES get a list of which ones are
+	 * shared libraries so we can create shdrs for them.
+	 */
+	notedesc->lm_files = (struct lib_mappings *)heapAlloc(sizeof(struct lib_mappings));
+	lookup_lib_maps(memdesc, notedesc->nt_files, notedesc->lm_files);
+	
+#if DEBUG
+	for (i = 0; i < notedesc->lm_files->libcount; i++)
+		printf("libname: %s addr: %lx\n", notedesc->lm_files->libs[i].name, notedesc->lm_files->libs[i].addr);
+#endif
 	/*
 	 * We get a plethora of information about where certain
 	 * data and code is from the dynamic segment by parsing
 	 * it by D_TAG values.
 	 */
-	printf("core path: %s\n", elfdesc->path);
-	printf("elfdesc address: %p\n", elfdesc);
 	ret = extract_dyntag_info(handle);
 	if (ret < 0) {
 		fprintf(stderr, "Failed to extract dynamic segment information\n");

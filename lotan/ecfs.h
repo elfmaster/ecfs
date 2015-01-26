@@ -110,6 +110,15 @@ struct nt_file_struct {
 	int page_size;
 };
 
+struct lib_mappings {
+	struct {
+		unsigned long addr;
+		size_t size;
+		char name[255];
+	} libs[2048];
+	int libcount;
+};
+
 typedef struct notedesc {
 	ElfW(Nhdr) * notes;
 	struct elf_prstatus *prstatus;	/* NT_PRSTATUS */
@@ -126,6 +135,7 @@ typedef struct notedesc {
 	int thread_status_size;
 	int numnote;
 	struct nt_file_struct *nt_files;
+	struct lib_mappings *lm_files;
 } notedesc_t;
 
 struct coredump_params {
