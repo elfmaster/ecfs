@@ -91,6 +91,7 @@ elfdesc_t * load_core_file(const char *path)
 	elfdesc->nhdr = nhdr;
 	elfdesc->mem = mem;
 	elfdesc->size = st.st_size;
+	
 	return elfdesc;
 }
 
@@ -661,14 +662,27 @@ int extract_dyntag_info(handle_t *handle)
 	notedesc_t *notedesc = handle->notedesc;
 	ElfW(Phdr) *phdr = elfdesc->phdr;
 	ElfW(Dyn) *dyn;
-	ElfW(Off) dataOffset;
+	ElfW(Off) dataOffset = elfdesc->dataOffset; // this was filled in from xref_phdrs_for_offsets
 	elfdesc->dyn = NULL;
 	struct section_meta smeta;
-
+	char *p;
+	
+	printf("elfdesc: %p\n", elfdesc);
+	printf("elfdesc->path: %s\n", elfdesc->path);
+	printf("phnum: %d\n", elfdesc->ehdr->e_phnum);
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
-		if (phdr[i].p_vaddr = elfdesc->dataVaddr) {
+		
+		if (phdr[i].p_vaddr == elfdesc->dataVaddr) {
+			
+			printf("p_vaddr for data: %lx p_offset: %lx\n", phdr[i].p_vaddr, phdr[i].p_offset);
 			printf("data vaddr: %lx dynvaddr: %lx\n", phdr[i].p_vaddr, elfdesc->dynVaddr);
+			printf("%lx - %lx\n", elfdesc->dynVaddr, elfdesc->dataVaddr);
+			printf("offset of dyn: %lx\n", phdr[i].p_offset + (elfdesc->dynVaddr - elfdesc->dataVaddr));
 			elfdesc->dyn = (ElfW(Dyn) *)&elfdesc->mem[phdr[i].p_offset + (elfdesc->dynVaddr - elfdesc->dataVaddr)];
+			p = elfdesc->dyn;
+			for (j = 0; j < 32; j++)
+				printf("%02x ", p[j] & 0xff);
+			printf("\n");
 			break;
 		}
 	}
@@ -683,27 +697,45 @@ int extract_dyntag_info(handle_t *handle)
 			case DT_REL:
                         	smeta.relVaddr = dyn[j].d_un.d_val;
                                 smeta.relOff = smeta.relVaddr - elfdesc->textVaddr;
+#if DEBUG
+				printf("relVaddr: %lx relOff: %lx\n", smeta.relVaddr, smeta.relOff);
+#endif
                         	break;
                         case DT_RELA:
                         	smeta.relaVaddr = dyn[j].d_un.d_val;
-                                smeta.relaOff = smeta.relaVaddr - elfdesc->textVaddr;
+                                smeta.relaOff = smeta.relaVaddr - elfdesc->textVaddr; 
+#if DEBUG
+				printf("relaVaddr: %lx relaOffset: %lx\n", smeta.relaVaddr, smeta.relaOff);
+#endif
                         	break;
                         case DT_PLTGOT:
                         	smeta.gotVaddr = dyn[j].d_un.d_val;
                                 smeta.gotOff = dyn[j].d_un.d_val - elfdesc->dataVaddr;
                                 smeta.gotOff += (ElfW(Off))dataOffset;
+#if DEBUG
+				printf("gotVaddr: %lx gotOffset: %lx\n", smeta.gotVaddr, smeta.gotOff);
+#endif
                                 break;
                         case DT_GNU_HASH:
                                 smeta.hashVaddr = dyn[j].d_un.d_val;
                                 smeta.hashOff = smeta.hashVaddr - elfdesc->textVaddr;
+#if DEBUG
+				printf("hashVaddr: %lx hashOff: %lx\n", smeta.hashVaddr, smeta.hashOff);
+#endif
                                 break;
                         case DT_INIT: 
                                 smeta.initVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
                                 smeta.initOff = smeta.initVaddr - elfdesc->textVaddr;
+#if DEBUG
+				printf("initVaddr: %lx initOff: %lx\n", smeta.initVaddr, smeta.initOff);
+#endif
                                 break;
                         case DT_FINI:
                                 smeta.finiVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
                                 smeta.finiOff = smeta.finiVaddr - elfdesc->textVaddr;
+#if DEBUG
+				printf("finiVaddr: %lx finiOff: %lx\n", smeta.finiVaddr, smeta.finiOff);
+#endif
                                 break;
                         case DT_STRSZ:
                                 smeta.strSiz = dyn[j].d_un.d_val;
@@ -765,8 +797,9 @@ static void xref_phdrs_for_offsets(memdesc_t *memdesc, elfdesc_t *elfdesc)
 		}
 		if (elfdesc->textVaddr == phdr[i].p_vaddr) {
 			elfdesc->textOffset = phdr[i].p_offset;
+			elfdesc->textSize = phdr[i].p_memsz;
 #if DEBUG
-			printf("noteOffset: %lx\n", elfdesc->textOffset);
+			printf("textOffset: %lx\n", elfdesc->textOffset);
 #endif
 		}
 		if (elfdesc->dataVaddr == phdr[i].p_vaddr) {
@@ -1029,7 +1062,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
          * .eh_frame
          */
         shdr[scount].sh_type = SHT_PROGBITS;
-        shdr[scount].sh_offset = elfdesc->ehframeOffset + (elfdesc->ehframe_Size + 4);
+        shdr[scount].sh_offset = elfdesc->ehframeOffset + elfdesc->ehframe_Size;
         shdr[scount].sh_addr = elfdesc->ehframe_Vaddr + elfdesc->ehframe_Size;
         shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
         shdr[scount].sh_info = 0;
@@ -1260,7 +1293,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         ehdr->e_shstrndx = e_shstrndx;
 	ehdr->e_shentsize = sizeof(ElfW(Shdr));
         ehdr->e_shnum = scount;
-        ehdr->e_type = ET_CORE;
+        ehdr->e_type = ET_NONE;
 	
 	msync(mem, st.st_size, MS_SYNC);
         munmap(mem, st.st_size);
@@ -1431,6 +1464,8 @@ int main(int argc, char **argv)
 	 * data and code is from the dynamic segment by parsing
 	 * it by D_TAG values.
 	 */
+	printf("core path: %s\n", elfdesc->path);
+	printf("elfdesc address: %p\n", elfdesc);
 	ret = extract_dyntag_info(handle);
 	if (ret < 0) {
 		fprintf(stderr, "Failed to extract dynamic segment information\n");
