@@ -114,6 +114,7 @@ struct lib_mappings {
 	struct {
 		unsigned long addr;
 		size_t size;
+		uint32_t flags; // PF_W|PF_R etc.
 		char name[255];
 	} libs[2048];
 	int libcount;

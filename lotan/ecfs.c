@@ -249,6 +249,15 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 	return notedesc;
 }
 
+static ElfW(Addr) get_mapping_flags(ElfW(Addr) addr, memdesc_t *memdesc)
+{
+	int i;
+	for (i = 0; i < memdesc->mapcount; i++) 
+		if (memdesc->maps[i].base == addr)
+			return memdesc->maps[i].p_flags;
+	return -1;
+}
+
 /*
  * Can only be called after the notes file has been parsed.
  * We really only need these for PIE executables since getting
@@ -338,6 +347,7 @@ static void lookup_lib_maps(memdesc_t *memdesc, struct nt_file_struct *fmaps, st
 		strncpy(lm->libs[lm->libcount].name, tmp, MAX_LIB_LEN - 1);
 		lm->libs[lm->libcount].addr = fmaps->files[i].addr;
 		lm->libs[lm->libcount].size = fmaps->files[i].size;
+		lm->libs[lm->libcount].flags = get_mapping_flags(lm->libs[lm->libcount].addr, memdesc);
 		lm->libcount++;
 	}
 		
@@ -693,22 +703,9 @@ int extract_dyntag_info(handle_t *handle)
 	struct section_meta smeta;
 	char *p;
 	
-	printf("elfdesc: %p\n", elfdesc);
-	printf("elfdesc->path: %s\n", elfdesc->path);
-	printf("phnum: %d\n", elfdesc->ehdr->e_phnum);
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
-		
 		if (phdr[i].p_vaddr == elfdesc->dataVaddr) {
-			
-			printf("p_vaddr for data: %lx p_offset: %lx\n", phdr[i].p_vaddr, phdr[i].p_offset);
-			printf("data vaddr: %lx dynvaddr: %lx\n", phdr[i].p_vaddr, elfdesc->dynVaddr);
-			printf("%lx - %lx\n", elfdesc->dynVaddr, elfdesc->dataVaddr);
-			printf("offset of dyn: %lx\n", phdr[i].p_offset + (elfdesc->dynVaddr - elfdesc->dataVaddr));
 			elfdesc->dyn = (ElfW(Dyn) *)&elfdesc->mem[phdr[i].p_offset + (elfdesc->dynVaddr - elfdesc->dataVaddr)];
-			p = (char *)elfdesc->dyn;
-			for (j = 0; j < 32; j++)
-				printf("%02x ", p[j] & 0xff);
-			printf("\n");
 			break;
 		}
 	}
