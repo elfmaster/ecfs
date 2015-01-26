@@ -849,37 +849,57 @@ static void xref_phdrs_for_offsets(memdesc_t *memdesc, elfdesc_t *elfdesc)
 	}
 }
 
-static ElfW(Off) get_internal_sh_offset(memdesc_t *memdesc, int type)
+static ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int type)
 {
 #define HEAP 0
 #define STACK 1
 #define VDSO 2
 #define VSYSCALL 3
 
-        int i;
+        int i, j;
         mappings_t *maps = memdesc->maps;
+	ElfW(Phdr) *phdr = elfdesc->phdr;
 
         switch(type) {
                 case HEAP:
-                        for (i = 0; i < memdesc->mapcount; i++)
-                                if (maps[i].heap)
-                                        return maps[i].sh_offset;
+                        for (i = 0; i < memdesc->mapcount; i++) {
+                                if (maps[i].heap) {
+					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
+						if (phdr[j].p_vaddr == maps[i].base)
+							return phdr[j].p_offset;
+					}
+				}
+			}
                         break;
                 case STACK:
-                         for (i = 0; i < memdesc->mapcount; i++)
-                                if (maps[i].stack)
-                                        return maps[i].sh_offset;
+                         for (i = 0; i < memdesc->mapcount; i++) {
+                                if (maps[i].stack) {
+					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
+                                                if (phdr[j].p_vaddr == maps[i].base)
+                                                        return phdr[j].p_offset;
+                                        }
+                                }
+                        }
                         break;
                 case VDSO:
-                         for (i = 0; i < memdesc->mapcount; i++)
+                         for (i = 0; i < memdesc->mapcount; i++) {
                                 if (maps[i].vdso) {
-                                        return maps[i].sh_offset;
+					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
+                                                if (phdr[j].p_vaddr == maps[i].base)
+                                                        return phdr[j].p_offset;
+                                        }
                                 }
+                       	}
                         break;
                 case VSYSCALL:
-                         for (i = 0; i < memdesc->mapcount; i++)
-                                if (maps[i].vsyscall)
-                                        return maps[i].sh_offset;
+                         for (i = 0; i < memdesc->mapcount; i++) {
+                                if (maps[i].vsyscall) {
+					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
+                                                if (phdr[j].p_vaddr == maps[i].base)
+                                                        return phdr[j].p_offset;
+                                        }
+                                } 
+                        }
                         break;
                 default:
                         return 0;
@@ -1183,7 +1203,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
          * .heap
          */
         shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
-        shdr[scount].sh_offset = get_internal_sh_offset(memdesc, HEAP);
+        shdr[scount].sh_offset = get_internal_sh_offset(elfdesc, memdesc, HEAP);
         shdr[scount].sh_addr = memdesc->heap.base;
         shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
         shdr[scount].sh_info = 0;
@@ -1234,7 +1254,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
          * .stack
          */
         shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
-        shdr[scount].sh_offset = get_internal_sh_offset(memdesc, STACK);
+        shdr[scount].sh_offset = get_internal_sh_offset(elfdesc, memdesc, STACK);
         shdr[scount].sh_addr = memdesc->stack.base;
         shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
         shdr[scount].sh_info = 0;
@@ -1251,7 +1271,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
          * .vdso
          */
         shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
-        shdr[scount].sh_offset = get_internal_sh_offset(memdesc, VDSO);
+        shdr[scount].sh_offset = get_internal_sh_offset(elfdesc, memdesc, VDSO);
         shdr[scount].sh_addr = memdesc->vdso.base;
         shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
         shdr[scount].sh_info = 0;
@@ -1268,7 +1288,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
          * .vsyscall
          */
         shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
-        shdr[scount].sh_offset = get_internal_sh_offset(memdesc, VSYSCALL);
+        shdr[scount].sh_offset = get_internal_sh_offset(elfdesc, memdesc, VSYSCALL);
         shdr[scount].sh_addr = memdesc->vsyscall.base;
         shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
         shdr[scount].sh_info = 0;
