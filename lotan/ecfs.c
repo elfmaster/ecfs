@@ -644,6 +644,8 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 	if (pid_read(pid, (void *)mem, (void *)text_base, 4096) < 0)
 		return -1;
 	
+	if (pid_detach_direct(pid) < 0)
+		return -1;
 	/*
 	 * Now get text_base again but from the core file. During a real crashdump
 	 * these values will be the exact same either way.
@@ -686,8 +688,8 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 				elfdesc->ehframe_Size = phdr[i].p_memsz;
 				break;
 			case PT_NOTE:
-				elfdesc->noteVaddr = phdr[i].p_vaddr + (elfdesc->pie ? text_base : 0);
-				elfdesc->noteSize = phdr[i].p_filesz;
+				//elfdesc->noteVaddr = phdr[i].p_vaddr + (elfdesc->pie ? text_base : 0);
+				//elfdesc->noteSize = phdr[i].p_filesz;
 				break;
 			case PT_INTERP:
 				elfdesc->dynlinked++;
@@ -808,8 +810,14 @@ static void xref_phdrs_for_offsets(memdesc_t *memdesc, elfdesc_t *elfdesc)
 	ElfW(Phdr) *phdr = elfdesc->phdr;
 	int i;
 	
-	printf("elfdesc->dataVaddr: %lx\n", elfdesc->dataVaddr);
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
+		if (phdr[i].p_type == PT_NOTE) {
+			elfdesc->noteOffset = phdr[i].p_offset;
+			elfdesc->noteVaddr = phdr[i].p_vaddr;
+#if DEBUG
+			printf("noteOffset: %lx\n", elfdesc->noteOffset);
+#endif
+		}
 		if (elfdesc->interpVaddr >= phdr[i].p_vaddr && elfdesc->interpVaddr < phdr[i].p_vaddr + phdr[i].p_memsz) {
 			elfdesc->interpOffset = phdr[i].p_offset + elfdesc->interpVaddr - phdr[i].p_vaddr;
 #if DEBUG
@@ -826,12 +834,6 @@ static void xref_phdrs_for_offsets(memdesc_t *memdesc, elfdesc_t *elfdesc)
 			elfdesc->ehframeOffset = phdr[i].p_offset + elfdesc->ehframe_Vaddr - phdr[i].p_vaddr;
 #if DEBUG
 			printf("ehframeOffset: %lx\n", elfdesc->ehframeOffset);
-#endif
-		}
-		if (elfdesc->noteVaddr >= phdr[i].p_vaddr && elfdesc->noteVaddr < phdr[i].p_vaddr + phdr[i].p_memsz) {
-			elfdesc->noteOffset = phdr[i].p_offset + elfdesc->noteVaddr - phdr[i].p_vaddr; 
-#if DEBUG
-			printf("noteOffset: %lx\n", elfdesc->noteOffset);
 #endif
 		}
 		if (elfdesc->textVaddr == phdr[i].p_vaddr) {
@@ -919,7 +921,7 @@ static ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, 
  */
 static int text_shdr_index;
 
-static int build_local_symtab(const char *outfile, handle_t *handle)
+static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle)
 {
 	elfdesc_t *elfdesc = handle->elfdesc;
         memdesc_t *memdesc = handle->memdesc;
@@ -933,10 +935,9 @@ static int build_local_symtab(const char *outfile, handle_t *handle)
 	ElfW(Shdr) *shdr;
 
 	char *StringTable;
-        if ((fncount = get_all_functions(outfile, &fndata)) < 0) {
-                printf("[!] get_all_functions() failed, cannot build .symtab");
-                return -1;
-        } 
+        fncount = get_all_functions(outfile, &fndata);
+ 	if (fncount < 0)
+		fncount = 0;             	
 
 #if DEBUG
 	printf("Found %d local functions from .eh_frame\n", fncount);
@@ -1037,17 +1038,20 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         memdesc_t *memdesc = handle->memdesc;
         notedesc_t *notedesc = handle->notedesc;
         struct section_meta *smeta = &handle->smeta;
-	ElfW(Shdr) *shdr = alloca(sizeof(ElfW(Shdr)) * 512);
-        char *StringTable = (char *)alloca(512);
+	ElfW(Shdr) *shdr = alloca(sizeof(ElfW(Shdr)) * MAX_SHDR_COUNT);
+        char *StringTable = (char *)alloca(MAX_SHDR_COUNT * 16);
 	struct stat st;
         unsigned int stoffset = 0;
         int scount = 0;
 	int i; 
+
+	printf("fd: %d ecfs_file: %p\n", fd, ecfs_file);
 	/*
 	 * Get the offset of where the shdrs are being written
 	 */
 	loff_t e_shoff = lseek(fd, 0, SEEK_CUR);
-
+	printf("Writing section header table at offset %lx\n", e_shoff);
+	
 	shdr[scount].sh_type = SHT_NULL;
         shdr[scount].sh_offset = 0;
         shdr[scount].sh_addr = 0;
@@ -1365,6 +1369,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 				str = xfmtstrdup("%s.relro", notedesc->lm_files->libs[i].name);
 				break;
 			default:
+				printf("flags: %lx\n", notedesc->lm_files->libs[i].flags);
 				str = xfmtstrdup("%s.undef", notedesc->lm_files->libs[i].name);
 				break;
 		}
@@ -1377,7 +1382,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	/*
 	 * .prstatus
 	 */
-	shdr[scount].sh_type = SHT_NOTE;
+	shdr[scount].sh_type = SHT_PROGBITS;
 	shdr[scount].sh_offset = ecfs_file->prstatus_offset;
 	shdr[scount].sh_addr = 0;
 	shdr[scount].sh_flags = 0;
@@ -1470,7 +1475,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         shdr[scount].sh_link = 0;
         shdr[scount].sh_entsize = 0;
         shdr[scount].sh_size = 0;
-        shdr[scount].sh_addralign = 4;
+        shdr[scount].sh_addralign = 1;
         shdr[scount].sh_name = stoffset;
         strcpy(&StringTable[stoffset], ".strtab");
         stoffset += strlen(".strtab") + 1;
@@ -1548,20 +1553,16 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	ElfW(Ehdr) *ehdr = elfdesc->ehdr;
 	ElfW(Phdr) *phdr = elfdesc->phdr;
 	uint8_t *mem = elfdesc->mem;
-	ecfs_file_t ecfs_file;
+	ecfs_file_t *ecfs_file = heapAlloc(sizeof(ecfs_file_t));
 	int fd, ret;
 
 	fd = xopen(outfile, O_CREAT|O_TRUNC|O_RDWR);
+	chmod(outfile, S_IRWXU|S_IRWXG);
  	
-	if (chmod(outfile, S_IRWXU | S_IRWXG | S_IROTH) < 0) {
-                perror("chmod");
-                exit(-1);
-        }
-	
-	stat(elfdesc->path, &st);
-	ecfs_file.prstatus_offset = st.st_size;
-	ecfs_file.prstatus_size = notedesc->thread_count * sizeof(struct elf_prstatus);
-	ecfs_file.stb_offset = ecfs_file.prstatus_offset + notedesc->thread_count * sizeof(struct elf_prstatus);
+	stat(elfdesc->path, &st); // stat the corefile
+	ecfs_file->prstatus_offset = st.st_size;
+	ecfs_file->prstatus_size = notedesc->thread_count * sizeof(struct elf_prstatus);
+	ecfs_file->stb_offset = ecfs_file->prstatus_offset + notedesc->thread_count * sizeof(struct elf_prstatus);
 		
 	if (write(fd, elfdesc->mem, st.st_size) != st.st_size) {
 		perror("write");
@@ -1572,7 +1573,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	for (i = 0; i < notedesc->thread_count; i++)	
 		write(fd, notedesc->thread_core_info[i].prstatus, sizeof(struct elf_prstatus));
 	
-	int shnum = build_section_headers(fd, outfile, handle, &ecfs_file);
+	int shnum = build_section_headers(fd, outfile, handle, ecfs_file);
 	
 	close(fd);
 
@@ -1588,7 +1589,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	}
 
 	ehdr = (ElfW(Ehdr) *)mem;
-	ehdr->e_shoff = ecfs_file.stb_offset;
+	ehdr->e_shoff = ecfs_file->stb_offset;
 	ehdr->e_shnum = shnum;
 	munmap(mem, st.st_size);
 	close(fd);
@@ -1599,11 +1600,12 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 * technique which is a big part of the draw to ECFS format.
 	 */
 	
-	ret = build_local_symtab(outfile, handle);
+	ret = build_local_symtab_and_finalize(outfile, handle);
 	if (ret < 0) 
 #if DEBUG
 		fprintf(stderr, "local symtab reconstruction failed\n");
 #endif	
+
 	return 0;
 }
 	

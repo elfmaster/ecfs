@@ -5,11 +5,11 @@ ecfs: ecfs.o util.o eh_frame.o ptrace.o
 ecfs.o: ecfs.c
 	gcc -g -DDEBUG -c ecfs.c
 util.o: util.c
-	gcc -c util.c
+	gcc -g -c util.c
 eh_frame.o: eh_frame.c
-	gcc -c eh_frame.c
+	gcc -g -c eh_frame.c
 ptrace.o: ptrace.c
-	gcc -c ptrace.c
+	gcc -g -c ptrace.c
 
 clean:
 	rm -f *.o

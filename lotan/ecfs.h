@@ -51,6 +51,8 @@
 #define ELFNOTE_DESC(_n_) (ELFNOTE_NAME(_n_) + ELFNOTE_ALIGN((_n_)->n_namesz))
 #define ELFNOTE_NEXT(_n_) ((ElfW(Nhdr) *)(ELFNOTE_DESC(_n_) + ELFNOTE_ALIGN((_n_)->n_descsz)))
 
+#define MAX_SHDR_COUNT 2048
+
 struct opts {
 	int coretype;
 	int all;
@@ -105,7 +107,7 @@ struct nt_file_struct {
 		size_t size;
 		size_t pgoff;
 		char path[512];
-	} files[2048];
+	} files[4096];
 	int fcount;
 	int page_size;
 };
@@ -117,7 +119,7 @@ struct lib_mappings {
 		size_t size;
 		uint32_t flags; // PF_W|PF_R etc.
 		char name[255];
-	} libs[2048];
+	} libs[4096];
 	int libcount;
 };
 

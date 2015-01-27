@@ -64,7 +64,7 @@ static struct fde_func_data * parse_frame_data(Dwarf_Debug dbg)
 	fndata = malloc(sizeof(struct fde_func_data) * fde_element_count);
 	if (fndata == NULL) {
 		perror("malloc");
-		exit(-1);
+		return NULL;
 	} 
 	
 	for(fdenum = 0; fdenum < fde_element_count; ++fdenum) {
@@ -138,12 +138,12 @@ int get_all_functions(const char *filepath, struct fde_func_data **funcs)
 
 	if ((fd = open(filepath, O_RDONLY)) < 0) {
 		perror("open");
-		exit(-1);
+		return -1;
 	}
 
 	if ((res = dwarf_init(fd, /*DW_DLC_REA*/ 0, errhand, errarg, &dbg, &error)) != DW_DLV_OK) {
 		fprintf(stderr, "dwarf_init() failed\n");
-		exit(-1);
+		return -1;
 	}
 
     	regtabrulecount = 1999;
