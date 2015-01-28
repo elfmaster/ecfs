@@ -25,6 +25,8 @@
 
 #include "ecfs.h"
 
+struct opts opts;
+
 typedef struct handle {
 	elfdesc_t *elfdesc;
 	memdesc_t *memdesc;
@@ -94,6 +96,60 @@ elfdesc_t * load_core_file(const char *path)
 	
 	return elfdesc;
 }
+
+
+#define RBUF_LEN 4096 * 8
+
+/*
+ * This function will read the corefile from stdin
+ * then write it to a temporary file which is then read
+ * by the load_core_file() function above.
+ */
+elfdesc_t * load_core_file_stdin(void)
+{
+	elfdesc_t *elfdesc = (elfdesc_t *)heapAlloc(sizeof(elfdesc_t));
+        ElfW(Ehdr) *ehdr;
+        ElfW(Phdr) *phdr;
+        ElfW(Nhdr) *nhdr; //notes
+        uint8_t *mem;
+        uint8_t *buf;
+	struct stat st;
+        ssize_t nread;
+	ssize_t bytes, bw;
+	int i = 0, j = 0;
+	int file, fd;
+	
+	char *filepath = xfmtstrdup("%s/tmp_core", ECFS_CORE_DIR);
+        do {
+                if (access(filepath, F_OK) == 0) {
+                        free(filepath);
+                        filepath = xfmtstrdup("%s/tmp_core.%d", ECFS_CORE_DIR, ++i);
+                } else
+                        break;
+                        
+        } while(1);
+	
+	/*
+	 * Open tmp file for writing
+	 */
+	file = xopen(filepath, O_CREAT|O_RDWR);
+	fchmod(file, S_IRWXU|S_IRWXG|S_IROTH|S_IWOTH);
+	buf = alloca(RBUF_LEN);
+	while ((nread = read(STDIN_FILENO, buf, RBUF_LEN)) > 0) {
+        	bytes += nread;
+		bw = write(file, buf, nread);
+		if (bw < 0) {
+			perror("write");
+			exit(-1);
+		}
+		syncfs(file);
+	}
+	syncfs(file);
+	close(file);
+	
+	return load_core_file(filepath);
+
+}		
 
 /*
  * This function does the opposite of how the kernel packs files into
@@ -710,6 +766,10 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 				elfdesc->ehframe_Size = phdr[i].p_memsz;
 				break;
 			case PT_NOTE:
+				/*
+				 * We don't want the original executables note, but the corefile
+				 * notes so we don't fill these in at this point.
+				 */
 				//elfdesc->noteVaddr = phdr[i].p_vaddr + (elfdesc->pie ? text_base : 0);
 				//elfdesc->noteSize = phdr[i].p_filesz;
 				break;
@@ -1721,14 +1781,59 @@ int main(int argc, char **argv)
 	elfdesc_t *elfdesc;
 	notedesc_t *notedesc = NULL;
 	handle_t *handle = alloca(sizeof(handle_t));
-	pid_t pid;
-	int i, j, ret;
+	pid_t pid = 0;
+	int i, j, ret, c;
+	char *corefile = NULL;
+	char *outfile = NULL;
 	
-	if (argc < 3) {
-		fprintf(stderr, "Usage: %s <corefile(input)> <ecfsfile(output)> <pid(optional)>\n", argv[0]);
+	
+	if (argc < 2) {
+		fprintf(stdout, "Usage: %s [-i] [-cpo]\n", argv[0]);
+		fprintf(stdout, "- Automated mode to be used with /proc/sys/kernel/core_pattern\n");
+		fprintf(stdout, "[-i]	read core file from stdin; output file will be procname.pid\n");
+		fprintf(stdout, "\n- Manual mode which allows for specifying existing core files (Debugging mode)\n");
+		fprintf(stdout, "[-c]	corefile to be processed\n");
+		fprintf(stdout, "[-p]	pid of process (Must respawn a process after it crashes)\n");
+		fprintf(stdout, "[-o]	output ecfs file\n\n");
 		exit(-1);
 	}
 	
+	while ((c = getopt(argc, argv, "c:io:p:")) != -1) {
+		switch(c) {
+			case 'c':	
+				opts.use_stdin = 0;
+				corefile = xstrdup(optarg);
+				break;
+			case 'i':
+				opts.use_stdin = 1;
+				break;
+			case 'o':
+				outfile = xstrdup(optarg);
+				break;
+			case 'p':
+				pid = atoi(optarg);
+				break;
+			default:
+				fprintf(stderr, "Unknown option\n");
+				exit(0);
+		}
+	}
+
+	if (opts.use_stdin == 0) {
+		if (corefile == NULL) {
+			printf("Must specify a corefile with -c if not using stdin mode\n");
+			exit(0);
+		}
+		if (pid == 0) {
+			printf("Must specify a pid with -p if not using stdin mode\n");
+			exit(0);
+		}
+		if (outfile == NULL) {
+			printf("Did not specify an output file, defaulting to use 'ecfs.out'\n");
+			outfile = xfmtstrdup("%s/ecfs.out", ECFS_CORE_DIR);		
+		}
+	}
+
 	/*
 	 * Don't allow itself to core in the event of a bug.
 	 */
@@ -1737,12 +1842,26 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 #if DEBUG
-	printf("Loading core file: %s\n", argv[1]);
+	if (corefile)
+		printf("Loading core file: %s\n", corefile);
 #endif
-	elfdesc = load_core_file((const char *)argv[1]);
-	if (elfdesc == NULL) {
-		fprintf(stderr, "Failed to parse core file\n");
-		exit(-1);
+	switch(opts.use_stdin) {
+		case 0:
+			/*
+			 * load the core file from a file
+			 */
+			elfdesc = load_core_file((const char *)corefile);
+			if (elfdesc == NULL) {
+				fprintf(stderr, "Failed to parse core file\n");
+				exit(-1);
+			}
+			break;
+		case 1:
+			/*
+			 * load the core file from stdin
+			 */
+			elfdesc = load_core_file_stdin();
+			break;
 	}
 
 	/*
@@ -1765,7 +1884,10 @@ int main(int argc, char **argv)
 	 * test scenarios we may want to be able to specify which pid to
 	 * use.
 	 */
-	pid = argc > 3 ? atoi(argv[3]) : notedesc->prstatus->pr_pid;
+	pid = pid ? pid : notedesc->prstatus->pr_pid;
+	
+	//pid = argc > 3 ? atoi(argv[3]) : notedesc->prstatus->pr_pid;
+	
 	memdesc = build_proc_metadata(pid, notedesc);
         if (memdesc == NULL) {
                 fprintf(stderr, "Failed to retrieve process metadata\n");
@@ -1833,7 +1955,7 @@ int main(int argc, char **argv)
 	 * Convert the core file into an actual ECFS file and write it
 	 * to disk.
 	 */
-	ret = core2ecfs(argv[2], handle);
+	ret = core2ecfs(outfile, handle);
 	if (ret < 0) {
 		fprintf(stderr, "Failed to transform core file '%s' into ecfs\n", argv[2]);
 		exit(-1);

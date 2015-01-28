@@ -22,6 +22,7 @@
 #include "dwarf.h"
 #include "libdwarf.h"
 
+#define ECFS_CORE_DIR "/home/ryan/bin" // XXX change this?
 #define UNKNOWN_SHDR_SIZE 64
 #define PAGE_ALIGN(x) (x & ~(PAGE_SIZE - 1))
 #define PAGE_ALIGN_UP(x) (PAGE_ALIGN(x) + PAGE_SIZE)
@@ -54,10 +55,7 @@
 #define MAX_SHDR_COUNT 2048
 
 struct opts {
-	int coretype;
-	int all;
-	int pid;
-	char *snapdir;
+	int use_stdin;
 };
 
 typedef struct {
