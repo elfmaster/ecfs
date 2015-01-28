@@ -22,6 +22,7 @@
 #include "dwarf.h"
 #include "libdwarf.h"
 
+#define LOGGING_PATH "/home/ryan/bin/logging.txt"
 #define ECFS_CORE_DIR "/home/ryan/bin" // XXX change this?
 #define UNKNOWN_SHDR_SIZE 64
 #define PAGE_ALIGN(x) (x & ~(PAGE_SIZE - 1))
@@ -56,6 +57,7 @@
 
 struct opts {
 	int use_stdin;
+	char *logfile;
 };
 
 typedef struct {
@@ -228,6 +230,7 @@ typedef struct memdesc {
 	pid_t pid;
 	uint8_t *exe;		/* Points to /proc/<pid>/exe */
 	char *path;		// path to executable
+	char *exe_path;
 	char *comm;		//name of executable
 	int mapcount;		// overall # of memory maps
 	int type;		// ET_EXEC or ET_DYN
@@ -298,3 +301,5 @@ void *heapAlloc(size_t);
 char *xstrdup(const char *);
 char *xfmtstrdup(char *fmt, ...);
 int get_all_functions(const char *filepath, struct fde_func_data **funcs);
+void ecfs_print(char *, ...);
+

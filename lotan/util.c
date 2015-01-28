@@ -26,6 +26,8 @@
 
 #include "ecfs.h"
 
+struct opts opts;
+
 void * heapAlloc(size_t len)
 {
 	void *p = malloc(len);
@@ -82,6 +84,24 @@ void xfree(void *p)
 {
 	if (p)
 		free(p);
+}
+
+#define LOGFILE "/home/ryan/bin/logging.txt"
+void ecfs_print(char *fmt, ...)
+{
+	FILE *fp;
+        va_list va;
+        char buf[512];
+	
+	va_start (va, fmt);
+	if ((fp = fopen(LOGFILE, "w")) == NULL) {
+		perror("fopen");
+		exit(-1);
+	}
+        vfprintf (fp, fmt, va);
+ 	fflush (fp);
+	va_end(va);
+	fclose(fp);
 }
 
 
