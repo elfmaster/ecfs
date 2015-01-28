@@ -1,0 +1,251 @@
+
+NAME
+	ECFS (Extended core file snapshot) format.
+
+SYNOPSIS
+	#include <ecfs.h>
+
+DESCRIPTION
+
+ECFS is an extension to the existing ELF core file format in Linux. It takes a process image
+or an existing corefile and produces a custom ELF file as the output. This output file is
+mostly backwards compatible with a regular core file, but it has a fully reconstructed set
+of section headers, and a fully reconstructed dynamic and local symbol table. This manual
+page will describe how to access the different components, which are primarily stored in 
+section headers and are therefore trivial to access.
+
+FILE TYPE
+
+An ECFS file is backwards compatible with a core file with the exception of having
+an e_type of ET_NONE instead of ET_CORE. This can be flipped trivially for the purposes
+of using GDB with an ECFS file. The reason ET_NONE is used, is because tools such as
+objdump will forcefully not see section headers if the file is marked as an ET_CORE.
+In many cases forensics analysts want to use objdump (And other more powerful tools)
+to view the section headers. 
+
+PROCESS & PROGRAM ATTRIBUTES
+
+ECFS is designed in such a way that extracting important information about the program and
+process image as a whole is trivial and primarily done through section headers, referenced by
+the section name and in some cases the section type, such as with SHT_SHLIB sections.
+The following structure should be used as a handle to open ECFS files.
+
+typedef struct ecfs_elf {
+         uint8_t *mem;		/* raw memory pointer */
+         char *shstrtab; 	/* shdr string table */
+	 char *strtab;		/* .symtab string table */
+	 char *dynstr; 		/* .dynstr string table */
+	 ElfW(Ehdr) * ehdr;	/* ELF Header pointer */
+         ElfW(Phdr) * phdr;	/* Program header table pointer */
+         ElfW(Shdr) * shdr;	/* Section header table pointer */
+         ElfW(Nhdr) * nhdr;	/* ELF Notes section pointer */
+         ElfW(Dyn)  *dyn;	/* Dynamic segment pointer */
+	 ElfW(Sym)  *symtab;	/* Pointer to array of symtab symbol structs */
+	 ElfW(Sym)  *dynsym;	/* Pointer to array of dynsym symbol structs */
+	 ElfW(Addr) textVaddr;  /* Text segment virtual address */
+	 ElfW(Addr) dataVaddr;  /* data segment virtual address */
+	 ElfW(Addr) dynVaddr;   /* dynamic segment virtual address */
+	 size_t filesize;	/* total file size		*/
+	 size_t dataSize;	/* p_memsz of data segment	*/
+	 size_t textSize;	/* p_memsz of text segment	*/
+	 size_t dynSize;	/* p_memsz of dynamnic segment  */
+	 int fd;		/* A copy of the file descriptor to the file */
+} ecfs_elf_t;
+	 
+	
+-=[OPENING AN ECFS FILE]
+
+- SYNOPSIS
+
+Opening a file:
+
+ecfs_elf_t * load_ecfs_file(const char *desc)
+
+
+Closing a file:
+
+void unload_ecfs_file(ecfs_elf_t *desc)
+
+
+This function will open the file pointed to by path, allocate an ecfs_elf_t 
+descriptor with malloc(), map all of the ECFS components into ecfs_elf_t, and return 
+a pointer to the structure.
+
+- RETURN VALUE
+
+NULL is returned on failure, otherwise a pointer to the ecfs_elf_t struct.
+
+
+
+
+-=[EXTRACTING THE NUMBER OF ACTIVE THREADS]
+
+In an ECFS file, the 'struct elf_prstatus' structures are copied from the core files notes
+area and stored in a section all to its own. 
+
+	SECTION NAME: .prstatus
+	SECTION TYPE: SHT_NOTE
+	
+For every thread in a process, there exists an elf_prstatus structure, and therefore the
+thread count can be deduced by determining how many elf_prstatus structures exist in the
+.prstatus section. The algorithm for getting the number of elf_prstatus structs in the 
+.prstatus section is to divide. The following line of code exemplifies this simple solution
+
+	int thread_count = shdr->sh_size / shdr->sh_entsize
+	
+- SYNOPSIS
+	
+	int get_thread_count(ecfs_elf_t *desc)
+
+- RETURN VALUE
+
+0 is returned on failure, as there should always be atleast 1 thread which is the group
+leader. 
+
+
+-=[GETTING THE PRSTATUS STRUCTS]
+
+The elf_prstatus structs contain alot of useful information including the 'struct user_regs_struct'
+containing the register state for a given thread or process. It may be desirable to get a 
+pointer to these structs in order to parse them. 
+
+	int get_prstatus_structs(ecfs_elf_t *desc, struct elf_prstatus **prstatus)
+
+- RETURN VALUE
+
+This function returns the number of elf_prstatus structs, which is also the number of active threads
+when the process cored.
+
+EXAMPLE:
+	/* Example code demonstrating how to print the pids/threads of the process */
+	
+	int i;
+	struct elf_prstatus *prstatus;
+	int thread_count = get_prstatus_structs(desc, &prstatus);
+	for (i = 0; i < thread_count; i++)
+		printf("tid: %d\n", prstatus[i].pr_pid);
+	
+
+
+
+
+-=[GETTING SIGINFO_T STRUCTURE]
+
+The siginfo_t structure is stored in the .siginfo section of the ecfs file.
+
+           siginfo_t {
+               int      si_signo;    /* Signal number */
+               int      si_errno;    /* An errno value */
+               int      si_code;     /* Signal code */
+               int      si_trapno;   /* Trap number that caused
+                                        hardware-generated signal
+                                        (unused on most architectures) */
+               pid_t    si_pid;      /* Sending process ID */
+               uid_t    si_uid;      /* Real user ID of sending process */
+               int      si_status;   /* Exit value or signal */
+               clock_t  si_utime;    /* User time consumed */
+               clock_t  si_stime;    /* System time consumed */
+               sigval_t si_value;    /* Signal value */
+               int      si_int;      /* POSIX.1b signal */
+               void    *si_ptr;      /* POSIX.1b signal */
+               int      si_overrun;  /* Timer overrun count; POSIX.1b timers */
+               int      si_timerid;  /* Timer ID; POSIX.1b timers */
+               void    *si_addr;     /* Memory location which caused fault */
+               long     si_band;     /* Band event (was int in
+                                        glibc 2.3.2 and earlier) */
+               int      si_fd;       /* File descriptor */
+               short    si_addr_lsb; /* Least significant bit of address
+                                        (since Linux 2.6.32) */
+           }
+
+SYNOPSIS
+
+	siginfo_t * get_siginfo(ecfs_elf_t *desc)
+
+- RETURN VALUE
+
+This function returns a pointer to the siginfo_t struct within the siginfo section of
+the binary. On failure NULL is returned.
+
+
+
+-=[GETTING FILE DESCRIPTOR INFO]
+
+ECFS stores information about open file descriptors in an ELF section named .fdinfo which contains
+an array of structures named 'struct fdinfo'
+
+struct fdinfo {
+	int fd;
+	char file_path[MAX_PATH];
+}; 
+
+-SYNOPSIS
+	
+	struct fdinfo * get_fd_info(ecfs_elf_t *desc)
+
+-RETURN VALUE
+
+On success a pointer to the .fdinfo section of the file is returned. On error NULL is returned.
+
+
+
+-=[SYMBOL TABLE RESOLUTION]
+
+One of the finer points of ECFS is the ability to completely reconstruct the symbol table both dynamic
+and local so that the output file has a readable symbol table that can be viewed with readelf or objdump
+just as if it were an executable. There are two symbol tables; one for dynamic symbols (imports) and
+a local symbol table for functions who's code exist in the program code itself. Respectively there
+are two separate functions for each.
+
+-SYNOPSIS
+
+	/*
+	 * Structure used for a single symbol
+	 */
+	#define MAX_SYM_LEN 255
+
+	typedef struct ecfs_sym {
+		ElfW(Addr) symval; /* Symbol value (address/offset) */
+		size_t size;	   /* size of object/function	    */
+		uint8_t type;      /* symbol type, i.e STT_FUNC, STT_OBJECT */
+		uint8_t binding;   /* symbol bind, i.e STB_GLOBAL, STB_LOCAL */
+		char *strtab; /* pointer to the symbols associated string table */
+		int nameoffset;	   /* Offset of symbol name into symbol strtab */
+	} ecfs_sym_t;
+
+	/* 
+	 * Function for retrieving all of the dynamic symbols (From .dynsym)
+	 */
+	int get_dynamic_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
+
+	/*
+	 * Function for retrieving all of the local symbols (From .symtab)
+	 */
+	int get_local_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
+
+
+Both of these functions allocate heap memory for an array of ecfs_sym_t structs
+representing each symbol.
+	
+EXAMPLE:
+
+	/* Code to print out name and value of each dynamic symbol */
+	  
+	int i;
+	ecfs_sym_t *dsyms;
+	char *strtab;
+
+	int symcount = get_dynamic_symbols(desc, &dsyms);
+	if (symcount < 0) 
+		error_exit("get_dynamic_symbols");
+	strtab = (char *)dsyms[0].strtab;
+	for (i = 0; i < symcount; i++) 
+		printf("Name: %s value: %lx\n", &strtab[dsyms[i].nameoffset], dsyms[i].symval);
+	
+
+
+
+
+
+
+
