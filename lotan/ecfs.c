@@ -449,7 +449,6 @@ static int get_maps(pid_t pid, mappings_t *maps, const char *path)
                 maps[lc].elfmap = 0;
                 maps[lc].base = strtoul(buf, NULL, 16);
                 maps[lc].size = strtoul(p, NULL, 16) - maps[lc].base;
-           	printf("Comparing %s and %s\n", tmp, path);
 		if (strstr(tmp, path)) {
                         if (!strstr(tmp, "---p"))
                                 maps[lc].filename = xstrdup(strchr(tmp, '/'));
@@ -1855,11 +1854,11 @@ int main(int argc, char **argv)
 
 	if (opts.use_stdin == 0) {
 		if (corefile == NULL) {
-			printf("Must specify a corefile with -c if not using stdin mode\n");
+			printf("Must specify a corefile with -c\n");
 			exit(0);
 		}
 		if (pid == 0) {
-			printf("Must specify a pid with -p if not using stdin mode\n");
+			printf("Must specify a pid with -p\n");
 			exit(0);
 		}
 		if (outfile == NULL) {
@@ -1878,6 +1877,7 @@ int main(int argc, char **argv)
 	}
 	*/
 	if (opts.use_stdin) {
+		printf("Using stdin, outfile is:%s\n", outfile);
 		/*
 		 * If we are getting core directly from the kernel then we must
 		 * read /proc/<pid>/ before we read the corefile. The process stays
@@ -1887,6 +1887,14 @@ int main(int argc, char **argv)
 			fprintf(stderr, "Must specify exename of process when using stdin mode; supplied by %%e of core_pattern\n");
 			exit(-1);
 		}
+		if (pid == 0) {
+                        printf("Must specify a pid with -p\n");
+                        exit(0);
+                }
+                if (outfile == NULL) {
+                        printf("Did not specify an output file, defaulting to use 'ecfs.out'\n");
+                        outfile = xfmtstrdup("%s/ecfs.out", ECFS_CORE_DIR);
+                }
 
 		memdesc = build_proc_metadata(pid, notedesc);
         	if (memdesc == NULL) {
@@ -2012,13 +2020,14 @@ int main(int argc, char **argv)
 	 * Convert the core file into an actual ECFS file and write it
 	 * to disk.
 	 */
+	printf("core2ecfs(%s, handle)\n", outfile);
 	ret = core2ecfs(outfile, handle);
 	if (ret < 0) {
 		fprintf(stderr, "Failed to transform core file '%s' into ecfs\n", argv[2]);
 		exit(-1);
 	}
 	
-
+	unlink(elfdesc->path);
 }
 
 
