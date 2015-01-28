@@ -205,7 +205,7 @@ int pid_attach_direct(pid_t pid)
 
         if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) < 0) {
                 if (errno) {
-                        fprintf(stderr, "ptrace: pid_attach() failed: %s\n", strerror(errno));
+                        fprintf(stderr, "ptrace: pid_attach() failed [pid: %d]: %s\n", pid, strerror(errno));
                         return -1;
                 }
         }

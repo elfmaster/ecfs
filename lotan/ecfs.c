@@ -449,7 +449,8 @@ static int get_maps(pid_t pid, mappings_t *maps, const char *path)
                 maps[lc].elfmap = 0;
                 maps[lc].base = strtoul(buf, NULL, 16);
                 maps[lc].size = strtoul(p, NULL, 16) - maps[lc].base;
-                if (strstr(tmp, path)) {
+           	printf("Comparing %s and %s\n", tmp, path);
+		if (strstr(tmp, path)) {
                         if (!strstr(tmp, "---p"))
                                 maps[lc].filename = xstrdup(strchr(tmp, '/'));
                                 maps[lc].elfmap++;
@@ -573,12 +574,19 @@ static int get_proc_status(notedesc_t *notedesc, memdesc_t *memdesc)
 {
 
 
-	memdesc->task.uid = notedesc->psinfo->pr_uid;
-	memdesc->task.gid = notedesc->psinfo->pr_gid;
-	memdesc->task.ppid = notedesc->psinfo->pr_ppid;
-	memdesc->task.pid = notedesc->psinfo->pr_pid;
-	memdesc->task.exit_signal = notedesc->prstatus->pr_info.si_signo;
-	memdesc->path = notedesc->psinfo->pr_fname;
+	if (opts.use_stdin == 0) {
+		/*
+		 * we are not reading from stdin which means we read
+		 * the corefile first and can use some of the psinfo
+		 * members that we parsed from notes.
+		 */
+		memdesc->task.uid = notedesc->psinfo->pr_uid;
+		memdesc->task.gid = notedesc->psinfo->pr_gid;
+		memdesc->task.ppid = notedesc->psinfo->pr_ppid;
+		memdesc->task.pid = notedesc->psinfo->pr_pid;
+		memdesc->task.exit_signal = notedesc->prstatus->pr_info.si_signo;
+		memdesc->path = notedesc->psinfo->pr_fname;
+	} // else; we get these values later.
 
 	switch(notedesc->psinfo->pr_sname) {
         	case 'D':
@@ -627,6 +635,8 @@ static int get_map_count(pid_t pid)
  * core files phdr's.
  */
 
+char *exename = NULL;
+
 memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 {
 	int i;
@@ -641,11 +651,14 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
         
         memset((void *)memdesc->maps, 0, sizeof(mappings_t) * memdesc->mapcount);
         
+	/*
         if (get_proc_status(notedesc, memdesc) < 0) {
                 printf("[!] failed to get data from /proc/%d/status\n", pid);
                 return NULL;
-        }
-        
+        } 
+	*/
+	memdesc->path = exename; // supplied by core_pattern %e
+	printf("exename is: %s\n", memdesc->path);
         if (get_maps(pid, memdesc->maps, memdesc->path) < 0) {
                 printf("[!] failed to get data from /proc/%d/maps\n", pid);
                 return NULL;
@@ -1773,6 +1786,16 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	return 0;
 }
 	
+void fill_in_pstatus(memdesc_t *memdesc, notedesc_t *notedesc)
+{
+                memdesc->task.uid = notedesc->psinfo->pr_uid;
+                memdesc->task.gid = notedesc->psinfo->pr_gid;
+                memdesc->task.ppid = notedesc->psinfo->pr_ppid;
+                //memdesc->task.pid = notedesc->psinfo->pr_pid;
+                memdesc->task.exit_signal = notedesc->prstatus->pr_info.si_signo;
+                memdesc->path = notedesc->psinfo->pr_fname;
+}
+
 int main(int argc, char **argv)
 {
 		
@@ -1786,19 +1809,27 @@ int main(int argc, char **argv)
 	char *corefile = NULL;
 	char *outfile = NULL;
 	
-	
+	/*
+	 * When testing use:
+	 * ./ecfs -c corefile -o output.ecfs -p <pid>
+	 *
+	 * although when having run as automated with core pipes use
+	 * the following command within /proc/sys/kernel/core_pattern
+	 * ./ecfs -i -p %p -e %e
+	 */
 	if (argc < 2) {
-		fprintf(stdout, "Usage: %s [-i] [-cpo]\n", argv[0]);
+		fprintf(stdout, "Usage: %s [-i] [-cpoe]\n", argv[0]);
 		fprintf(stdout, "- Automated mode to be used with /proc/sys/kernel/core_pattern\n");
 		fprintf(stdout, "[-i]	read core file from stdin; output file will be procname.pid\n");
 		fprintf(stdout, "\n- Manual mode which allows for specifying existing core files (Debugging mode)\n");
 		fprintf(stdout, "[-c]	corefile to be processed\n");
 		fprintf(stdout, "[-p]	pid of process (Must respawn a process after it crashes)\n");
+		fprintf(stdout, "[-e]	executable path (Supplied by %%e format arg in core_pattern)\n");
 		fprintf(stdout, "[-o]	output ecfs file\n\n");
 		exit(-1);
 	}
 	
-	while ((c = getopt(argc, argv, "c:io:p:")) != -1) {
+	while ((c = getopt(argc, argv, "c:io:p:e:")) != -1) {
 		switch(c) {
 			case 'c':	
 				opts.use_stdin = 0;
@@ -1809,6 +1840,9 @@ int main(int argc, char **argv)
 				break;
 			case 'o':
 				outfile = xstrdup(optarg);
+				break;
+			case 'e':
+				exename = xstrdup(optarg);
 				break;
 			case 'p':
 				pid = atoi(optarg);
@@ -1833,14 +1867,35 @@ int main(int argc, char **argv)
 			outfile = xfmtstrdup("%s/ecfs.out", ECFS_CORE_DIR);		
 		}
 	}
-
+	
 	/*
 	 * Don't allow itself to core in the event of a bug.
 	 */
+	/*
     	if (setrlimit(RLIMIT_CORE, &limit_core) < 0) {
 		perror("setrlimit");
 		exit(-1);
 	}
+	*/
+	if (opts.use_stdin) {
+		/*
+		 * If we are getting core directly from the kernel then we must
+		 * read /proc/<pid>/ before we read the corefile. The process stays
+		 * open as long as the corefile hasn't been read yet.
+	  	 */
+        	if (exename == NULL) {
+			fprintf(stderr, "Must specify exename of process when using stdin mode; supplied by %%e of core_pattern\n");
+			exit(-1);
+		}
+
+		memdesc = build_proc_metadata(pid, notedesc);
+        	if (memdesc == NULL) {
+                	fprintf(stderr, "Failed to retrieve process metadata\n");
+                	exit(-1);
+        	}
+		memdesc->task.pid = pid;
+	}
+
 #if DEBUG
 	if (corefile)
 		printf("Loading core file: %s\n", corefile);
@@ -1875,7 +1930,7 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Failed to parse ELF notes segment\n");
 		exit(-1);
 	}
-
+	
 	/*
 	 * In real scenarios we will be receiving the core dump right as
 	 * the kernel creates it and therefore the pid that we get from
@@ -1884,16 +1939,18 @@ int main(int argc, char **argv)
 	 * test scenarios we may want to be able to specify which pid to
 	 * use.
 	 */
-	pid = pid ? pid : notedesc->prstatus->pr_pid;
-	
-	//pid = argc > 3 ? atoi(argv[3]) : notedesc->prstatus->pr_pid;
-	
-	memdesc = build_proc_metadata(pid, notedesc);
-        if (memdesc == NULL) {
-                fprintf(stderr, "Failed to retrieve process metadata\n");
-                exit(-1);
-        }
-
+	if (opts.use_stdin == 0) {
+		exename = notedesc->psinfo->pr_fname;
+		pid = pid ? pid : notedesc->prstatus->pr_pid;
+		printf("pid: %d\n", pid);
+		memdesc = build_proc_metadata(pid, notedesc);
+        	if (memdesc == NULL) {
+                	fprintf(stderr, "Failed to retrieve process metadata\n");
+                	exit(-1);
+        	}
+		memdesc->task.pid = pid;
+	}
+	fill_in_pstatus(memdesc, notedesc);
 		
 	/*
 	 * Which mappings are stored in actual phdr segments?
