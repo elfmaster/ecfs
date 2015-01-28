@@ -751,6 +751,7 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 	if (pid_detach_direct(pid) < 0)
 		return -1;
 	*/
+	
 	/* Instead we use mmap on the original executable file */
 	fd = xopen(memdesc->exe_path, O_RDONLY);
 	mem = mmap(NULL, 8192, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -1875,19 +1876,7 @@ int main(int argc, char **argv)
 				exit(0);
 		}
 	}
-	FILE *fdesc = fopen("/tmp/core.test", "w");	
-	char *pfile = xfmtstrdup("/proc/%d/maps", pid);
-	FILE *fr = fopen(pfile, "r");
-	char tmp[8192];
-	fgets(tmp, sizeof(tmp), fr);
-	fclose(fr);
-	ecfs_print("exename: %s\n", exename);
-	printf("pid: %d\n", pid);
-	fprintf(fdesc, "exename: %s pid: %d\n%s", exename, pid, tmp);
-	fclose(fdesc);
 	
-	opts.logfile = LOGGING_PATH;
-
 	if (opts.use_stdin == 0) {
 		if (corefile == NULL) {
 			printf("Must specify a corefile with -c\n");
@@ -1920,12 +1909,10 @@ int main(int argc, char **argv)
 		 * open as long as the corefile hasn't been read yet.
 	  	 */
         	if (exename == NULL) {
-			ecfs_print("must specify exename\n");
 			fprintf(stderr, "Must specify exename of process when using stdin mode; supplied by %%e of core_pattern\n");
 			exit(-1);
 		}
 		if (pid == 0) {
-			ecfs_print("must specify a pid\n");
                         printf("Must specify a pid with -p\n");
                         exit(0);
                 }
@@ -1934,13 +1921,11 @@ int main(int argc, char **argv)
                         outfile = xfmtstrdup("%s/ecfs.out", ECFS_CORE_DIR);
                 }
 
-		ecfs_print("calling build_proc_metadata\n");
 		memdesc = build_proc_metadata(pid, notedesc);
         	if (memdesc == NULL) {
                 	fprintf(stderr, "Failed to retrieve process metadata\n");
                 	exit(-1);
         	}
-		ecfs_print("succeeded in calling proc_metadata\n");
 		memdesc->task.pid = pid;
 	}
 
@@ -1975,7 +1960,6 @@ int main(int argc, char **argv)
 	 */
 	notedesc = (notedesc_t *)parse_notes_area(elfdesc);
 	if (notedesc == NULL) {
-		ecfs_print("Failed to parse notes\n");
 		fprintf(stderr, "Failed to parse ELF notes segment\n");
 		exit(-1);
 	}
@@ -2039,7 +2023,6 @@ int main(int argc, char **argv)
 	 * Out of the parsed NT_FILES get a list of which ones are
 	 * shared libraries so we can create shdrs for them.
 	 */
-	ecfs_print("lookup_lib_maps\n");
 	notedesc->lm_files = (struct lib_mappings *)heapAlloc(sizeof(struct lib_mappings));
 	lookup_lib_maps(elfdesc, memdesc, notedesc->nt_files, notedesc->lm_files);
 	
@@ -2052,7 +2035,6 @@ int main(int argc, char **argv)
 	 * data and code is from the dynamic segment by parsing
 	 * it by D_TAG values.
 	 */
-	ecfs_print("extracting dyninfo\n");
 	ret = extract_dyntag_info(handle);
 	if (ret < 0) {
 		fprintf(stderr, "Failed to extract dynamic segment information\n");
@@ -2062,7 +2044,6 @@ int main(int argc, char **argv)
 	 * Convert the core file into an actual ECFS file and write it
 	 * to disk.
 	 */
-	ecfs_print("core2ecfs\n");
 	ret = core2ecfs(outfile, handle);
 	if (ret < 0) {
 		fprintf(stderr, "Failed to transform core file '%s' into ecfs\n", argv[2]);
