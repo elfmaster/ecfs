@@ -231,6 +231,7 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 			case NT_AUXV:
 				notedesc->auxv = heapAlloc(notes->n_descsz);
 				memcpy((void *)notedesc->auxv, (void *)desc, notes->n_descsz);
+				notedesc->auxv_size = notes->n_descsz;
 				break;
 			case NT_FILE:
 				parse_nt_files(&nt_files, (void *)desc, notes->n_descsz);
@@ -489,6 +490,27 @@ static int get_maps(pid_t pid, mappings_t *maps, const char *path)
         fclose(fd);
 
         return 0;
+}
+
+static int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
+{
+	DIR *dp;
+	struct dirent *dptr = NULL;
+	char tmp[256];
+	char *dpath = xfmtstrdup("/proc/%d/fd", memdesc->task.pid);
+	*fdinfo = (fd_info_t *)heapAlloc(sizeof(fd_info_t) * 256);
+	int fdcount;
+ 
+        for (fdcount = 0, dp = opendir(dpath); dp != NULL;) {
+                dptr = readdir(dp);
+                if (dptr == NULL) 
+                        break;
+		snprintf(tmp, sizeof(tmp), "%s/%s", dpath, dptr->d_name); // i.e /proc/pid/fd/3
+		readlink(tmp, (*fdinfo)[fdcount].path, MAX_PATH);
+		(*fdinfo)[fdcount].fd = atoi(dptr->d_name);
+		fdcount++;
+	}
+	return fdcount;
 }
 
 static int get_proc_status(notedesc_t *notedesc, memdesc_t *memdesc)
@@ -1396,6 +1418,60 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	stoffset += strlen(".prstatus") + 1;
 	scount++;
 	
+	/*
+	 * .fd_info
+	 */
+      	shdr[scount].sh_type = SHT_PROGBITS;
+        shdr[scount].sh_offset = ecfs_file->fdinfo_offset;
+        shdr[scount].sh_addr = 0;
+        shdr[scount].sh_flags = 0;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = sizeof(fd_info_t);
+        shdr[scount].sh_size = ecfs_file->fdinfo_size;
+        shdr[scount].sh_addralign = 4;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".fd_info");
+        stoffset += strlen(".fd_info") + 1;
+        scount++;
+
+	/*
+	 * siginfo_t
+	 */
+	shdr[scount].sh_type = SHT_PROGBITS;
+        shdr[scount].sh_offset = ecfs_file->siginfo_offset;
+        shdr[scount].sh_addr = 0;
+        shdr[scount].sh_flags = 0;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = sizeof(siginfo_t);
+        shdr[scount].sh_size = ecfs_file->siginfo_size;
+        shdr[scount].sh_addralign = 4;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".siginfo");
+        stoffset += strlen(".siginfo") + 1;
+        scount++;
+
+	/*
+	 * auxv
+	 */
+   	shdr[scount].sh_type = SHT_PROGBITS;
+        shdr[scount].sh_offset = ecfs_file->auxv_offset;
+        shdr[scount].sh_addr = 0;
+        shdr[scount].sh_flags = 0;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 8;
+        shdr[scount].sh_size = ecfs_file->auxv_size;
+        shdr[scount].sh_addralign = 8;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".auxvector");
+        stoffset += strlen(".auxvector") + 1;
+        scount++;
+
+
+
+
 	 /*
          * .stack
          */
@@ -1553,6 +1629,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	ElfW(Ehdr) *ehdr = elfdesc->ehdr;
 	ElfW(Phdr) *phdr = elfdesc->phdr;
 	uint8_t *mem = elfdesc->mem;
+	fd_info_t *fdinfo = NULL;
 	ecfs_file_t *ecfs_file = heapAlloc(sizeof(ecfs_file_t));
 	int fd, ret;
 
@@ -1562,17 +1639,47 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	stat(elfdesc->path, &st); // stat the corefile
 	ecfs_file->prstatus_offset = st.st_size;
 	ecfs_file->prstatus_size = notedesc->thread_count * sizeof(struct elf_prstatus);
-	ecfs_file->stb_offset = ecfs_file->prstatus_offset + notedesc->thread_count * sizeof(struct elf_prstatus);
-		
+	ecfs_file->fdinfo_offset = ecfs_file->prstatus_offset + notedesc->thread_count * sizeof(struct elf_prstatus);
+	ecfs_file->fdinfo_size = get_fd_links(memdesc, &fdinfo) * sizeof(fd_info_t);
+	ecfs_file->siginfo_offset = ecfs_file->fdinfo_offset + ecfs_file->fdinfo_size;
+	ecfs_file->siginfo_size = sizeof(siginfo_t);
+	ecfs_file->auxv_offset = ecfs_file->siginfo_offset + ecfs_file->siginfo_size;
+	ecfs_file->auxv_size = notedesc->auxv_size;
+	ecfs_file->stb_offset = ecfs_file->auxv_offset + ecfs_file->auxv_size;
+	
+	/*
+	 * write original body of core file
+	 */	
 	if (write(fd, elfdesc->mem, st.st_size) != st.st_size) {
 		perror("write");
 		exit(-1);
 	}
 
+	/*
+	 * write prstatus structs
+	 */
 	write(fd, notedesc->prstatus, sizeof(struct elf_prstatus));
 	for (i = 0; i < notedesc->thread_count; i++)	
 		write(fd, notedesc->thread_core_info[i].prstatus, sizeof(struct elf_prstatus));
 	
+	/*
+	 * write fdinfo structs
+	 */
+	write(fd, fdinfo, ecfs_file->fdinfo_size);
+
+	/*
+	 * write siginfo_t struct
+	 */
+	write(fd, notedesc->siginfo, sizeof(siginfo_t));
+	
+	/*
+ 	 * write auxv data
+	 */
+	write(fd, notedesc->auxv, notedesc->auxv_size);
+	
+	/*
+	 * Build section header table
+	 */
 	int shnum = build_section_headers(fd, outfile, handle, ecfs_file);
 	
 	close(fd);

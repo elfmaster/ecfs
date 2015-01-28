@@ -71,6 +71,15 @@ struct fde_func_data {		/* For eh_frame.c */
 	size_t size;
 };
 
+#ifndef MAX_PATH
+#define MAX_PATH 512
+#endif
+
+typedef struct fd_info {
+	int fd;
+	char path[MAX_PATH];
+} fd_info_t;
+
 struct section_meta {
 	ElfW(Addr) bssVaddr, dynVaddr, relVaddr, relaVaddr, ehframeVaddr,
 	    textVaddr, o_textVaddr, dataVaddr, o_dataVaddr, gotVaddr, noteVaddr,
@@ -95,9 +104,15 @@ struct elf_thread_core_info {
 typedef struct ecfs_file_fmt {
 	loff_t prstatus_offset; 
 	loff_t prpsinfo_offset;
+	loff_t fdinfo_offset;
+	loff_t siginfo_offset;
+	loff_t auxv_offset;
 	loff_t stb_offset;
 	size_t prstatus_size;
 	size_t prpsinfo_size;
+	size_t fdinfo_size;
+	size_t siginfo_size;
+	size_t auxv_size;
 	int thread_count;
 } ecfs_file_t;
 
@@ -138,6 +153,7 @@ typedef struct notedesc {
 	int thread_count;
 	int thread_status_size;
 	int numnote;
+	size_t auxv_size;
 	struct nt_file_struct *nt_files;
 	struct lib_mappings *lm_files;
 } notedesc_t;
