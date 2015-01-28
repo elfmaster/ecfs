@@ -1067,12 +1067,10 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         int scount = 0;
 	int i; 
 
-	printf("fd: %d ecfs_file: %p\n", fd, ecfs_file);
 	/*
 	 * Get the offset of where the shdrs are being written
 	 */
 	loff_t e_shoff = lseek(fd, 0, SEEK_CUR);
-	printf("Writing section header table at offset %lx\n", e_shoff);
 	
 	shdr[scount].sh_type = SHT_NULL;
         shdr[scount].sh_offset = 0;
@@ -1369,7 +1367,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	int data_count;
 	char *str = NULL;
 	for (data_count = 0, i = 0; i < notedesc->lm_files->libcount; i++) {
-		shdr[scount].sh_type = SHT_PROGBITS;
+		shdr[scount].sh_type = SHT_SHLIB;
 		shdr[scount].sh_offset = notedesc->lm_files->libs[i].offset;
 		shdr[scount].sh_addr = notedesc->lm_files->libs[i].addr;
 		shdr[scount].sh_flags = SHF_ALLOC;
@@ -1391,7 +1389,6 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 				str = xfmtstrdup("%s.relro", notedesc->lm_files->libs[i].name);
 				break;
 			default:
-				printf("flags: %lx\n", notedesc->lm_files->libs[i].flags);
 				str = xfmtstrdup("%s.undef", notedesc->lm_files->libs[i].name);
 				break;
 		}
@@ -1431,8 +1428,8 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         shdr[scount].sh_size = ecfs_file->fdinfo_size;
         shdr[scount].sh_addralign = 4;
         shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], ".fd_info");
-        stoffset += strlen(".fd_info") + 1;
+        strcpy(&StringTable[stoffset], ".fdinfo");
+        stoffset += strlen(".fdinfo") + 1;
         scount++;
 
 	/*
