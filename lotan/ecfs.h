@@ -296,10 +296,9 @@ typedef struct list {
 	node_t *tail;
 } list_t;
 
-memdesc_t *take_process_snapshot(pid_t);
 void *heapAlloc(size_t);
 char *xstrdup(const char *);
 char *xfmtstrdup(char *fmt, ...);
 int get_all_functions(const char *filepath, struct fde_func_data **funcs);
 void ecfs_print(char *, ...);
-
+int xopen(const char *, int);

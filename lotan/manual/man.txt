@@ -45,6 +45,9 @@ typedef struct ecfs_elf {
 	 ElfW(Addr) textVaddr;  /* Text segment virtual address */
 	 ElfW(Addr) dataVaddr;  /* data segment virtual address */
 	 ElfW(Addr) dynVaddr;   /* dynamic segment virtual address */
+	 ElfW(Off) textOff;	/* text segment offset */
+	 ElfW(Off) dataOff;	/* data segment offset */
+	 ElfW(Off) dynOff;	/* dynamic section offset */
 	 size_t filesize;	/* total file size		*/
 	 size_t dataSize;	/* p_memsz of data segment	*/
 	 size_t textSize;	/* p_memsz of text segment	*/

@@ -569,49 +569,6 @@ static int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
 	return fdcount;
 }
 
-static int get_proc_status(notedesc_t *notedesc, memdesc_t *memdesc)
-{
-
-
-	if (opts.use_stdin == 0) {
-		/*
-		 * we are not reading from stdin which means we read
-		 * the corefile first and can use some of the psinfo
-		 * members that we parsed from notes.
-		 */
-		memdesc->task.uid = notedesc->psinfo->pr_uid;
-		memdesc->task.gid = notedesc->psinfo->pr_gid;
-		memdesc->task.ppid = notedesc->psinfo->pr_ppid;
-		memdesc->task.pid = notedesc->psinfo->pr_pid;
-		memdesc->task.exit_signal = notedesc->prstatus->pr_info.si_signo;
-		memdesc->path = notedesc->psinfo->pr_fname;
-	} // else; we get these values later.
-
-	switch(notedesc->psinfo->pr_sname) {
-        	case 'D':
-                	memdesc->task.state |= PS_SLEEP_UNINTER;
-                        break;
-                case 'R':
-                        memdesc->task.state |= PS_RUNNING;
-                        break;
-                case 'S':
-                    	memdesc->task.state |= PS_SLEEP_INTER;
-                       	break;
-                case 'T':
-                        memdesc->task.state |= PS_STOPPED;
-                        break;
-                case 'Z':
-                        memdesc->task.state |= PS_DEFUNCT;
-                        break;
-                default:
-                        memdesc->task.state |= PS_UNKNOWN;
-                        break;
-      	}
-	return 0;
-
-}
-
-
 static int get_map_count(pid_t pid)
 {
         FILE *pd;
