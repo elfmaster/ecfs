@@ -161,6 +161,84 @@ int get_dynamic_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
 	return 0;
 }
 
+
+
+int get_siginfo(ecfs_elf_t *desc, siginfo_t **siginfo)
+{
+	char *StringTable = desc->shstrtab;
+	ElfW(Shdr) *shdr = desc->shdr;
+	int i;
+
+	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+		if (!strcmp(&StringTable[shdr[i].sh_name], ".siginfo")) {
+			*siginfo = (siginfo_t *)heapAlloc(shdr[i].sh_size);
+			memcpy(*siginfo, &desc->mem[shdr[i].sh_offset], shdr[i].sh_size);
+			return 0;
+		}
+	}
+
+	return -1;
+}
+
+ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr)
+{
+	char *StringTable = desc->shstrtab;
+	ElfW(Shdr) *shdr = desc->shdr;
+	int i;
+
+	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+		if (!strcmp(&StringTable[shdr[i].sh_name], ".stack")) {
+			*ptr = &desc->mem[shdr[i].sh_offset];
+			return shdr[i].sh_size;
+		}
+	}
+
+	return -1;
+}
+
+ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr)
+{
+	char *StringTable = desc->shstrtab;
+	ElfW(Shdr) *shdr = desc->shdr;
+	int i;
+
+	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+		if (!strcmp(&StringTable[shdr[i].sh_name], ".heap")) {
+			*ptr = &desc->mem[shdr[i].sh_offset];
+			return shdr[i].sh_size;
+		}
+	}
+
+	return -1;
+}
+
+
+int get_local_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
+{
+	int i, j;
+	ElfW(Ehdr) *ehdr = desc->ehdr;
+	ElfW(Shdr) *shdr = desc->shdr;
+	ssize_t symcount;
+	ElfW(Sym) *locsym = desc->strtab;
+
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (shdr[i].sh_type == SHT_SYMTAB) {
+			symcount = shdr[i].sh_size / sizeof(ElfW(Sym));
+			size_t alloc_len = symcount * sizeof(ecfs_sym_t);
+			*syms = (ecfs_sym_t *)heapAlloc(alloc_len);
+			for (j = 0; j < symcount; j++) {
+				(*syms)[j].strtab = desc->dynstr;
+				(*syms)[j].symval = locsym[j].st_value;
+				(*syms)[j].size = locsym[j].st_size;
+				(*syms)[j].type = ELF32_ST_TYPE(locsym[j].st_info);
+				(*syms)[j].binding = ELF32_ST_BIND(locsym[j].st_info);
+				(*syms)[j].nameoffset = locsym[j].st_name;
+			}
+			return symcount;
+		}
+	}
+	return 0;
+}
 						
 	
 
