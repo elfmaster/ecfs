@@ -55,6 +55,14 @@
 
 #define MAX_SHDR_COUNT 2048
 
+typedef struct elf_stats {
+#define ELF_STATIC (1 << 1) // if its statically linked (instead of dynamically)
+#define ELF_PIE (1 << 2)    // if its position indepdendent executable
+#define ELF_LOCSYM (1 << 3) // local symtab exists?
+        unsigned int personality; // if (personality & ELF_STATIC)
+        char arch;
+} elf_stat_t;
+
 struct opts {
 	int use_stdin;
 	char *logfile;

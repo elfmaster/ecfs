@@ -693,23 +693,6 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 		return -1;
 	}
 	
-	/*
-	 * We should avoid using ptrace and it won't work in conjunction with
-	 * the kernels core_pattern piping feature.
-	 */
-	/*
-	if (pid_attach_direct(pid) < 0) {
-		ecfs_print("pid_attach failed\n");
-		return -1;
-	}
-	
-	if (pid_read(pid, (void *)mem, (void *)text_base, 4096) < 0)
-		return -1;
-	
-	if (pid_detach_direct(pid) < 0)
-		return -1;
-	*/
-	
 	/* Instead we use mmap on the original executable file */
 	fd = xopen(memdesc->exe_path, O_RDONLY);
 	mem = mmap(NULL, 8192, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -1800,6 +1783,12 @@ void fill_in_pstatus(memdesc_t *memdesc, notedesc_t *notedesc)
                 memdesc->task.exit_signal = notedesc->prstatus->pr_info.si_signo;
                 memdesc->path = notedesc->psinfo->pr_fname;
 }
+
+void build_elf_stats(handle_t *handle)
+{
+
+}
+
 
 int main(int argc, char **argv)
 {
