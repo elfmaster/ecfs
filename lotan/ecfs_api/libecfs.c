@@ -81,9 +81,24 @@ int get_fd_info(ecfs_elf_t *desc, struct fdinfo **fdinfo)
 	int i;
 	for (i = 0; i < desc->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".fdinfo")) {
-			*fdinfo = (struct fdinfo *)heapAlloc(shdr[i].sh_size * 2);
+			*fdinfo = (struct fdinfo *)heapAlloc(shdr[i].sh_size);
 			memcpy(*fdinfo, &desc->mem[shdr[i].sh_offset], shdr[i].sh_size);
 			return shdr[i].sh_size / sizeof(struct fdinfo);
+		}
+	}
+	return -1;
+}
+
+int get_prstatus_structs(ecfs_elf_t *desc, struct elf_prstatus **prstatus)
+{
+	char *StringTable = desc->shstrtab;
+        ElfW(Shdr) *shdr = desc->shdr;
+        int i;
+        for (i = 0; i < desc->ehdr->e_shnum; i++) {
+		if (!strcmp(&StringTable[shdr[i].sh_name], ".prstatus")) {
+			*prstatus = (struct elf_prstatus *)heapAlloc(shdr[i].sh_size);
+			memcpy(*prstatus, &desc->mem[shdr[i].sh_offset], shdr[i].sh_size);
+			return shdr[i].sh_size / sizeof(struct elf_prstatus);
 		}
 	}
 	return -1;
@@ -101,5 +116,24 @@ int get_thread_count(ecfs_elf_t *desc)
 	}
 	return -1;
 }
+		
+char * get_exe_path(ecfs_elf_t *desc)
+{
+        char *StringTable = desc->shstrtab;
+        ElfW(Shdr) *shdr = desc->shdr;
+	int i, c;
+	char *ret;
 
-			
+        for (i = 0; i < desc->ehdr->e_shnum; i++) {
+                if (!strcmp(&StringTable[shdr[i].sh_name], ".exepath")) {
+			ret = (char *)heapAlloc(shdr[i].sh_size);
+			strcpy(ret, (char *)&desc->mem[shdr[i].sh_offset]);
+			return ret;	
+        	}
+	}
+        return NULL;
+}
+
+
+	
+

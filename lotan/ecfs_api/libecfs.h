@@ -67,5 +67,7 @@ struct fdinfo {
 void * heapAlloc(size_t);
 
 ecfs_elf_t * load_ecfs_file(const char *);
+char * get_exe_path(ecfs_elf_t *desc);
 int get_fd_info(ecfs_elf_t *desc, struct fdinfo **fdinfo);
 int get_thread_count(ecfs_elf_t *desc);
+int get_prstatus_structs(ecfs_elf_t *desc, struct elf_prstatus **prstatus);

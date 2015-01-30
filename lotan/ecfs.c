@@ -1525,6 +1525,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	 * .exepath
 	 */
 	shdr[scount].sh_type = SHT_PROGBITS;
+	shdr[scount].sh_offset = ecfs_file->exepath_offset;
 	shdr[scount].sh_addr = 0;
         shdr[scount].sh_flags = 0;
         shdr[scount].sh_info = 0;
