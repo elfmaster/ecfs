@@ -258,9 +258,32 @@ EXAMPLE:
 		printf("Name: %s value: %lx\n", &strtab[dsyms[i].nameoffset], dsyms[i].symval);
 	
 
+-=[GET STACK POINTER]
+
+ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr);
+
+-RETURN VALUE
+
+Returns the size of the stack on success, -1 on failure. Sets ptr to point to
+the stack inside of the desc struct on success, null on failure.
 
 
+-=[GET STACK POINTER]
+
+ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr);
+
+-RETURN VALUE
+
+Returns the size of the heap on success, -1 on failure. Sets ptr to point to the
+heap inside of the desc struct on success, null on failure.
 
 
+-=[GET LOCAL SYMBOLS]
+
+int get_local_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms);
+
+-RETURN VALUE
+
+Returns the number of symbols found.
 
 

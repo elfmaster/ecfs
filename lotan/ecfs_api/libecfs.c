@@ -193,6 +193,7 @@ ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr)
 		}
 	}
 
+	*ptr = null;
 	return -1;
 }
 
@@ -208,7 +209,8 @@ ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr)
 			return shdr[i].sh_size;
 		}
 	}
-
+	
+	*ptr = null;
 	return -1;
 }
 
