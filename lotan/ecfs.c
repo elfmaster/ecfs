@@ -556,11 +556,13 @@ static int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
 	char *dpath = xfmtstrdup("/proc/%d/fd", memdesc->task.pid);
 	*fdinfo = (fd_info_t *)heapAlloc(sizeof(fd_info_t) * 256);
 	int fdcount;
- 
+ 	
         for (fdcount = 0, dp = opendir(dpath); dp != NULL;) {
                 dptr = readdir(dp);
                 if (dptr == NULL) 
                         break;
+		if (dptr->d_name[0] == '.')
+			continue;
 		snprintf(tmp, sizeof(tmp), "%s/%s", dpath, dptr->d_name); // i.e /proc/pid/fd/3
 		readlink(tmp, (*fdinfo)[fdcount].path, MAX_PATH);
 		(*fdinfo)[fdcount].fd = atoi(dptr->d_name);
@@ -620,7 +622,6 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
        
 	memdesc->exe_path = get_exe_path(pid);
 
-	printf("exe_path: %s\n", memdesc->exe_path);
 	if (get_maps(pid, memdesc->maps, memdesc->path) < 0) {
                 printf("[!] failed to get data from /proc/%d/maps\n", pid);
                 return NULL;
@@ -1520,10 +1521,25 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         stoffset += strlen(".auxvector") + 1;
         scount++;
 
+	/*
+	 * .exepath
+	 */
+	shdr[scount].sh_type = SHT_PROGBITS;
+	shdr[scount].sh_addr = 0;
+        shdr[scount].sh_flags = 0;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 8;
+        shdr[scount].sh_size = ecfs_file->exepath_size;
+        shdr[scount].sh_addralign = 0;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".exepath");
+        stoffset += strlen(".exepath") + 1;
+        scount++;
 
 
 
-	 /*
+	/*
          * .stack
          */
         shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
@@ -1696,7 +1712,9 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	ecfs_file->siginfo_size = sizeof(siginfo_t);
 	ecfs_file->auxv_offset = ecfs_file->siginfo_offset + ecfs_file->siginfo_size;
 	ecfs_file->auxv_size = notedesc->auxv_size;
-	ecfs_file->stb_offset = ecfs_file->auxv_offset + ecfs_file->auxv_size;
+	ecfs_file->exepath_offset = ecfs_file->auxv_offset + ecfs_file->auxv_size;
+	ecfs_file->exepath_size = strlen(memdesc->exe_path) + 1;
+	ecfs_file->stb_offset = ecfs_file->exepath_offset + ecfs_file->exepath_size;
 	
 	/*
 	 * write original body of core file
@@ -1728,6 +1746,11 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 */
 	write(fd, notedesc->auxv, notedesc->auxv_size);
 	
+	/*
+	 * write exepath string
+	 */
+	write(fd, memdesc->exe_path, strlen(memdesc->exe_path) + 1);
+
 	/*
 	 * Build section header table
 	 */

@@ -107,12 +107,14 @@ typedef struct ecfs_file_fmt {
 	loff_t fdinfo_offset;
 	loff_t siginfo_offset;
 	loff_t auxv_offset;
+	loff_t exepath_offset;
 	loff_t stb_offset;
 	size_t prstatus_size;
 	size_t prpsinfo_size;
 	size_t fdinfo_size;
 	size_t siginfo_size;
 	size_t auxv_size;
+	size_t exepath_size;
 	int thread_count;
 } ecfs_file_t;
 

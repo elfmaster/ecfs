@@ -24,9 +24,9 @@
  */
 
 
-#include "ecfs.h"
+#include "libecfs.h"
+#include <stdio.h>
 
-struct opts opts;
 
 void * heapAlloc(size_t len)
 {

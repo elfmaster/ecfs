@@ -184,11 +184,23 @@ struct fdinfo {
 
 -SYNOPSIS
 	
-	struct fdinfo * get_fd_info(ecfs_elf_t *desc)
-
+	int get_fd_info(ecfs_elf_t *desc, struct fdinfo **fdinfo)
+	
 -RETURN VALUE
 
-On success a pointer to the .fdinfo section of the file is returned. On error NULL is returned.
+On success get_fd_info returns the number of fd entries, and fdinfo is allocated to an array of 
+struct fdinfo's on the heap.
+
+-EXAMPLE
+
+	int i;
+	struct fdinfo *fdinfo;
+	int ret = get_fd_info(desc, &fdinfo);
+	if (ret < 0) 
+		error_out("get_fd_info");
+	for(i = 0; i < ret; i++)
+		printf("fd: %d path: %s\n", fdinfo[i].fd, fdinfo[i].path);
+
 
 
 

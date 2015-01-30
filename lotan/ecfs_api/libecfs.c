@@ -1,8 +1,8 @@
 #include "libecfs.h"
 
-ecfs_file_t * load_ecfs_file(const char *path)
+ecfs_elf_t * load_ecfs_file(const char *path)
 {
-	ecfs_file_t *ecfs = (ecfs_file_t *)heapAlloc(sizeof(ecfs_file_t));
+	ecfs_elf_t *ecfs = (ecfs_elf_t *)heapAlloc(sizeof(ecfs_elf_t));
 	uint8_t *mem;
 	ElfW(Ehdr) *ehdr;
 	ElfW(Phdr) *phdr;
@@ -12,6 +12,7 @@ ecfs_file_t * load_ecfs_file(const char *path)
 
 	fd = xopen(path, O_RDONLY);
 	xfstat(fd, &st);
+	ecfs->filesize = st.st_size;
 	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
 	if (mem == MAP_FAILED) {
 		perror("mmap");
@@ -27,14 +28,22 @@ ecfs_file_t * load_ecfs_file(const char *path)
 	ecfs->shstrtab = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
 	
 	/*
-	 * setup dynamic string table
+	 * setup .dynsym symbols, .symtab symbols, and .dynstr and .strtab string table
 	 */
 	for (ecfs->dynstr = NULL, i = 0; i < ehdr->e_shnum; i++) {
-		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".dynstr")) {
+		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".dynstr")) 
 			ecfs->dynstr = (char *)&mem[shdr[i].sh_offset];
-			break;
-		}
+		else
+		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".strtab"))
+			ecfs->strtab = (char *)&mem[shdr[i].sh_offset];
+		else
+		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".dynsym")) 
+                        ecfs->dynsym = (ElfW(Sym) *)&mem[shdr[i].sh_offset];
+		else
+                if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".symtab"))
+                        ecfs->symtab = (ElfW(Sym) *)&mem[shdr[i].sh_offset];
 	}
+	
 	
 	/*
 	 * Find .dynamic, .text, and .data segment/section
@@ -58,8 +67,26 @@ ecfs_file_t * load_ecfs_file(const char *path)
                 }
 
 	}
-	
-			
+	ecfs->ehdr = ehdr;
+	ecfs->phdr = phdr;
+	ecfs->shdr = shdr;
+	ecfs->mem = mem;
+	return ecfs;
+}	
+
+int get_fd_info(ecfs_elf_t *desc, struct fdinfo **fdinfo)
+{
+	char *StringTable = desc->shstrtab;
+	ElfW(Shdr) *shdr = desc->shdr;
+	int i;
+	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+		if (!strcmp(&StringTable[shdr[i].sh_name], ".fdinfo")) {
+			*fdinfo = (struct fdinfo *)heapAlloc(shdr[i].sh_size * 2);
+			memcpy(*fdinfo, &desc->mem[shdr[i].sh_offset], shdr[i].sh_size);
+			return shdr[i].sh_size / sizeof(struct fdinfo);
+		}
+	}
+	return -1;
 }
 
 

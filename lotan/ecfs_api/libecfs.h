@@ -18,13 +18,14 @@
 #include <sys/user.h>
 #include <sys/procfs.h>         /* struct elf_prstatus */
 #include <sys/resource.h>
+#include <stdio.h>
 
 typedef struct ecfs_elf {
          uint8_t *mem;          /* raw memory pointer */
          char *shstrtab;        /* shdr string table */
          char *strtab;          /* .symtab string table */
          char *dynstr;          /* .dynstr string table */
-         ElfW(Ehdr) * ehdr;     /* ELF Header pointer */
+	 ElfW(Ehdr) * ehdr;     /* ELF Header pointer */
          ElfW(Phdr) * phdr;     /* Program header table pointer */
          ElfW(Shdr) * shdr;     /* Section header table pointer */
          ElfW(Nhdr) * nhdr;     /* ELF Notes section pointer */
@@ -34,7 +35,10 @@ typedef struct ecfs_elf {
          ElfW(Addr) textVaddr;  /* Text segment virtual address */
          ElfW(Addr) dataVaddr;  /* data segment virtual address */
          ElfW(Addr) dynVaddr;   /* dynamic segment virtual address */
-         size_t filesize;       /* total file size              */
+         ElfW(Off) textOff;
+	 ElfW(Off) dataOff;
+	 ElfW(Off) dynOff;
+	 size_t filesize;       /* total file size              */
          size_t dataSize;       /* p_memsz of data segment      */
          size_t textSize;       /* p_memsz of text segment      */
          size_t dynSize;        /* p_memsz of dynamnic segment  */
@@ -51,4 +55,17 @@ typedef struct ecfs_sym {
         char *strtab; /* pointer to the symbols associated string table */
         int nameoffset;    /* Offset of symbol name into symbol strtab */
 } ecfs_sym_t;
+
+#ifndef MAX_PATH
+#define MAX_PATH 512
+#endif
+struct fdinfo {
+	int fd;
+	char file_path[MAX_PATH];
+};
+
+void * heapAlloc(size_t);
+
+ecfs_elf_t * load_ecfs_file(const char *);
+int get_fd_info(ecfs_elf_t *desc, struct fdinfo **fdinfo);
 
