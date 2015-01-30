@@ -68,4 +68,4 @@ void * heapAlloc(size_t);
 
 ecfs_elf_t * load_ecfs_file(const char *);
 int get_fd_info(ecfs_elf_t *desc, struct fdinfo **fdinfo);
-
+int get_thread_count(ecfs_elf_t *desc);

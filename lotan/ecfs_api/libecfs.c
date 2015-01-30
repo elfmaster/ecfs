@@ -89,4 +89,17 @@ int get_fd_info(ecfs_elf_t *desc, struct fdinfo **fdinfo)
 	return -1;
 }
 
+int get_thread_count(ecfs_elf_t *desc)
+{
+	char *StringTable = desc->shstrtab;
+	ElfW(Shdr) *shdr = desc->shdr;
+	int i;
 
+	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+		if (!strcmp(&StringTable[shdr[i].sh_name], ".prstatus")) 
+			return shdr[i].sh_size / shdr[i].sh_entsize;
+	}
+	return -1;
+}
+
+			
