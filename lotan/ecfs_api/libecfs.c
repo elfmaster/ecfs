@@ -135,5 +135,33 @@ char * get_exe_path(ecfs_elf_t *desc)
 }
 
 
+int get_dynamic_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
+{
+	int i, j;
+	ElfW(Ehdr) *ehdr = desc->ehdr;
+	ElfW(Shdr) *shdr = desc->shdr;
+	ssize_t symcount;
+	ElfW(Sym) *dynsym = desc->dynsym;
+
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (shdr[i].sh_type == SHT_DYNSYM) {
+			symcount = shdr[i].sh_size / sizeof(ElfW(Sym));
+			*syms = (ecfs_sym_t *)heapAlloc(shdr[i].sh_size);
+			for (j = 0; j < symcount; j++) {
+				(*syms)[j].strtab = desc->dynstr;
+				(*syms)[j].symval = dynsym[j].st_value;
+				(*syms)[j].size = dynsym[j].st_size;
+				(*syms)[j].type = ELF32_ST_TYPE(dynsym[j].st_info);
+				(*syms)[j].binding = ELF32_ST_BIND(dynsym[j].st_info);
+				(*syms)[j].nameoffset = dynsym[j].st_name;
+			}
+			return symcount;
+		}
+	}
+	return 0;
+}
+
+						
 	
+
 

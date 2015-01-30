@@ -11,6 +11,7 @@ int main(int argc, char **argv)
 	ecfs_elf_t *desc;
 	struct fdinfo *fdinfo;
 	struct elf_prstatus *prstatus;
+	ecfs_sym_t *dsyms;
 	char *path;
 
 	desc = load_ecfs_file(argv[1]);
@@ -30,6 +31,9 @@ int main(int argc, char **argv)
 	
 	for (i = 0; i < ret; i++)
 		printf("fd: %d path: %s\n", fdinfo[i].fd, fdinfo[i].file_path);
-
-}
+	
+	ret = get_dynamic_symbols(desc, &dsyms);
+	for (i = 0; i < ret; i++)
+		printf("symbol: %s\n", &desc->dynstr[dsyms[i].nameoffset]);
+}	
 
