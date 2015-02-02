@@ -28,12 +28,15 @@
 struct opts opts;
 
 typedef struct handle {
+	elf_stat_t *elfstat;
 	elfdesc_t *elfdesc;
 	memdesc_t *memdesc;
 	notedesc_t *notedesc;
 	struct nt_file_struct *nt_files;
 	struct section_meta smeta;
 } handle_t;
+
+ElfW(Addr) get_original_ep(int, elfdesc_t *);
 
 /*
  * This function simply mmap's the core file into memory
@@ -326,6 +329,38 @@ static ElfW(Off) get_mapping_offset(ElfW(Addr) addr, elfdesc_t *elfdesc)
 			return phdr[i].p_offset;
 	return 0;
 }
+
+/*
+ * Get size of the original section header used in original executable
+ * It is not necessary for this function to succeed (Such as when the original
+ * executable has a stripped section header) but it aids in getthg the correct
+ * size of the .got and .hash sections, otherwise they are given UNKNOWN_SHDR_SIZE
+ */
+
+static ssize_t get_original_shdr_size(int pid, const char *name)
+{
+	struct stat st;
+	int i;
+        char *path = xfmtstrdup("/proc/%d/exe", pid);
+        int fd = xopen(path, O_RDONLY);
+        xfree(path);
+        xfstat(fd, &st);
+        uint8_t *mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        if (mem == MAP_FAILED) {
+                perror("mmap");
+                return -1;
+        }
+        ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
+	ElfW(Shdr) *shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
+	if (ehdr->e_shstrndx == 0 || ehdr->e_shnum == 0)
+		return -1;
+	char *StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
+	for (i = 0; i < ehdr->e_shnum; i++) 
+		if (!strcmp(&StringTable[shdr[i].sh_name], name))
+			return shdr[i].sh_size;
+	return 0;
+}
+
 
 /*
  * Can only be called after the notes file has been parsed.
@@ -753,7 +788,7 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 			case PT_INTERP:
 				elfdesc->dynlinked++;
 				elfdesc->interpVaddr = phdr[i].p_vaddr;
-				elfdesc->interpSize = phdr[i].p_memsz ? phdr[i].p_memsz : phdr[i].p_filesz;
+				elfdesc->interpSize = phdr[i].p_memsz ? phdr[i].p_memsz : phdr[i].p_filesz; 
 				break;
 		}
 	}
@@ -846,10 +881,17 @@ int extract_dyntag_info(handle_t *handle)
                         case DT_SYMTAB:
                                 smeta.dsymVaddr = dyn[j].d_un.d_ptr;
                                 smeta.dsymOff = elfdesc->textOffset + smeta.dsymVaddr - elfdesc->textVaddr;
-                                break;
+#if DEBUG
+				printf(".dynsym addr: %lx offset: %lx\n", smeta.dsymVaddr, smeta.dsymOff);
+#endif
+				break;
                         case DT_STRTAB:
                                 smeta.dstrVaddr = dyn[j].d_un.d_ptr;
                                 smeta.dstrOff = elfdesc->textOffset + smeta.dstrVaddr - elfdesc->textVaddr;
+#if DEBUG
+				printf(".dynstr addr: %lx  offset: %lx (%lx + (%lx - %lx)\n", smeta.dstrVaddr, smeta.dstrOff,
+				elfdesc->textOffset, smeta.dstrVaddr, elfdesc->textVaddr); 
+#endif
                                 break;
 
 		}
@@ -1133,7 +1175,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         shdr[scount].sh_info = 0;
         shdr[scount].sh_link = 0;
         shdr[scount].sh_entsize = 0;
-        shdr[scount].sh_size = smeta->interpSiz;
+        shdr[scount].sh_size = elfdesc->interpSize;
         shdr[scount].sh_addralign = 1;
         shdr[scount].sh_name = stoffset;
         strcpy(&StringTable[stoffset], ".interp");
@@ -1167,7 +1209,8 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         shdr[scount].sh_info = 0;
         shdr[scount].sh_link = 0;
         shdr[scount].sh_entsize = 0;
-        shdr[scount].sh_size = UNKNOWN_SHDR_SIZE;
+	long hash_size = get_original_shdr_size(memdesc->task.pid, ".gnu.hash");
+        shdr[scount].sh_size = hash_size <= 0 ? UNKNOWN_SHDR_SIZE : hash_size;
         shdr[scount].sh_addralign = 4;
         shdr[scount].sh_name = stoffset;
         strcpy(&StringTable[stoffset], ".hash");
@@ -1218,7 +1261,8 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         shdr[scount].sh_info = 0;
         shdr[scount].sh_link = scount - 1;
         shdr[scount].sh_entsize = (__ELF_NATIVE_CLASS == 64) ? sizeof(Elf64_Rela) : sizeof(Elf32_Rel);
-        shdr[scount].sh_size = UNKNOWN_SHDR_SIZE;
+	long rela_size = get_original_shdr_size(memdesc->task.pid, ".rela.dyn");
+        shdr[scount].sh_size = rela_size <= 0 ? UNKNOWN_SHDR_SIZE : rela_size;
         shdr[scount].sh_addralign = sizeof(long); 
         shdr[scount].sh_name = stoffset;
         if (__ELF_NATIVE_CLASS == 64) {
@@ -1240,7 +1284,8 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         shdr[scount].sh_info = 0;
         shdr[scount].sh_link = 0;
         shdr[scount].sh_entsize = 0;
-        shdr[scount].sh_size = UNKNOWN_SHDR_SIZE;
+	long init_size = get_original_shdr_size(memdesc->task.pid, ".init");
+        shdr[scount].sh_size = init_size <= 0 ? UNKNOWN_SHDR_SIZE : init_size;
         shdr[scount].sh_addralign = sizeof(long);
         shdr[scount].sh_name = stoffset;
         strcpy(&StringTable[stoffset], ".init");
@@ -1276,7 +1321,8 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         shdr[scount].sh_info = 0;
         shdr[scount].sh_link = 0;
         shdr[scount].sh_entsize = 0;
-        shdr[scount].sh_size = UNKNOWN_SHDR_SIZE;
+	unsigned long fini_size = get_original_shdr_size(memdesc->task.pid, ".fini");
+        shdr[scount].sh_size = fini_size <= 0 ? UNKNOWN_SHDR_SIZE : fini_size;
         shdr[scount].sh_addralign = 16;
         shdr[scount].sh_name = stoffset;
         strcpy(&StringTable[stoffset], ".fini");
@@ -1344,7 +1390,8 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         shdr[scount].sh_info = 0;
         shdr[scount].sh_link = 0;
         shdr[scount].sh_entsize = sizeof(long);
-        shdr[scount].sh_size = UNKNOWN_SHDR_SIZE;
+        long got_size = get_original_shdr_size(memdesc->task.pid, ".got.plt");
+	shdr[scount].sh_size = got_size <= 0 ? UNKNOWN_SHDR_SIZE : got_size;
         shdr[scount].sh_addralign = sizeof(long);
         shdr[scount].sh_name = stoffset;
         strcpy(&StringTable[stoffset], ".got.plt");
@@ -1402,6 +1449,11 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         stoffset += strlen(".heap") + 1;
         scount++;
 	
+	/*
+	 * This next part is a loop that writes out all of the
+	 * section headers for the shared libraries. libc.so.text,
+	 * libc.so.data, .libc.so.relro, etc. (approx 3 mappings/sections for each lib)
+	 */
 	int data_count;
 	char *str = NULL;
 	for (data_count = 0, i = 0; i < notedesc->lm_files->libcount; i++) {
@@ -1652,7 +1704,9 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         }
 
         ElfW(Ehdr *)ehdr = (ElfW(Ehdr) *)mem;
-        ehdr->e_shoff = e_shoff;
+	ElfW(Addr) o_entry = get_original_ep(memdesc->task.pid, elfdesc);
+        ehdr->e_entry = o_entry < 0 ? 0 : o_entry;
+	ehdr->e_shoff = e_shoff;
         ehdr->e_shstrndx = e_shstrndx;
 	ehdr->e_shentsize = sizeof(ElfW(Shdr));
         ehdr->e_shnum = scount;
@@ -1774,18 +1828,43 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	return 0;
 }
 	
+/*
+ * Get original entry point
+ */
+ElfW(Addr) get_original_ep(int pid, elfdesc_t *elfdesc)
+{
+	struct stat st;
+	char *path = xfmtstrdup("/proc/%d/exe", pid);
+	int fd = xopen(path, O_RDONLY);
+	xfree(path);
+	xfstat(fd, &st);
+	uint8_t *mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (mem == MAP_FAILED) {
+		perror("mmap");
+		return -1;
+	}
+	ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
+	return ehdr->e_entry;
+}
+
 void fill_in_pstatus(memdesc_t *memdesc, notedesc_t *notedesc)
 {
                 memdesc->task.uid = notedesc->psinfo->pr_uid;
                 memdesc->task.gid = notedesc->psinfo->pr_gid;
                 memdesc->task.ppid = notedesc->psinfo->pr_ppid;
-                //memdesc->task.pid = notedesc->psinfo->pr_pid;
                 memdesc->task.exit_signal = notedesc->prstatus->pr_info.si_signo;
                 memdesc->path = notedesc->psinfo->pr_fname;
 }
 
 void build_elf_stats(handle_t *handle)
 {
+	handle->elfstat->personality = 0;
+
+	if (handle->elfdesc->dynlinked == 0)
+		handle->elfstat->personality |= ELF_STATIC;
+	if (handle->elfdesc->pie)
+		handle->elfstat->personality |= ELF_PIE;
+	handle->elfstat->arch = 64;
 
 }
 

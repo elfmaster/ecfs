@@ -11,8 +11,9 @@ int main(int argc, char **argv)
 	ecfs_elf_t *desc;
 	struct fdinfo *fdinfo;
 	struct elf_prstatus *prstatus;
-	ecfs_sym_t *dsyms;
+	ecfs_sym_t *dsyms, *lsyms;
 	char *path;
+	siginfo_t *siginfo;
 
 	desc = load_ecfs_file(argv[1]);
 	path = get_exe_path(desc);
@@ -22,6 +23,8 @@ int main(int argc, char **argv)
 	
 	printf("# of threads: %d\n", ret);
 	
+	ret = get_siginfo(desc, &siginfo);
+	printf("Exited on signal %d\n", siginfo->si_signo);
 	ret = get_prstatus_structs(desc, &prstatus);
 	
 	for (i = 0; i < ret; i++) 
@@ -34,6 +37,18 @@ int main(int argc, char **argv)
 	
 	ret = get_dynamic_symbols(desc, &dsyms);
 	for (i = 0; i < ret; i++)
-		printf("symbol: %s\n", &desc->dynstr[dsyms[i].nameoffset]);
+		printf("dynamic symbol: %s\n", &desc->dynstr[dsyms[i].nameoffset]);
+	
+	ret = get_local_symbols(desc, &lsyms);
+	for (i = 0; i < ret; i++)
+		printf("local symbol: %s\n", &desc->strtab[lsyms[i].nameoffset]);
+	
+	
+	uint8_t *ptr;
+	ssize_t len = get_pointer_for_va(desc, 0x400000, &ptr);
+	printf("%d bytes left for segment\n", len);
+	for (i = 0; i < 16; i++)
+		printf("%02x ", ptr[i] & 0xff);
+	printf("\n");
 }	
 

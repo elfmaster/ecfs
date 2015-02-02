@@ -146,7 +146,8 @@ int get_dynamic_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
 	for (i = 0; i < ehdr->e_shnum; i++) {
 		if (shdr[i].sh_type == SHT_DYNSYM) {
 			symcount = shdr[i].sh_size / sizeof(ElfW(Sym));
-			*syms = (ecfs_sym_t *)heapAlloc(shdr[i].sh_size);
+                        size_t alloc_len = symcount * sizeof(ecfs_sym_t);
+			*syms = (ecfs_sym_t *)heapAlloc(alloc_len);
 			for (j = 0; j < symcount; j++) {
 				(*syms)[j].strtab = desc->dynstr;
 				(*syms)[j].symval = dynsym[j].st_value;
@@ -193,7 +194,7 @@ ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr)
 		}
 	}
 
-	*ptr = null;
+	*ptr = NULL;
 	return -1;
 }
 
@@ -210,7 +211,7 @@ ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr)
 		}
 	}
 	
-	*ptr = null;
+	*ptr = NULL;
 	return -1;
 }
 
@@ -221,7 +222,7 @@ int get_local_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
 	ElfW(Ehdr) *ehdr = desc->ehdr;
 	ElfW(Shdr) *shdr = desc->shdr;
 	ssize_t symcount;
-	ElfW(Sym) *locsym = desc->strtab;
+	ElfW(Sym) *locsym = desc->symtab;
 
 	for (i = 0; i < ehdr->e_shnum; i++) {
 		if (shdr[i].sh_type == SHT_SYMTAB) {
@@ -242,6 +243,26 @@ int get_local_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
 	return 0;
 }
 						
+
+ssize_t get_pointer_for_va(ecfs_elf_t *desc, unsigned long vaddr, uint8_t **ptr)
+{
+	ElfW(Ehdr) *ehdr = desc->ehdr;
+	ElfW(Phdr) *phdr = desc->phdr;
+	ssize_t len;
+	int i;
 	
+	for (i = 0; i < ehdr->e_phnum; i++) {
+		if (vaddr >= phdr[i].p_vaddr && vaddr < phdr[i].p_vaddr + phdr[i].p_memsz) {
+			*ptr = (uint8_t *)&desc->mem[phdr[i].p_offset + (vaddr - phdr[i].p_vaddr)];
+			len = phdr[i].p_vaddr + phdr[i].p_memsz - vaddr;
+			return len;
+		}
+	}
+	*ptr = NULL;
+	return -1;
+	
+}
+
+		
 
 
