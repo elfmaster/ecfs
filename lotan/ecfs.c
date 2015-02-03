@@ -1295,6 +1295,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	 /*
          * .text
          */
+	
         text_shdr_index = scount;
         shdr[scount].sh_type = SHT_PROGBITS;
         shdr[scount].sh_offset = elfdesc->textOffset;
@@ -1944,12 +1945,12 @@ int main(int argc, char **argv)
 	/*
 	 * Don't allow itself to core in the event of a bug.
 	 */
-	/*
+	
     	if (setrlimit(RLIMIT_CORE, &limit_core) < 0) {
 		perror("setrlimit");
 		exit(-1);
 	}
-	*/
+
 	if (opts.use_stdin) {
 		printf("Using stdin, outfile is:%s\n", outfile);
 		/*

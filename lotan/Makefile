@@ -1,9 +1,9 @@
 all: ecfs
 
 ecfs: ecfs.o util.o eh_frame.o ptrace.o
-	gcc -fsanitize=address -fno-omit-frame-pointer -Wall -Werror -DDEBUG -g ecfs.o util.o eh_frame.o ptrace.o -o ecfs -ldwarf -lelf
+	gcc -fno-omit-frame-pointer -Wall -Werror -DDEBUG -g ecfs.o util.o eh_frame.o ptrace.o -o ecfs -ldwarf -lelf
 ecfs.o: ecfs.c
-	gcc -fsanitize=address -fno-omit-frame-pointer -g -DDEBUG -c ecfs.c
+	gcc -fno-omit-frame-pointer -g -DDEBUG -c ecfs.c
 util.o: util.c
 	gcc -g -c util.c
 eh_frame.o: eh_frame.c

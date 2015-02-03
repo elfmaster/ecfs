@@ -72,8 +72,8 @@ int get_fd_info(ecfs_elf_t *desc, struct fdinfo **fdinfo);
 int get_thread_count(ecfs_elf_t *desc);
 int get_prstatus_structs(ecfs_elf_t *desc, struct elf_prstatus **prstatus);
 int get_dynamic_symbols(ecfs_elf_t *desc, ecfs_sym_t **);
-int get_siginfo(ecfs_elf_t *desc, siginfo_t **siginfo);
+int get_siginfo(ecfs_elf_t *desc, siginfo_t *siginfo);
 ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr);
 ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr);
 int get_local_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms);
-
+ssize_t get_ptr_for_va(ecfs_elf_t *desc, unsigned long vaddr, uint8_t **ptr);

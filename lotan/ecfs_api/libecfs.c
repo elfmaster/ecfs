@@ -164,7 +164,7 @@ int get_dynamic_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
 
 
 
-int get_siginfo(ecfs_elf_t *desc, siginfo_t **siginfo)
+int get_siginfo(ecfs_elf_t *desc, siginfo_t *siginfo)
 {
 	char *StringTable = desc->shstrtab;
 	ElfW(Shdr) *shdr = desc->shdr;
@@ -172,8 +172,7 @@ int get_siginfo(ecfs_elf_t *desc, siginfo_t **siginfo)
 
 	for (i = 0; i < desc->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".siginfo")) {
-			*siginfo = (siginfo_t *)heapAlloc(shdr[i].sh_size);
-			memcpy(*siginfo, &desc->mem[shdr[i].sh_offset], shdr[i].sh_size);
+			memcpy(siginfo, &desc->mem[shdr[i].sh_offset], shdr[i].sh_size);
 			return 0;
 		}
 	}
@@ -244,7 +243,7 @@ int get_local_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
 }
 						
 
-ssize_t get_pointer_for_va(ecfs_elf_t *desc, unsigned long vaddr, uint8_t **ptr)
+ssize_t get_ptr_for_va(ecfs_elf_t *desc, unsigned long vaddr, uint8_t **ptr)
 {
 	ElfW(Ehdr) *ehdr = desc->ehdr;
 	ElfW(Phdr) *phdr = desc->phdr;
@@ -262,6 +261,28 @@ ssize_t get_pointer_for_va(ecfs_elf_t *desc, unsigned long vaddr, uint8_t **ptr)
 	return -1;
 	
 }
+
+/*
+ * i.e. len = get_section_pointer(desc, ".bss", &ptr);
+ */
+ssize_t get_section_pointer(ecfs_elf_t *desc, const char *name, uint8_t **ptr)
+{
+	char *StringTable = desc->shstrtab;
+	ElfW(Shdr) *shdr = desc->shdr;
+	ssize_t len;
+	int i;
+
+	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+		if (!strcmp(&StringTable[shdr[i].sh_name], name)) {
+			*ptr = (uint8_t *)&desc->mem[shdr[i].sh_offset];
+			len = shdr[i].sh_size;
+			return len;
+		}		
+	}
+	*ptr = NULL;
+	return -1;
+}
+
 
 		
 
