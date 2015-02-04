@@ -1220,29 +1220,32 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
         notedesc_t *notedesc = handle->notedesc;
         struct section_meta *smeta = &handle->smeta;
 	struct fde_func_data *fndata, *fdp;
-        int fncount, i, fd;
+        int fncount, fd;
         struct stat st;
 	uint8_t *mem;
 	ElfW(Ehdr) *ehdr;
 	ElfW(Shdr) *shdr;
-
+	int i;
 	char *StringTable;
+	char *strtab = alloca(8192 * 16);
+
         fncount = get_all_functions(outfile, &fndata);
  	if (fncount < 0)
 		fncount = 0;             	
-
+	
 #if DEBUG
 	printf("Found %d local functions from .eh_frame\n", fncount);
 #endif
-        ElfW(Sym) *symtab = (ElfW(Sym) *)alloca(sizeof(ElfW(Sym)) * fncount);
+        
+	ElfW(Sym) *symtab = (ElfW(Sym) *)heapAlloc(fncount * sizeof(ElfW(Sym)));
         fdp = (struct fde_func_data *)fndata; 
-        char *strtab = alloca(8192);
         char *sname;
         int symstroff = 0;
         int symcount = fncount;
         int dsymcount = 0;
         
         for (i = 0; i < fncount; i++) {
+		printf("i: %d\n", i);
                 symtab[i].st_value = fdp[i].addr;
                 symtab[i].st_size = fdp[i].size;
                 symtab[i].st_info = (((STB_GLOBAL) << 4) + ((STT_FUNC) & 0xf));
@@ -1250,6 +1253,7 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
                 symtab[i].st_shndx = text_shdr_index;
                 symtab[i].st_name = symstroff;
                 sname = xfmtstrdup("sub_%lx", fdp[i].addr);
+		printf("symstroff: %d\n", symstroff);
                 strcpy(&strtab[symstroff], sname);
                 symstroff += strlen(sname) + 1;
                 free(sname);    
@@ -1283,9 +1287,10 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
         }
 	
         uint64_t symtab_offset = lseek(fd, 0, SEEK_CUR);
-        for (i = 0; i < symcount; i++) 
+        for (i = 0; i < symcount; i++) {
+		printf("Writing symtab for: %lx\n", symtab[i].st_value);
                 write(fd, (char *)&symtab[i], sizeof(ElfW(Sym))); 
-        
+        }
       	StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
         /* Write section hdr string table */
         uint64_t stloff = lseek(fd, 0, SEEK_CUR);

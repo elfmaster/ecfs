@@ -80,7 +80,6 @@ static struct fde_func_data * parse_frame_data(Dwarf_Debug dbg)
 		fndata[fdenum].size = func_data.size;
 	}
 
-	//dwarf_fde_cie_list_dealloc(dbg, cie_data, cie_element_count, fde_data, fde_element_count);
    
 	return fndata;
 }
@@ -164,7 +163,6 @@ int get_all_functions(const char *filepath, struct fde_func_data **funcs)
 		return -1;
 	}
 	fndata = *funcs;
-	
 	res = dwarf_finish(dbg, &error);
 	if(res != DW_DLV_OK) 
         	fprintf(stderr, "eh_frame parsing err3: dwarf_finish failed!\n");
