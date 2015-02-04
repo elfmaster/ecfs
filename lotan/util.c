@@ -28,6 +28,11 @@
 
 struct opts opts;
 
+void deliver_signal(int pid, int signo)
+{
+	kill(pid, signo);
+}
+
 void * heapAlloc(size_t len)
 {
 	void *p = malloc(len);
@@ -70,6 +75,17 @@ int xopen(const char *path, int flags)
 	return fd;
 }
 
+int xlseek(int fd, off_t offset, int whence)
+{
+	off_t ret = lseek(fd, offset, whence);
+	if (ret < 0) {
+		perror("lseek");
+		exit(-1);
+	}
+	return ret;
+}
+
+	
 int xfstat(int fd, struct stat *st)
 {
 	int ret = fstat(fd, st);
@@ -86,6 +102,9 @@ void xfree(void *p)
 		free(p);
 }
 
+/*
+ * Used for debugging
+ */
 #define LOGFILE "/home/ryan/bin/logging.txt"
 void ecfs_print(char *fmt, ...)
 {
@@ -103,5 +122,6 @@ void ecfs_print(char *fmt, ...)
 	va_end(va);
 	fclose(fp);
 }
+
 
 

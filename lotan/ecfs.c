@@ -36,8 +36,17 @@ typedef struct handle {
 	struct section_meta smeta;
 } handle_t;
 
-ElfW(Addr) get_original_ep(int, elfdesc_t *);
+/*
+ * XXX stay out of habit of using global variables
+ * this was put in  because I had to perform a hack
+ * after the code had already been designed in order
+ * to merge the entire text segment into the corefile
+ * prior to processing it into an ECFS file.
+ */
+static char *tmp_corefile = NULL;
 
+ElfW(Addr) get_original_ep(int, elfdesc_t *);
+ssize_t get_segment_from_pmem(unsigned long, memdesc_t *, uint8_t **);
 /*
  * This function simply mmap's the core file into memory
  * and sets up pointers to the ELF header, and the program
@@ -88,6 +97,8 @@ elfdesc_t * load_core_file(const char *path)
 		if (phdr[i].p_type == PT_NOTE) {
 			nhdr = (ElfW(Nhdr) *)&mem[phdr[i].p_offset];
 			elfdesc->noteSize = phdr[i].p_filesz;
+			elfdesc->text_filesz = phdr[i + 1].p_filesz;
+			elfdesc->text_memsz = phdr[i + 1].p_memsz;
 			break;
 		}
 	
@@ -149,11 +160,130 @@ elfdesc_t * load_core_file_stdin(void)
 	}
 	syncfs(file);
 	close(file);
-	
+	tmp_corefile = xstrdup(filepath);
 	return load_core_file(filepath);
 
 }		
 
+/*
+ * The complete text segment of executables and shared library
+ * is not included in core files. Only 4096 bytes are written
+ * to save space; this is generally fine since the text presumably
+ * doesn't ever change, and can be remarkably big. For our case
+ * though we want the complete text of the main executable and
+ * its shared libaries.
+ */
+int merge_texts_into_core(const char *path, memdesc_t *memdesc)
+{
+	elfdesc_t *elfdesc = (elfdesc_t *)heapAlloc(sizeof(elfdesc_t));
+        ElfW(Ehdr) *ehdr;
+        ElfW(Phdr) *phdr;
+	ElfW(Addr) textVaddr;
+	ElfW(Off) textOffset;
+	ElfW(Off) dataOffset;
+	size_t textSize;
+        uint8_t *mem;
+        uint8_t *buf;
+        struct stat st;
+        ssize_t nread;
+	int in, out, i;
+
+	in = xopen(path, O_RDWR);
+	xfstat(in, &st);
+
+	char *tmp = xfmtstrdup("%s/tmp_core", ECFS_CORE_DIR);
+        do {
+                if (access(tmp, F_OK) == 0) {
+                        free(tmp);
+                        tmp = xfmtstrdup("%s/tmp_core.%d", ECFS_CORE_DIR, ++i);
+                } else
+                        break;
+
+        } while(1);
+	out = xopen(tmp, O_RDWR|O_CREAT);
+	
+	uint8_t *textseg;
+	for (textVaddr = 0, i = 0; i < memdesc->mapcount; i++) {
+		if (memdesc->maps[i].textbase)
+			textVaddr = memdesc->maps[i].base;
+	}
+	if (textVaddr == 0) {
+		printf("Could not find textvaddr\n");
+		exit(0);
+	}
+
+        ssize_t tlen = get_segment_from_pmem(textVaddr, memdesc, &textseg);
+        if (tlen < 0) {
+                fprintf(stderr, "get_segment_from_pmem() failed: %s\n", strerror(errno));
+                return -1;
+        }
+
+
+	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, in, 0);
+	if (mem == MAP_FAILED) {
+		perror("mmap");
+		exit(-1);
+	}
+
+	ehdr = (ElfW(Ehdr) *)mem;
+	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
+	int tc, found_text;
+	/* Text is right after the note segment */
+	for (found_text = 0, i = 0; i < ehdr->e_phnum; i++) {
+		if (phdr[i].p_type == PT_NOTE) {
+			tc = i + 1;	
+			textOffset = phdr[tc].p_offset;
+			dataOffset = phdr[tc + 1].p_offset;
+			textVaddr = phdr[tc].p_vaddr;
+			textSize = phdr[tc].p_memsz; // get the memory size of text
+			phdr[tc].p_filesz = phdr[tc].p_memsz; // make filesz same as memsz
+			found_text++;
+		} 
+		else
+		if (found_text) {
+			printf("modifying phdr comparing %d with %d\n", i, tc);
+			if (i <= tc)
+				continue;
+			printf("Shifting offset from %lx to %lx\n", phdr[i].p_offset, phdr[i].p_offset + (tlen - 4096));
+			phdr[i].p_offset += (tlen - 4096); // we must push the other segments forward to make room for the text
+		}
+		printf("i: %d\n", i);
+	}
+	if (textVaddr == 0) {
+		fprintf(stderr, "Failed to merge texts into core\n");
+		return -1;
+	}
+	if (write(out, mem, textOffset) < 0) {
+#if DEBUG
+		perror("1:write");
+#endif
+		return -1;
+	}
+	if (write(out, textseg, tlen) < 0) {
+#if DEBUG
+		perror("2:write"); 
+#endif
+		return -1;
+	}
+	if (write(out, &mem[dataOffset], st.st_size - (textOffset + 4096)) < 0) {
+#if DEBUG
+		perror("3:write");
+#endif
+		return -1;
+	}
+
+	fsync(out);
+	close(out);
+	close(in);
+	
+	if (rename(tmp, path) < 0) {
+		printf("Could not rename %s to %s\n", tmp, path);
+		return -1;
+	}
+		
+	printf("Renamed %s to %s\n", tmp, path);
+	return 0;
+}
 /*
  * This function does the opposite of how the kernel packs files into
  * the notes entry. We do the opposite to extract the info out of the
@@ -307,6 +437,65 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 	}
 
 	return notedesc;
+}
+
+static ssize_t ptrace_get_text_mapping(memdesc_t *memdesc, elfdesc_t *elfdesc, uint8_t **ptr)
+{
+	void *addr = (void *)elfdesc->textVaddr;
+	uint8_t *mem = heapAlloc(elfdesc->textSize);
+	
+	if (pid_read(memdesc->task.pid, (void *)mem, addr, elfdesc->textSize) < 0) {
+		*ptr = NULL;
+		return -1;
+	}
+	*ptr = mem;
+	
+	return elfdesc->textSize;
+}
+
+ssize_t read_pmem(pid_t pid, uint8_t *ptr, unsigned long vaddr, size_t len)
+{	
+	char *path = xfmtstrdup("/proc/%d/mem", pid);
+	int fd = xopen(path, O_RDONLY);
+	ssize_t bytes = pread(fd, ptr, len, vaddr);
+	if (bytes != len) {
+		fprintf(stderr, "pread failed [read %d bytes]: %s\n", (int)bytes, strerror(errno));
+		return -1;
+	}
+	return bytes;
+}
+	
+/*
+ * This function will not read directly from vaddr unless vaddr marks
+ * the beggining of a segment; otherwise this function finds where the
+ * segment begins (The segment range that vaddr fits in) and reads from there.
+ */
+ssize_t get_segment_from_pmem(unsigned long vaddr, memdesc_t *memdesc, uint8_t **ptr)
+{
+	/*
+	 * We read from /proc/$pid/mem which should already be
+	 * stopped (SIGSTOP) unless we are running this program
+	 * in debugging mode, in which case we deliver a sigstop
+	 * just incase.	
+ 	 */
+	int i;
+	size_t len;
+	ssize_t ret;
+	/*
+	 * Are we trying to read from a valid process mapping?
+	 */
+	for (i = 0; i < memdesc->mapcount; i++) {
+		if (vaddr >= memdesc->maps[i].base && vaddr < memdesc->maps[i].base + memdesc->maps[i].size) {
+			len = memdesc->maps[i].size;
+			*ptr = HUGE_ALLOC(len);
+			deliver_signal(memdesc->task.pid, SIGSTOP);
+			ret = read_pmem(memdesc->task.pid, *ptr, memdesc->maps[i].base, len);
+			deliver_signal(memdesc->task.pid, SIGCONT);
+			return ret;
+		}
+	}
+	return -1;
+	
 }
 
 static ElfW(Addr) get_mapping_flags(ElfW(Addr) addr, memdesc_t *memdesc)
@@ -654,7 +843,6 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
         memset((void *)memdesc->maps, 0, sizeof(mappings_t) * memdesc->mapcount);
         
 	memdesc->path = exename; // supplied by core_pattern %e
-       
 	memdesc->exe_path = get_exe_path(pid);
 
 	if (get_maps(pid, memdesc->maps, memdesc->path) < 0) {
@@ -828,6 +1016,7 @@ int extract_dyntag_info(handle_t *handle)
 	}
 	dyn = elfdesc->dyn;
 	for (j = 0; dyn[j].d_tag != DT_NULL; j++) {
+		printf("d_tag: %d\n", dyn[j].d_tag);
         	switch(dyn[j].d_tag) {
 			case DT_REL:
                         	smeta.relVaddr = dyn[j].d_un.d_val;
@@ -854,6 +1043,7 @@ int extract_dyntag_info(handle_t *handle)
                         case DT_GNU_HASH:
                                 smeta.hashVaddr = dyn[j].d_un.d_val;
                                 smeta.hashOff = elfdesc->textOffset + smeta.hashVaddr - elfdesc->textVaddr;
+				printf("hashvaddr: %lx hashoff: %lx\n", smeta.hashVaddr, smeta.hashOff);
 #if DEBUG
 				printf("hashVaddr: %lx hashOff: %lx\n", smeta.hashVaddr, smeta.hashOff);
 #endif
@@ -1203,6 +1393,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
          * .hash
          */
         shdr[scount].sh_type = SHT_GNU_HASH; // use SHT_HASH?
+	printf("hash offset: %lx\n", smeta->hashOff);
         shdr[scount].sh_offset = smeta->hashOff; 
         shdr[scount].sh_addr = smeta->hashVaddr;
         shdr[scount].sh_flags = SHF_ALLOC;
@@ -1351,8 +1542,13 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
          * .eh_frame
          */
         shdr[scount].sh_type = SHT_PROGBITS;
-        shdr[scount].sh_offset = elfdesc->ehframeOffset + elfdesc->ehframe_Size;
-        shdr[scount].sh_addr = elfdesc->ehframe_Vaddr + elfdesc->ehframe_Size;
+        
+	// XXX workaround for an alignment bug where eh_frame has 4 bytes of zeroes
+	// that should not be there at the beggining
+	shdr[scount].sh_offset = elfdesc->ehframeOffset + elfdesc->ehframe_Size;
+        if (*(uint32_t *)&elfdesc->mem[shdr[scount].sh_offset] == (uint32_t)0x00000000)
+		shdr[scount].sh_offset += 4;
+	shdr[scount].sh_addr = elfdesc->ehframe_Vaddr + elfdesc->ehframe_Size;
         shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
         shdr[scount].sh_info = 0;
         shdr[scount].sh_link = 0;
@@ -1759,7 +1955,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 * write original body of core file
 	 */	
 	if (write(fd, elfdesc->mem, st.st_size) != st.st_size) {
-		perror("write");
+		perror("4:write");
 		exit(-1);
 	}
 
@@ -2033,7 +2229,27 @@ int main(int argc, char **argv)
 		memdesc->task.pid = pid;
 	}
 	fill_in_pstatus(memdesc, notedesc);
-		
+
+	/*
+	 * XXX the linux kernel only dumps 4096 bytes of any code segment
+	 * in order to save space, and this is generally OK since the code
+	 * segment isn't suppose to change in memory. Unfortunatley for
+ 	 * our purposes we want this, so we have to retrieve the text from
+	 * /proc/$pid/mem and merge it into our corefile which is a pain
+	 * and after we do this, we must re-load the corefile again.
+	 */
+ 	      
+	if (elfdesc->text_memsz > elfdesc->text_filesz) {
+		if (merge_texts_into_core((const char *)corefile, memdesc) < 0)
+        		fprintf(stderr, "Failed to merge text into corefile\n");
+		corefile = tmp_corefile == NULL ? corefile : tmp_corefile;
+        	elfdesc = load_core_file((const char *)corefile);
+        	if (elfdesc == NULL) {
+        		fprintf(stderr, "Failed to parse remerged core file\n");
+                	exit(-1);
+        	}
+	}
+	
 	/*
 	 * Which mappings are stored in actual phdr segments?
 	 */

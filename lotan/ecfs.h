@@ -22,6 +22,9 @@
 #include "dwarf.h"
 #include "libdwarf.h"
 
+#define HUGE_ALLOC(size)  \
+      mmap(0, (size), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0)
+
 #define LOGGING_PATH "/home/ryan/bin/logging.txt"
 #define ECFS_CORE_DIR "/home/ryan/bin" // XXX change this?
 #define UNKNOWN_SHDR_SIZE 64
@@ -208,6 +211,8 @@ typedef struct elfdesc {
 	size_t bssSize;
 	size_t interpSize;
 	size_t o_datafsize; // data filesz of executable (not core)
+	size_t text_memsz;
+	size_t text_filesz;
 	int dynlinked;
 	int pie;
 } elfdesc_t;
