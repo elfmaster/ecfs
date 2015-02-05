@@ -1044,14 +1044,14 @@ int extract_dyntag_info(handle_t *handle)
         	switch(dyn[j].d_tag) {
 			case DT_REL:
                         	smeta.relVaddr = dyn[j].d_un.d_val;
-                                smeta.relOff = smeta.relVaddr - elfdesc->textVaddr;
+                                smeta.relOff = elfdesc->textOffset + smeta.relVaddr - elfdesc->textVaddr;
 #if DEBUG
 				printf("relVaddr: %lx relOff: %lx\n", smeta.relVaddr, smeta.relOff);
 #endif
                         	break;
                         case DT_RELA:
                         	smeta.relaVaddr = dyn[j].d_un.d_val;
-                                smeta.relaOff = smeta.relaVaddr - elfdesc->textVaddr; 
+                                smeta.relaOff = elfdesc->textOffset + smeta.relaVaddr - elfdesc->textVaddr; 
 #if DEBUG
 				printf("relaVaddr: %lx relaOffset: %lx\n", smeta.relaVaddr, smeta.relaOff);
 #endif
@@ -1357,7 +1357,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         notedesc_t *notedesc = handle->notedesc;
         struct section_meta *smeta = &handle->smeta;
 	ElfW(Shdr) *shdr = alloca(sizeof(ElfW(Shdr)) * MAX_SHDR_COUNT);
-        char *StringTable = (char *)alloca(MAX_SHDR_COUNT * 16);
+        char *StringTable = (char *)alloca(MAX_SHDR_COUNT * 64);
 	struct stat st;
         unsigned int stoffset = 0;
         int scount = 0;
@@ -1399,7 +1399,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         scount++;
 
 	 /*
-         * .note
+         *.note
          */
         shdr[scount].sh_type = SHT_NOTE;
         shdr[scount].sh_offset = elfdesc->noteOffset;
@@ -1471,7 +1471,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
          */
         shdr[scount].sh_type = (__ELF_NATIVE_CLASS == 64) ? SHT_RELA : SHT_REL;
         shdr[scount].sh_offset = (__ELF_NATIVE_CLASS == 64) ? smeta->relaOff : smeta->relOff;
-        shdr[scount].sh_addr = (__ELF_NATIVE_CLASS == 64) ? smeta->relaVaddr : smeta->relVaddr;
+	shdr[scount].sh_addr = (__ELF_NATIVE_CLASS == 64) ? smeta->relaVaddr : smeta->relVaddr;
         shdr[scount].sh_flags = SHF_ALLOC;
         shdr[scount].sh_info = 0;
         shdr[scount].sh_link = scount - 1;
@@ -2206,13 +2206,14 @@ int main(int argc, char **argv)
                         printf("Did not specify an output file, defaulting to use 'ecfs.out'\n");
                         outfile = xfmtstrdup("%s/ecfs.out", ECFS_CORE_DIR);
                 }
-
+		
 		memdesc = build_proc_metadata(pid, notedesc);
         	if (memdesc == NULL) {
                 	fprintf(stderr, "Failed to retrieve process metadata\n");
                 	exit(-1);
         	}
 		memdesc->task.pid = pid;
+		pull_unknown_shdr_sizes(pid);
 		//memdesc->o_entry = get_original_ep(pid);
 	}
 
@@ -2269,6 +2270,7 @@ int main(int argc, char **argv)
                 	exit(-1);
         	}
 		memdesc->task.pid = pid;
+		pull_unknown_shdr_sizes(pid);
 	}
 	fill_in_pstatus(memdesc, notedesc);
 
