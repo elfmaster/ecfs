@@ -37,7 +37,7 @@ int insert_item_front(list_t **list, void *data, size_t sz)
 	return 0;
 }
 
-int insert_item_end(list_t **list, void *data)
+int insert_item_end(list_t **list, void *data, size_t sz)
 {
 	node_t *new = malloc(sizeof(node_t));
 	if (new == NULL)

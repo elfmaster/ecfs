@@ -678,17 +678,6 @@ static void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_fi
 		
 }
 
-int fill_dynamic_symtab(elfdesc_t *elfdesc, memdesc_t *memdesc, struct lib_mappings *lm)
-{
-	/*
-	 * The .dynsym section is in the output ecfs executable and does not exist
-	 * yet when this function is called. We therefore 
-	 */
-	
-	
-
-}
-			
 /*
  * Since the process is paused, all /proc data is still available.
  * get_maps() simply extracts all of the memory mapping information
@@ -2214,6 +2203,8 @@ int main(int argc, char **argv)
 		perror("setrlimit");
 		exit(-1);
 	}
+	
+	prctl(PR_SET_DUMPABLE, 0);
 
 	if (opts.use_stdin) {
 		printf("Using stdin, outfile is:%s\n", outfile);
@@ -2378,6 +2369,16 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Failed to extract dynamic segment information\n");
 		exit(-1);
 	}
+
+	/*
+	 * Parse the symtab of each shared library and store its
+	 * results in linked list. Each node holds a symentry_t vector
+	 */
+	list_t *list_head;
+	ret = fill_dynamic_symtab(&list_head, notedesc->lm_files);
+	if (ret < 0) 
+		printf("Unable to load dynamic symbol table with runtime values\n");
+	
 	/*
 	 * Convert the core file into an actual ECFS file and write it
 	 * to disk.

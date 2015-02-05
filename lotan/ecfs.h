@@ -19,6 +19,7 @@
 #include <sys/user.h>
 #include <sys/procfs.h>		/* struct elf_prstatus */
 #include <sys/resource.h>
+#include <sys/prctl.h>
 #include "dwarf.h"
 #include "libdwarf.h"
 
@@ -324,6 +325,15 @@ typedef struct list {
 	node_t *tail;
 } list_t;
 
+typedef struct symentry {
+        ElfW(Addr) value;
+        size_t size;
+        size_t count; //# of sym entries
+	char *name;  //symname
+	char *library; //libname
+	
+} symentry_t;
+
 void *heapAlloc(size_t);
 char *xstrdup(const char *);
 char *xfmtstrdup(char *fmt, ...);
@@ -332,5 +342,10 @@ void ecfs_print(char *, ...);
 int xopen(const char *, int);
 
 /* from list.c */
-int insert_item_end(list_t **list, void *data);
-int insert_item_front(list_t **list, void *data);
+int insert_item_end(list_t **list, void *data, size_t sz);
+int insert_item_front(list_t **list, void *data, size_t sz);
+
+/* from symresolve.c */
+
+int fill_dynamic_symtab(list_t **list, struct lib_mappings *lm);
+unsigned long lookup_from_symlist(const char *name, list_t *list);
