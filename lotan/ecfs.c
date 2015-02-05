@@ -2065,6 +2065,9 @@ int core2ecfs(const char *outfile, handle_t *handle)
 		fprintf(stderr, "local symtab reconstruction failed\n");
 #endif	
 
+	/* Open just once more to fill in the dynamic symbol table values */
+
+
 	return 0;
 }
 	
@@ -2393,6 +2396,14 @@ int main(int argc, char **argv)
 		unlink(elfdesc->path);
 	if (tmp_corefile) // incase we had to re-write file and mege in text
 		unlink(tmp_corefile);
+	
+	/*
+	 * XXX should move into core2ecfs?
+	 */
+	ret = store_dynamic_symvals(list_head, outfile);
+	if (ret < 0) 
+		printf("Unable to store runtime values into dynamic symbol table\n");
+
 }
 
 

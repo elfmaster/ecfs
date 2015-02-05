@@ -22,7 +22,6 @@ static int resolve_symbols(list_t **list, const char *path, unsigned long base)
 	size_t i, symcount;
 	symentry_t *symvector;
 
-	printf("Opening path: %s\n", path);
 	fd = xopen(path, O_RDONLY);
 	xfstat(fd, &st);
 	mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -78,6 +77,46 @@ unsigned long lookup_from_symlist(const char *name, list_t *list)
 	return 0;
 }
 
+int store_dynamic_symvals(list_t *list, const char *path)
+{	
+        struct stat st;
+        int fd, ret;
+        uint8_t *mem;
+        ElfW(Ehdr) *ehdr;
+        ElfW(Shdr) *shdr;
+        ElfW(Sym) *symtab;
+        char *StringTable, *dynstr;
+        size_t i, j, symcount;
+
+        fd = xopen(path, O_RDWR);
+        xfstat(fd, &st);
+        mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+        if (mem == MAP_FAILED) {
+                perror("mmap");
+                return -1;
+        }
+
+        ehdr = (ElfW(Ehdr) *)mem;
+        shdr = (ElfW(Shdr) *)&mem[ehdr->e_shoff];
+        StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
+	
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (!strcmp(&StringTable[shdr[i].sh_name], ".dynstr")) {
+			dynstr = (char *)&mem[shdr[i].sh_offset];
+			break;
+		}
+	}
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (!strcmp(&StringTable[shdr[i].sh_name], ".dynsym")) {
+			symtab = (ElfW(Sym) *)&mem[shdr[i].sh_offset];
+			symcount = shdr[i].sh_size / shdr[i].sh_entsize;
+			for (j = 0; j < symcount; j++) 
+				symtab[j].st_value = lookup_from_symlist((char *)&dynstr[symtab[j].st_name], list);
+		}
+	}
+	return 0;
+}
+	
 
 int fill_dynamic_symtab(list_t **list, struct lib_mappings *lm)
 {
