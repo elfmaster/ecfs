@@ -1371,7 +1371,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         memdesc_t *memdesc = handle->memdesc;
         notedesc_t *notedesc = handle->notedesc;
         struct section_meta *smeta = &handle->smeta;
-	ElfW(Shdr) *shdr = alloca(sizeof(ElfW(Shdr)) * MAX_SHDR_COUNT);
+	ElfW(Shdr) *shdr = heapAlloc(sizeof(ElfW(Shdr)) * MAX_SHDR_COUNT);
         char *StringTable = (char *)alloca(MAX_SHDR_COUNT * 64);
 	struct stat st;
         unsigned int stoffset = 0;
