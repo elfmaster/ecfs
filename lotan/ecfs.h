@@ -108,6 +108,7 @@ struct elf_thread_core_info {
 	struct elf_prstatus *prstatus;
 	struct elf_prpsinfo *psinfo;
 	struct user_regs_struct *regs;
+	elf_fpregset_t *fpu;
 	siginfo_t *siginfo;
 	 ElfW(Nhdr) * notes;
 };

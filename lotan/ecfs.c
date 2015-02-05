@@ -402,12 +402,13 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 				tc = !!notedesc->thread_count;
 				switch(tc) {
 				case 1: 
-					notedesc->thread_core_info[tc].prstatus = (struct elf_prstatus *)heapAlloc(notes->n_descsz);
-					memcpy(notedesc->thread_core_info[tc].prstatus, desc, notes->n_descsz);
+					notedesc->thread_core_info[notedesc->thread_count].prstatus = (struct elf_prstatus *)heapAlloc(notes->n_descsz);
+					memcpy(notedesc->thread_core_info[notedesc->thread_count].prstatus, desc, notes->n_descsz);
 					break;
 				case 0:
 					notedesc->prstatus = (struct elf_prstatus *)heapAlloc(sizeof(struct elf_prstatus));
 					memcpy(notedesc->prstatus, desc, notes->n_descsz);
+					notedesc->thread_core_info[notedesc->thread_count].prstatus = notedesc->prstatus;
 					break;
 				}
 				notedesc->thread_count++;
@@ -443,6 +444,17 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 				notedesc->nt_files = (struct nt_file_struct *)heapAlloc(sizeof(struct nt_file_struct));
 				memcpy(notedesc->nt_files, nt_files, sizeof(struct nt_file_struct));
 				break;
+			case NT_FPREGSET:
+				if (notes->n_descsz != sizeof(elf_fpregset_t)) {
+#if DEBUG
+					printf("error: The ELF note entry for NT_PRPSINFO is not the correct size\n");
+#endif 
+					break;
+				}
+				notedesc->fpu = (elf_fpregset_t *)heapAlloc(sizeof(elf_fpregset_t));
+				memcpy(notedesc->fpu, desc, notes->n_descsz);
+				break;
+			
 		}
 		/*
 		 * note entries are always word aligned (4 bytes)
@@ -1398,9 +1410,11 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         stoffset += strlen(".interp") + 1;
         scount++;
 
+	
 	 /*
          *.note
          */
+	
         shdr[scount].sh_type = SHT_NOTE;
         shdr[scount].sh_offset = elfdesc->noteOffset;
         shdr[scount].sh_addr = elfdesc->noteVaddr;
@@ -1414,7 +1428,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         strcpy(&StringTable[stoffset], ".note");
         stoffset += strlen(".note") + 1;
         scount++;
-
+	
         /*
          * .hash
          */
@@ -1987,7 +2001,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 * write prstatus structs
 	 */
 	write(fd, notedesc->prstatus, sizeof(struct elf_prstatus));
-	for (i = 0; i < notedesc->thread_count; i++)	
+	for (i = 1; i < notedesc->thread_count; i++)	
 		write(fd, notedesc->thread_core_info[i].prstatus, sizeof(struct elf_prstatus));
 	
 	/*
@@ -2214,7 +2228,7 @@ int main(int argc, char **argv)
         	}
 		memdesc->task.pid = pid;
 		pull_unknown_shdr_sizes(pid);
-		//memdesc->o_entry = get_original_ep(pid);
+		memdesc->o_entry = get_original_ep(pid);
 	}
 
 #if DEBUG
@@ -2264,7 +2278,7 @@ int main(int argc, char **argv)
 		exename = notedesc->psinfo->pr_fname;
 		pid = pid ? pid : notedesc->prstatus->pr_pid;
 		memdesc = build_proc_metadata(pid, notedesc);
-        	//memdesc->o_entry = get_original_ep(pid); // get original entry point
+        	memdesc->o_entry = get_original_ep(pid); // get original entry point
 		if (memdesc == NULL) {
                 	fprintf(stderr, "Failed to retrieve process metadata\n");
                 	exit(-1);
