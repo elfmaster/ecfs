@@ -249,7 +249,9 @@ typedef struct memdesc {
 	char *comm;		//name of executable
 	int mapcount;		// overall # of memory maps
 	int type;		// ET_EXEC or ET_DYN
-	 ElfW(Addr) base, data_base;
+	uint8_t *textseg;	// gets heapallocated and has text segment read into it
+	ElfW(Addr) base, data_base;
+	
 	struct {
 		unsigned long sh_offset;
 		unsigned long base;
@@ -271,6 +273,11 @@ typedef struct memdesc {
 		unsigned int size;
 	} heap;
 	struct {
+		unsigned long sh_offset;
+		unsigned long base;
+		unsigned int size;
+	} text; // special case since coredumps don't dump complete text image
+	struct {
 		int fds[MAXFD];
 		int pid;
 		int ppid;
@@ -289,6 +296,7 @@ typedef struct memdesc {
 	size_t stack_args_len;
 	uint8_t *saved_auxv;
 	int pie;
+	unsigned long o_entry;
 } memdesc_t;
 
 typedef struct descriptor {

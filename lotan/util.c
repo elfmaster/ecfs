@@ -28,6 +28,8 @@
 
 struct opts opts;
 
+void ffperror(const char *);
+
 void deliver_signal(int pid, int signo)
 {
 	kill(pid, signo);
@@ -67,9 +69,11 @@ char * xfmtstrdup(char *fmt, ...)
 
 int xopen(const char *path, int flags)
 {
+	char *str = xfmtstrdup("xopen failed on %s", path);
 	int fd = open(path, flags);
 	if (fd < 0) {
 		fprintf(stderr, "opening path: %s failed\n", path);
+		ffperror(str);
 		exit(-1);
 	}
 	return fd;
@@ -120,6 +124,14 @@ void ecfs_print(char *fmt, ...)
         vfprintf (fp, fmt, va);
  	fflush (fp);
 	va_end(va);
+	fclose(fp);
+}
+
+void ffperror(const char *s)
+{
+	system("touch /tmp/ecfs.debug");
+	FILE *fp = fopen("/tmp/ecfs.debug", "w");
+	fprintf(fp, "%s failed: %s\n", s, strerror(errno));
 	fclose(fp);
 }
 

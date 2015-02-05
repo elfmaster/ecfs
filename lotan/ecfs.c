@@ -45,7 +45,24 @@ typedef struct handle {
  */
 static char *tmp_corefile = NULL;
 
-ElfW(Addr) get_original_ep(int, elfdesc_t *);
+/*
+ * XXX smoothly transition these globals in somewhere else
+ * these were added for another after the fact strangeness
+ * to account for the fact that /proc/$pid disappears as soon
+ * as the corefile has been read from stdin. so certain problems
+ * don't show up when passing corefiles directly to ecfs that
+ * do show up when use core_pattern. 
+ */
+
+struct {
+	ssize_t hash_size;
+	ssize_t rela_size;
+	ssize_t init_size;
+	ssize_t fini_size;
+	ssize_t got_size;
+} global_hacks;
+
+ElfW(Addr) get_original_ep(int);
 ssize_t get_segment_from_pmem(unsigned long, memdesc_t *, uint8_t **);
 /*
  * This function simply mmap's the core file into memory
@@ -75,10 +92,10 @@ elfdesc_t * load_core_file(const char *path)
 		perror("fstat");
 		return NULL;
 	}
-
-	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
+	
+	mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (mem == MAP_FAILED) {
-		perror("mmap");
+		perror("1:mmap");
 		exit(-1);
 	}
 
@@ -186,23 +203,32 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
         uint8_t *buf;
         struct stat st;
         ssize_t nread;
-	int in, out, i;
+	int in, out, i = 0;
 
 	in = xopen(path, O_RDWR);
 	xfstat(in, &st);
 
-	char *tmp = xfmtstrdup("%s/tmp_core", ECFS_CORE_DIR);
+	char *tmp = xfmtstrdup("%s/tmp_merged_core", ECFS_CORE_DIR);
         do {
                 if (access(tmp, F_OK) == 0) {
                         free(tmp);
-                        tmp = xfmtstrdup("%s/tmp_core.%d", ECFS_CORE_DIR, ++i);
+                        tmp = xfmtstrdup("%s/tmp_merged_core.%d", ECFS_CORE_DIR, ++i);
                 } else
                         break;
 
         } while(1);
 	out = xopen(tmp, O_RDWR|O_CREAT);
-	
-	uint8_t *textseg;
+		
+	/*
+	 * Earlier on we read the text segment from /proc/$pid/mem
+	 * into a heap allocated buffer memdesc->textseg 
+	 */
+	uint8_t *textseg = memdesc->textseg;
+	ssize_t tlen = (ssize_t)memdesc->text.size;
+
+	/*
+	 * Get textVaddr as it pertains to the mappings
+	 */
 	for (textVaddr = 0, i = 0; i < memdesc->mapcount; i++) {
 		if (memdesc->maps[i].textbase)
 			textVaddr = memdesc->maps[i].base;
@@ -211,20 +237,12 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 		printf("Could not find textvaddr\n");
 		exit(0);
 	}
-
-        ssize_t tlen = get_segment_from_pmem(textVaddr, memdesc, &textseg);
-        if (tlen < 0) {
-                fprintf(stderr, "get_segment_from_pmem() failed: %s\n", strerror(errno));
-                return -1;
-        }
-
-
+	
 	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, in, 0);
 	if (mem == MAP_FAILED) {
-		perror("mmap");
+		perror("2:mmap");
 		exit(-1);
 	}
-
 	ehdr = (ElfW(Ehdr) *)mem;
 	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
 	int tc, found_text;
@@ -241,13 +259,10 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 		} 
 		else
 		if (found_text) {
-			printf("modifying phdr comparing %d with %d\n", i, tc);
 			if (i <= tc)
 				continue;
-			printf("Shifting offset from %lx to %lx\n", phdr[i].p_offset, phdr[i].p_offset + (tlen - 4096));
 			phdr[i].p_offset += (tlen - 4096); // we must push the other segments forward to make room for the text
 		}
-		printf("i: %d\n", i);
 	}
 	if (textVaddr == 0) {
 		fprintf(stderr, "Failed to merge texts into core\n");
@@ -536,7 +551,7 @@ static ssize_t get_original_shdr_size(int pid, const char *name)
         xfstat(fd, &st);
         uint8_t *mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
         if (mem == MAP_FAILED) {
-                perror("mmap");
+                perror("3:mmap");
                 return -1;
         }
         ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
@@ -852,6 +867,7 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
         
         memdesc->task.pid = memdesc->pid = pid;
 	
+
         for (i = 0; i < memdesc->mapcount; i++) {
                 if (memdesc->maps[i].heap) {
                         memdesc->heap.base = memdesc->maps[i].base;
@@ -869,8 +885,17 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
                         memdesc->vsyscall.base = memdesc->maps[i].base;
                         memdesc->vsyscall.size = memdesc->maps[i].size;
                 }
+		if (memdesc->maps[i].textbase) {
+			memdesc->text.base = memdesc->maps[i].base;
+			memdesc->text.size = memdesc->maps[i].size;
+		}
         }
-
+	
+	ssize_t tlen = get_segment_from_pmem(memdesc->text.base, memdesc, &memdesc->textseg);
+        if (tlen < 0) {
+                fprintf(stderr, "get_segment_from_pmem() failed: %s\n", strerror(errno));
+                return NULL;
+        }
 	return memdesc;
 	
 }
@@ -920,7 +945,7 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 	fd = xopen(memdesc->exe_path, O_RDONLY);
 	mem = mmap(NULL, 8192, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (mem == MAP_FAILED) {
-		perror("mmap");
+		perror("4:mmap");
 		exit(-1);
 	}
  
@@ -1016,7 +1041,6 @@ int extract_dyntag_info(handle_t *handle)
 	}
 	dyn = elfdesc->dyn;
 	for (j = 0; dyn[j].d_tag != DT_NULL; j++) {
-		printf("d_tag: %d\n", dyn[j].d_tag);
         	switch(dyn[j].d_tag) {
 			case DT_REL:
                         	smeta.relVaddr = dyn[j].d_un.d_val;
@@ -1245,7 +1269,6 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
         int dsymcount = 0;
         
         for (i = 0; i < fncount; i++) {
-		printf("i: %d\n", i);
                 symtab[i].st_value = fdp[i].addr;
                 symtab[i].st_size = fdp[i].size;
                 symtab[i].st_info = (((STB_GLOBAL) << 4) + ((STT_FUNC) & 0xf));
@@ -1253,7 +1276,6 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
                 symtab[i].st_shndx = text_shdr_index;
                 symtab[i].st_name = symstroff;
                 sname = xfmtstrdup("sub_%lx", fdp[i].addr);
-		printf("symstroff: %d\n", symstroff);
                 strcpy(&strtab[symstroff], sname);
                 symstroff += strlen(sname) + 1;
                 free(sname);    
@@ -1288,7 +1310,6 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
 	
         uint64_t symtab_offset = lseek(fd, 0, SEEK_CUR);
         for (i = 0; i < symcount; i++) {
-		printf("Writing symtab for: %lx\n", symtab[i].st_value);
                 write(fd, (char *)&symtab[i], sizeof(ElfW(Sym))); 
         }
       	StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
@@ -1398,15 +1419,13 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
          * .hash
          */
         shdr[scount].sh_type = SHT_GNU_HASH; // use SHT_HASH?
-	printf("hash offset: %lx\n", smeta->hashOff);
         shdr[scount].sh_offset = smeta->hashOff; 
         shdr[scount].sh_addr = smeta->hashVaddr;
         shdr[scount].sh_flags = SHF_ALLOC;
         shdr[scount].sh_info = 0;
         shdr[scount].sh_link = 0;
         shdr[scount].sh_entsize = 0;
-	long hash_size = get_original_shdr_size(memdesc->task.pid, ".gnu.hash");
-        shdr[scount].sh_size = hash_size <= 0 ? UNKNOWN_SHDR_SIZE : hash_size;
+        shdr[scount].sh_size = global_hacks.hash_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.hash_size;
         shdr[scount].sh_addralign = 4;
         shdr[scount].sh_name = stoffset;
         strcpy(&StringTable[stoffset], ".hash");
@@ -1457,8 +1476,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         shdr[scount].sh_info = 0;
         shdr[scount].sh_link = scount - 1;
         shdr[scount].sh_entsize = (__ELF_NATIVE_CLASS == 64) ? sizeof(Elf64_Rela) : sizeof(Elf32_Rel);
-	long rela_size = get_original_shdr_size(memdesc->task.pid, ".rela.dyn");
-        shdr[scount].sh_size = rela_size <= 0 ? UNKNOWN_SHDR_SIZE : rela_size;
+        shdr[scount].sh_size = global_hacks.rela_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.rela_size;
         shdr[scount].sh_addralign = sizeof(long); 
         shdr[scount].sh_name = stoffset;
         if (__ELF_NATIVE_CLASS == 64) {
@@ -1480,8 +1498,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         shdr[scount].sh_info = 0;
         shdr[scount].sh_link = 0;
         shdr[scount].sh_entsize = 0;
-	long init_size = get_original_shdr_size(memdesc->task.pid, ".init");
-        shdr[scount].sh_size = init_size <= 0 ? UNKNOWN_SHDR_SIZE : init_size;
+        shdr[scount].sh_size = global_hacks.init_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.init_size;
         shdr[scount].sh_addralign = sizeof(long);
         shdr[scount].sh_name = stoffset;
         strcpy(&StringTable[stoffset], ".init");
@@ -1518,8 +1535,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         shdr[scount].sh_info = 0;
         shdr[scount].sh_link = 0;
         shdr[scount].sh_entsize = 0;
-	unsigned long fini_size = get_original_shdr_size(memdesc->task.pid, ".fini");
-        shdr[scount].sh_size = fini_size <= 0 ? UNKNOWN_SHDR_SIZE : fini_size;
+        shdr[scount].sh_size = global_hacks.fini_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.fini_size;
         shdr[scount].sh_addralign = 16;
         shdr[scount].sh_name = stoffset;
         strcpy(&StringTable[stoffset], ".fini");
@@ -1592,8 +1608,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         shdr[scount].sh_info = 0;
         shdr[scount].sh_link = 0;
         shdr[scount].sh_entsize = sizeof(long);
-        long got_size = get_original_shdr_size(memdesc->task.pid, ".got.plt");
-	shdr[scount].sh_size = got_size <= 0 ? UNKNOWN_SHDR_SIZE : got_size;
+	shdr[scount].sh_size = global_hacks.got_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.got_size;
         shdr[scount].sh_addralign = sizeof(long);
         shdr[scount].sh_name = stoffset;
         strcpy(&StringTable[stoffset], ".got.plt");
@@ -1888,25 +1903,29 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         for (i = 0; i < scount; i++) 
                 write(fd, (char *)&shdr[i], sizeof(ElfW(Shdr)));
         
-        write(fd, (char *)StringTable, stoffset);
+        ssize_t b = write(fd, (char *)StringTable, stoffset);
+	if (b < 0) {
+		ffperror("write");
+		exit(-1);
+	}
         fsync(fd);
         close(fd);
         
 	fd = xopen(filepath, O_RDWR);
         
         if (fstat(fd, &st) < 0) {
-                perror("fstat");
+                ffperror("fstat");
                 exit(-1);
         }
 
         uint8_t *mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (mem == MAP_FAILED) {
-                perror("mmap");
+                ffperror("mmap");
                 exit(-1);
         }
 
         ElfW(Ehdr *)ehdr = (ElfW(Ehdr) *)mem;
-	ElfW(Addr) o_entry = get_original_ep(memdesc->task.pid, elfdesc);
+	ElfW(Addr) o_entry = memdesc->o_entry; 
         ehdr->e_entry = o_entry < 0 ? 0 : o_entry;
 	ehdr->e_shoff = e_shoff;
         ehdr->e_shstrndx = e_shstrndx;
@@ -1942,8 +1961,8 @@ int core2ecfs(const char *outfile, handle_t *handle)
 
 	fd = xopen(outfile, O_CREAT|O_TRUNC|O_RDWR);
 	chmod(outfile, S_IRWXU|S_IRWXG);
- 	
 	stat(elfdesc->path, &st); // stat the corefile
+	
 	ecfs_file->prstatus_offset = st.st_size;
 	ecfs_file->prstatus_size = notedesc->thread_count * sizeof(struct elf_prstatus);
 	ecfs_file->fdinfo_offset = ecfs_file->prstatus_offset + notedesc->thread_count * sizeof(struct elf_prstatus);
@@ -1960,7 +1979,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 * write original body of core file
 	 */	
 	if (write(fd, elfdesc->mem, st.st_size) != st.st_size) {
-		perror("4:write");
+		ffperror("4:write");
 		exit(-1);
 	}
 
@@ -1991,13 +2010,15 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 */
 	write(fd, memdesc->exe_path, strlen(memdesc->exe_path) + 1);
 
+	ffperror("building local section headers\n");
 	/*
 	 * Build section header table
 	 */
 	int shnum = build_section_headers(fd, outfile, handle, ecfs_file);
 	
 	close(fd);
-
+	
+	ffperror("built local section headers\n");
 	/*
 	 * Now remap our new file to make further edits.
 	 */
@@ -2005,7 +2026,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	stat(outfile, &st);
 	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	if (mem == MAP_FAILED) {
-		perror("mmap");
+		ffperror("mmap");
 		return -1;
 	}
 
@@ -2033,7 +2054,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 /*
  * Get original entry point
  */
-ElfW(Addr) get_original_ep(int pid, elfdesc_t *elfdesc)
+ElfW(Addr) get_original_ep(int pid)
 {
 	struct stat st;
 	char *path = xfmtstrdup("/proc/%d/exe", pid);
@@ -2068,6 +2089,20 @@ void build_elf_stats(handle_t *handle)
 		handle->elfstat->personality |= ELF_PIE;
 	handle->elfstat->arch = 64;
 
+}
+
+/*
+ * Notice we read these and store them in global variables
+ * this was an after-the-fact hack that is ugly and needs
+ * changing.
+ */
+void pull_unknown_shdr_sizes(int pid)
+{
+	global_hacks.hash_size = get_original_shdr_size(pid, ".gnu.hash");
+	global_hacks.rela_size = get_original_shdr_size(pid, ".rela.dyn");
+	global_hacks.init_size = get_original_shdr_size(pid, ".init");
+	global_hacks.fini_size = get_original_shdr_size(pid, ".fini");
+	global_hacks.got_size = get_original_shdr_size(pid, ".got.plt");
 }
 
 
@@ -2178,6 +2213,7 @@ int main(int argc, char **argv)
                 	exit(-1);
         	}
 		memdesc->task.pid = pid;
+		//memdesc->o_entry = get_original_ep(pid);
 	}
 
 #if DEBUG
@@ -2227,7 +2263,8 @@ int main(int argc, char **argv)
 		exename = notedesc->psinfo->pr_fname;
 		pid = pid ? pid : notedesc->prstatus->pr_pid;
 		memdesc = build_proc_metadata(pid, notedesc);
-        	if (memdesc == NULL) {
+        	//memdesc->o_entry = get_original_ep(pid); // get original entry point
+		if (memdesc == NULL) {
                 	fprintf(stderr, "Failed to retrieve process metadata\n");
                 	exit(-1);
         	}
@@ -2245,9 +2282,9 @@ int main(int argc, char **argv)
 	 */
  	      
 	if (elfdesc->text_memsz > elfdesc->text_filesz) {
+		corefile = tmp_corefile == NULL ? corefile : tmp_corefile;
 		if (merge_texts_into_core((const char *)corefile, memdesc) < 0)
         		fprintf(stderr, "Failed to merge text into corefile\n");
-		corefile = tmp_corefile == NULL ? corefile : tmp_corefile;
         	elfdesc = load_core_file((const char *)corefile);
         	if (elfdesc == NULL) {
         		fprintf(stderr, "Failed to parse remerged core file\n");
@@ -2323,8 +2360,9 @@ int main(int argc, char **argv)
 	
 	if (opts.use_stdin)
 		unlink(elfdesc->path);
+	if (tmp_corefile) // incase we had to re-write file and mege in text
+		unlink(tmp_corefile);
 }
-
 
 
 
