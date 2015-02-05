@@ -25,6 +25,9 @@
 #define HUGE_ALLOC(size)  \
       mmap(0, (size), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0)
 
+#define MAX_LIB_NAME 255
+#define MAX_LIB_PATH 512
+
 #define LOGGING_PATH "/home/ryan/bin/logging.txt"
 #define ECFS_CORE_DIR "/home/ryan/bin" // XXX change this?
 #define UNKNOWN_SHDR_SIZE 64
@@ -147,7 +150,8 @@ struct lib_mappings {
 		unsigned long offset;
 		size_t size;
 		uint32_t flags; // PF_W|PF_R etc.
-		char name[255];
+		char name[MAX_LIB_NAME + 1];
+		char path[MAX_LIB_PATH + 1];
 	} libs[4096];
 	int libcount;
 };
@@ -312,7 +316,7 @@ typedef struct descriptor {
 typedef struct node {
 	struct node *next;
 	struct node *prev;
-	desc_t *desc;
+	void *data;
 } node_t;
 
 typedef struct list {
@@ -326,3 +330,7 @@ char *xfmtstrdup(char *fmt, ...);
 int get_all_functions(const char *filepath, struct fde_func_data **funcs);
 void ecfs_print(char *, ...);
 int xopen(const char *, int);
+
+/* from list.c */
+int insert_item_end(list_t **list, void *data);
+int insert_item_front(list_t **list, void *data);

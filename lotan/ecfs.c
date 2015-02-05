@@ -646,7 +646,6 @@ static ElfW(Addr) lookup_data_size(memdesc_t *memdesc, struct nt_file_struct *fm
         return 0;
 }
 
-#define MAX_LIB_LEN 255
 /*
  * There should be 3 mappings for each lib
  * .text, relro, and .data.
@@ -664,7 +663,12 @@ static void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_fi
 		for (j = 0; j < strlen(p); j++)
 			tmp[j] = p[j];
 		tmp[j] = '\0';
-		strncpy(lm->libs[lm->libcount].name, tmp, MAX_LIB_LEN - 1);
+		/*
+	 	 * path and name are MAX_LIB_N + 1 in size hence no need
+		 * to take byte for null terminator into account with strncpy
+	 	 */
+		strncpy(lm->libs[lm->libcount].path, fmaps->files[i].path, MAX_LIB_PATH);
+		strncpy(lm->libs[lm->libcount].name, tmp, MAX_LIB_NAME);
 		lm->libs[lm->libcount].addr = fmaps->files[i].addr;
 		lm->libs[lm->libcount].size = fmaps->files[i].size;
 		lm->libs[lm->libcount].flags = get_mapping_flags(lm->libs[lm->libcount].addr, memdesc);
@@ -674,6 +678,16 @@ static void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_fi
 		
 }
 
+int fill_dynamic_symtab(elfdesc_t *elfdesc, memdesc_t *memdesc, struct lib_mappings *lm)
+{
+	/*
+	 * The .dynsym section is in the output ecfs executable and does not exist
+	 * yet when this function is called. We therefore 
+	 */
+	
+	
+
+}
 			
 /*
  * Since the process is paused, all /proc data is still available.
