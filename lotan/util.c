@@ -25,6 +25,7 @@
 
 
 #include "ecfs.h"
+#include <syslog.h>
 
 struct opts opts;
 
@@ -127,6 +128,17 @@ void ecfs_print(char *fmt, ...)
 	fclose(fp);
 }
 
+void log_msg(unsigned int lineno, char *fmt, ...)
+{
+	int fd;
+        char buf[512];
+	va_list va;
+        va_start (va, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, va);
+	va_end(va);
+	syslog(LOG_MAKEPRI(LOG_USER, LOG_WARNING), "%s [line: %i]", buf, lineno);
+
+}
 void ffperror(const char *s, int lineno)
 {
 	system("touch /tmp/ecfs.debug");

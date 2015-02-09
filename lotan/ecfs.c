@@ -231,7 +231,6 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 	 */
 	uint8_t *textseg = memdesc->textseg;
 	ssize_t tlen = (ssize_t)memdesc->text.size;
-	printf("tlen: %lx\n", tlen);
 	/*
 	 * Get textVaddr as it pertains to the mappings
 	 */
@@ -516,7 +515,6 @@ ssize_t get_segment_from_pmem(unsigned long vaddr, memdesc_t *memdesc, uint8_t *
 	/*
 	 * Are we trying to read from a valid process mapping?
 	 */
-	printf("looking for address: %lx\n", vaddr);
 	for (i = 0; i < memdesc->mapcount; i++) {
 		if (vaddr >= memdesc->maps[i].base && vaddr < memdesc->maps[i].base + memdesc->maps[i].size) {
 			len = memdesc->maps[i].size;
@@ -713,8 +711,8 @@ static int get_maps(pid_t pid, mappings_t *maps, const char *path)
 		if (chp) 
 			*(char *)strchr(chp, '\n') = '\0';
 		if (chp && !strcmp(&chp[1], path)) {
-		//if (strstr(tmp, path)) {
-			printf("%s is within %s\n", path, tmp);
+			//sprintf(errmsg, "%s is within %s\n", path, tmp);
+			//printf("%s is within %s\n", path, tmp);
                         if (!strstr(tmp, "---p")) {
                                 maps[lc].filename = xstrdup(strchr(tmp, '/'));
                                 maps[lc].elfmap++;
@@ -917,7 +915,6 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 			memdesc->text.size = memdesc->maps[i].size;
 		}
         }
-	printf("text base: %lx\n", memdesc->text.base);
 	ssize_t tlen = get_segment_from_pmem(memdesc->text.base, memdesc, &memdesc->textseg);
         if (tlen < 0) {
                 fprintf(stderr, "get_segment_from_pmem() failed: %s\n", strerror(errno));
@@ -2321,11 +2318,13 @@ int main(int argc, char **argv)
 	if (elfdesc->text_memsz > elfdesc->text_filesz) {
 		corefile = tmp_corefile == NULL ? corefile : tmp_corefile;
 		if (merge_texts_into_core((const char *)corefile, memdesc) < 0) {
+			log_msg(__LINE__, "Failed to merge text into core file");
 			ffperror("Failed to merge text into corefile", __LINE__);
 		}
         	elfdesc = load_core_file((const char *)corefile);
         	if (elfdesc == NULL) {
-        		ffperror("Failed to parse remerged core file", __LINE__);
+        		log_msg(__LINE__, "Failed to parse text-merged core file");	
+			ffperror("Failed to parse remerged core file", __LINE__);
                 	exit(-1);
         	}
 	}
@@ -2374,6 +2373,7 @@ int main(int argc, char **argv)
 	
 #if DEBUG
 	for (i = 0; i < notedesc->lm_files->libcount; i++)
+		log_msg(__LINE__, "libname: %s addr: %lx\n", notedesc->lm_files->libs[i].name, notedesc->lm_files->libs[i].addr);
 		printf("libname: %s addr: %lx\n", notedesc->lm_files->libs[i].name, notedesc->lm_files->libs[i].addr);
 #endif
 	/*

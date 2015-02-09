@@ -20,6 +20,7 @@
 #include <sys/procfs.h>		/* struct elf_prstatus */
 #include <sys/resource.h>
 #include <sys/prctl.h>
+#include <sys/socket.h>
 #include "dwarf.h"
 #include "libdwarf.h"
 
