@@ -28,7 +28,7 @@
 
 struct opts opts;
 
-void ffperror(const char *);
+void ffperror(const char *, int);
 
 void deliver_signal(int pid, int signo)
 {
@@ -73,7 +73,7 @@ int xopen(const char *path, int flags)
 	int fd = open(path, flags);
 	if (fd < 0) {
 		fprintf(stderr, "opening path: %s failed\n", path);
-		ffperror(str);
+		ffperror(str, 0);
 		exit(-1);
 	}
 	return fd;
@@ -127,11 +127,11 @@ void ecfs_print(char *fmt, ...)
 	fclose(fp);
 }
 
-void ffperror(const char *s)
+void ffperror(const char *s, int lineno)
 {
 	system("touch /tmp/ecfs.debug");
 	FILE *fp = fopen("/tmp/ecfs.debug", "w");
-	fprintf(fp, "%s failed: %s\n", s, strerror(errno));
+	fprintf(fp, "%s failed on code line [%d]: %s\n", s, lineno, strerror(errno));
 	fclose(fp);
 }
 

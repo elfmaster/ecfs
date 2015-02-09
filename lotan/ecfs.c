@@ -207,7 +207,13 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 
 	in = xopen(path, O_RDWR);
 	xfstat(in, &st);
-
+	
+	/*
+	 * tmp will point to the new temporary file that contains
+	 * our corefile with a merged in program text segment and
+	 * with updated p_filesz, and updated p_offsets for phdr's 
+	 * that follow it.
+	 */
 	char *tmp = xfmtstrdup("%s/tmp_merged_core", ECFS_CORE_DIR);
         do {
                 if (access(tmp, F_OK) == 0) {
@@ -225,7 +231,7 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 	 */
 	uint8_t *textseg = memdesc->textseg;
 	ssize_t tlen = (ssize_t)memdesc->text.size;
-
+	printf("tlen: %lx\n", tlen);
 	/*
 	 * Get textVaddr as it pertains to the mappings
 	 */
@@ -234,14 +240,14 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 			textVaddr = memdesc->maps[i].base;
 	}
 	if (textVaddr == 0) {
-		printf("Could not find textvaddr\n");
-		exit(0);
+		ffperror("Could not find textvaddr\n", __LINE__);
+		return -1;
 	}
 	
 	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, in, 0);
 	if (mem == MAP_FAILED) {
-		perror("2:mmap");
-		exit(-1);
+		ffperror("mmap", __LINE__);
+		return -1;
 	}
 	ehdr = (ElfW(Ehdr) *)mem;
 	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
@@ -251,7 +257,7 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 		if (phdr[i].p_type == PT_NOTE) {
 			tc = i + 1;	
 			textOffset = phdr[tc].p_offset;
-			dataOffset = phdr[tc + 1].p_offset;
+			dataOffset = phdr[tc + 1].p_offset; // data segment is always i + 1 after the text
 			textVaddr = phdr[tc].p_vaddr;
 			textSize = phdr[tc].p_memsz; // get the memory size of text
 			phdr[tc].p_filesz = phdr[tc].p_memsz; // make filesz same as memsz
@@ -265,24 +271,24 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 		}
 	}
 	if (textVaddr == 0) {
-		fprintf(stderr, "Failed to merge texts into core\n");
+		ffperror("Failed to merge texts into core\n", __LINE__);
 		return -1;
 	}
 	if (write(out, mem, textOffset) < 0) {
 #if DEBUG
-		perror("1:write");
+		ffperror("write", __LINE__);
 #endif
 		return -1;
 	}
 	if (write(out, textseg, tlen) < 0) {
 #if DEBUG
-		perror("2:write"); 
+		ffperror("2:write", __LINE__);
 #endif
 		return -1;
 	}
 	if (write(out, &mem[dataOffset], st.st_size - (textOffset + 4096)) < 0) {
 #if DEBUG
-		perror("3:write");
+		ffperror("write", __LINE__);
 #endif
 		return -1;
 	}
@@ -292,11 +298,10 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 	close(in);
 	
 	if (rename(tmp, path) < 0) {
-		printf("Could not rename %s to %s\n", tmp, path);
+		ffperror("rename", __LINE__);
 		return -1;
 	}
 		
-	printf("Renamed %s to %s\n", tmp, path);
 	return 0;
 }
 /*
@@ -511,6 +516,7 @@ ssize_t get_segment_from_pmem(unsigned long vaddr, memdesc_t *memdesc, uint8_t *
 	/*
 	 * Are we trying to read from a valid process mapping?
 	 */
+	printf("looking for address: %lx\n", vaddr);
 	for (i = 0; i < memdesc->mapcount; i++) {
 		if (vaddr >= memdesc->maps[i].base && vaddr < memdesc->maps[i].base + memdesc->maps[i].size) {
 			len = memdesc->maps[i].size;
@@ -687,7 +693,7 @@ static void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_fi
  */
 static int get_maps(pid_t pid, mappings_t *maps, const char *path)
 {
-        char mpath[256], buf[256], tmp[256], *p, *q = alloca(32);
+        char mpath[256], buf[256], tmp[256], *p, *chp, *q = alloca(32);
         FILE *fd;
         int lc, i;
         
@@ -703,12 +709,18 @@ static int get_maps(pid_t pid, mappings_t *maps, const char *path)
                 maps[lc].elfmap = 0;
                 maps[lc].base = strtoul(buf, NULL, 16);
                 maps[lc].size = strtoul(p, NULL, 16) - maps[lc].base;
-		if (strstr(tmp, path)) {
-                        if (!strstr(tmp, "---p"))
+		chp = strrchr(tmp, '/'); 
+		if (chp) 
+			*(char *)strchr(chp, '\n') = '\0';
+		if (chp && !strcmp(&chp[1], path)) {
+		//if (strstr(tmp, path)) {
+			printf("%s is within %s\n", path, tmp);
+                        if (!strstr(tmp, "---p")) {
                                 maps[lc].filename = xstrdup(strchr(tmp, '/'));
                                 maps[lc].elfmap++;
-				if (strstr(tmp, "r-xp") || strstr(tmp, "rwxp"))
+				if (strstr(tmp, "r-xp") || strstr(tmp, "rwxp")) //sometimes text is polymorphic
 					maps[lc].textbase++;
+			}
                 }
                 else
                 if (strstr(tmp, "[heap]")) 
@@ -905,7 +917,7 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 			memdesc->text.size = memdesc->maps[i].size;
 		}
         }
-	
+	printf("text base: %lx\n", memdesc->text.base);
 	ssize_t tlen = get_segment_from_pmem(memdesc->text.base, memdesc, &memdesc->textseg);
         if (tlen < 0) {
                 fprintf(stderr, "get_segment_from_pmem() failed: %s\n", strerror(errno));
@@ -1266,7 +1278,7 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
 	ElfW(Shdr) *shdr;
 	int i;
 	char *StringTable;
-	char *strtab = alloca(8192 * 16);
+	char *strtab = heapAlloc(8192 * 32);
 
         fncount = get_all_functions(outfile, &fndata);
  	if (fncount < 0)
@@ -1358,6 +1370,7 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
                 }
         }
         
+	free(strtab);
         msync(mem, st.st_size, MS_SYNC);
         munmap(mem, st.st_size);
         close(fd);
@@ -1372,7 +1385,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         notedesc_t *notedesc = handle->notedesc;
         struct section_meta *smeta = &handle->smeta;
 	ElfW(Shdr) *shdr = heapAlloc(sizeof(ElfW(Shdr)) * MAX_SHDR_COUNT);
-        char *StringTable = (char *)alloca(MAX_SHDR_COUNT * 64);
+        char *StringTable = (char *)heapAlloc(MAX_SHDR_COUNT * 64);
 	struct stat st;
         unsigned int stoffset = 0;
         int scount = 0;
@@ -1918,11 +1931,12 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	const char *filepath = outfile;
         int e_shstrndx = scount - 1;
         for (i = 0; i < scount; i++) 
-                write(fd, (char *)&shdr[i], sizeof(ElfW(Shdr)));
+                if (write(fd, (char *)&shdr[i], sizeof(ElfW(Shdr))) < 0)
+			ffperror("write", __LINE__);
         
         ssize_t b = write(fd, (char *)StringTable, stoffset);
 	if (b < 0) {
-		ffperror("write");
+		ffperror("write", __LINE__);
 		exit(-1);
 	}
         fsync(fd);
@@ -1931,13 +1945,13 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	fd = xopen(filepath, O_RDWR);
         
         if (fstat(fd, &st) < 0) {
-                ffperror("fstat");
+                ffperror("fstat", __LINE__);
                 exit(-1);
         }
 
         uint8_t *mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (mem == MAP_FAILED) {
-                ffperror("mmap");
+                ffperror("mmap", __LINE__);
                 exit(-1);
         }
 
@@ -1954,8 +1968,9 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         munmap(mem, st.st_size);
 
         close(fd);
+	free(shdr);
+	free(StringTable);
 
-	
 	return scount;
 }
 
@@ -1996,7 +2011,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 * write original body of core file
 	 */	
 	if (write(fd, elfdesc->mem, st.st_size) != st.st_size) {
-		ffperror("4:write");
+		ffperror("4:write", __LINE__);
 		exit(-1);
 	}
 
@@ -2027,7 +2042,6 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 */
 	write(fd, memdesc->exe_path, strlen(memdesc->exe_path) + 1);
 
-	ffperror("building local section headers\n");
 	/*
 	 * Build section header table
 	 */
@@ -2035,7 +2049,6 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	
 	close(fd);
 	
-	ffperror("built local section headers\n");
 	/*
 	 * Now remap our new file to make further edits.
 	 */
@@ -2043,7 +2056,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	stat(outfile, &st);
 	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	if (mem == MAP_FAILED) {
-		ffperror("mmap");
+		ffperror("mmap", __LINE__);
 		return -1;
 	}
 
@@ -2304,14 +2317,15 @@ int main(int argc, char **argv)
 	 * /proc/$pid/mem and merge it into our corefile which is a pain
 	 * and after we do this, we must re-load the corefile again.
 	 */
- 	      
+ 	  
 	if (elfdesc->text_memsz > elfdesc->text_filesz) {
 		corefile = tmp_corefile == NULL ? corefile : tmp_corefile;
-		if (merge_texts_into_core((const char *)corefile, memdesc) < 0)
-        		fprintf(stderr, "Failed to merge text into corefile\n");
+		if (merge_texts_into_core((const char *)corefile, memdesc) < 0) {
+			ffperror("Failed to merge text into corefile", __LINE__);
+		}
         	elfdesc = load_core_file((const char *)corefile);
         	if (elfdesc == NULL) {
-        		fprintf(stderr, "Failed to parse remerged core file\n");
+        		ffperror("Failed to parse remerged core file", __LINE__);
                 	exit(-1);
         	}
 	}
