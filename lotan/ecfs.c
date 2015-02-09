@@ -485,7 +485,6 @@ ssize_t read_pmem(pid_t pid, uint8_t *ptr, unsigned long vaddr, size_t len)
 	ssize_t bytes = pread(fd, ptr, len, vaddr);
 	if (bytes != len) {
 		log_msg(__LINE__, "pread failed [read %d bytes]: %s", (int)bytes, strerror(errno));
-		fprintf(stderr, "pread failed [read %d bytes]: %s\n", (int)bytes, strerror(errno));
 		return -1;
 	}
 	return bytes;
@@ -1084,7 +1083,6 @@ int extract_dyntag_info(handle_t *handle)
                         case DT_GNU_HASH:
                                 smeta.hashVaddr = dyn[j].d_un.d_val;
                                 smeta.hashOff = elfdesc->textOffset + smeta.hashVaddr - elfdesc->textVaddr;
-				printf("hashvaddr: %lx hashoff: %lx\n", smeta.hashVaddr, smeta.hashOff);
 #if DEBUG
 				printf("hashVaddr: %lx hashOff: %lx\n", smeta.hashVaddr, smeta.hashOff);
 #endif
@@ -1988,7 +1986,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	ecfs_file->prstatus_offset = st.st_size;
 	ecfs_file->prstatus_size = notedesc->thread_count * sizeof(struct elf_prstatus);
 	ecfs_file->fdinfo_offset = ecfs_file->prstatus_offset + notedesc->thread_count * sizeof(struct elf_prstatus);
-	ecfs_file->fdinfo_size = get_fd_links(memdesc, &fdinfo) * sizeof(fd_info_t);
+	ecfs_file->fdinfo_size = memdesc->fdinfo_size;
 	ecfs_file->siginfo_offset = ecfs_file->fdinfo_offset + ecfs_file->fdinfo_size;
 	ecfs_file->siginfo_size = sizeof(siginfo_t);
 	ecfs_file->auxv_offset = ecfs_file->siginfo_offset + ecfs_file->siginfo_size;
@@ -2015,7 +2013,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	/*
 	 * write fdinfo structs
 	 */
-	write(fd, fdinfo, ecfs_file->fdinfo_size);
+	write(fd, memdesc->fdinfo, ecfs_file->fdinfo_size);
 
 	/*
 	 * write siginfo_t struct
@@ -2139,7 +2137,8 @@ int main(int argc, char **argv)
 	int i, j, ret, c;
 	char *corefile = NULL;
 	char *outfile = NULL;
-	
+	fd_info_t *fdinfo = NULL;
+
 	/*
 	 * When testing use:
 	 * ./ecfs -c corefile -o output.ecfs -p <pid>
@@ -2236,7 +2235,8 @@ int main(int argc, char **argv)
                 	exit(-1);
         	}
 		memdesc->task.pid = pid;
-		pull_unknown_shdr_sizes(pid);
+		pull_unknown_shdr_sizes(pid); // get size of certain shdrs from original exe
+		memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
 		memdesc->o_entry = get_original_ep(pid);
 	}
 
@@ -2293,6 +2293,7 @@ int main(int argc, char **argv)
                 	exit(-1);
         	}
 		memdesc->task.pid = pid;
+		memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
 		pull_unknown_shdr_sizes(pid);
 	}
 	fill_in_pstatus(memdesc, notedesc);

@@ -303,7 +303,9 @@ typedef struct memdesc {
 	size_t stack_args_len;
 	uint8_t *saved_auxv;
 	int pie;
-	unsigned long o_entry;
+	unsigned long o_entry; 
+	fd_info_t *fdinfo;
+	ssize_t fdinfo_size;
 } memdesc_t;
 
 typedef struct descriptor {
