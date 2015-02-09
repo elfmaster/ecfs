@@ -14,9 +14,11 @@ static int resolve_symbols(list_t **list, const char *path, unsigned long base)
 {
 	struct stat st;
 	int fd, ret;
+	char use_addend = 0;
 	uint8_t *mem;
 	ElfW(Ehdr) *ehdr;
 	ElfW(Shdr) *shdr;
+	ElfW(Phdr) *phdr;
 	ElfW(Sym) *symtab;
 	char *StringTable, *dynstr;
 	size_t i, symcount;
@@ -32,6 +34,15 @@ static int resolve_symbols(list_t **list, const char *path, unsigned long base)
 	
 	ehdr = (ElfW(Ehdr) *)mem;	
 	shdr = (ElfW(Shdr) *)&mem[ehdr->e_shoff];
+	phdr = (ElfW(Phdr) *)&mem[ehdr->e_phoff];
+	
+	for (i = 0; i < ehdr->e_phnum; i++) {
+		if (phdr[i].p_type == PT_LOAD) {
+			if (phdr[i].p_vaddr == 0)
+				use_addend++;
+			break;
+		}
+	}
 	StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
 
  	for (i = 0; i < ehdr->e_shnum; i++) {
@@ -49,7 +60,7 @@ static int resolve_symbols(list_t **list, const char *path, unsigned long base)
 	symvector[0].library = xstrdup(strchr(path, '/') + 1);
 
 	for (i = 0; i < symcount; i++) { 
-		symvector[i].value = symtab[i].st_value;
+		symvector[i].value = use_addend ? (symtab[i].st_value + base) : symtab[i].st_value;
 		symvector[i].size = symtab[i].st_size;
 		symvector[i].name = xstrdup(&dynstr[symtab[i].st_name]);
 	}

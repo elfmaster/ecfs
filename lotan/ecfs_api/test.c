@@ -45,7 +45,7 @@ int main(int argc, char **argv)
 	
 	
 	uint8_t *ptr;
-	ssize_t len = get_ptr_for_va(desc, 0x400000, &ptr);
+	ssize_t len = get_ptr_for_va(desc, desc->textVaddr, &ptr);
 	printf("%d bytes left for segment\n", (int)len);
 	for (i = 0; i < 16; i++)
 		printf("%02x ", ptr[i] & 0xff);
