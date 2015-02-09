@@ -84,18 +84,18 @@ elfdesc_t * load_core_file(const char *path)
 	elfdesc->path = xstrdup(path);
 
 	if ((fd = open(path, O_RDONLY)) < 0) {
-		perror("open");
+		log_msg(__LINE__, "open %s", strerror(errno));
 		return NULL;
 	}
 
 	if (fstat(fd, &st) < 0) {
-		perror("fstat");
+		log_msg(__LINE__, "fstat %s", strerror(errno));
 		return NULL;
 	}
 	
 	mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (mem == MAP_FAILED) {
-		perror("1:mmap");
+		log_msg(__LINE__, "mmap %s", strerror(errno));
 		exit(-1);
 	}
 
@@ -103,7 +103,7 @@ elfdesc_t * load_core_file(const char *path)
 	phdr = (ElfW(Phdr) *)&mem[ehdr->e_phoff];
 	
 	if (ehdr->e_type != ET_CORE) {
-		fprintf(stderr, "File %s is not an ELF core file. exiting with failure\n", path);
+		log_msg(__LINE__, "File %s is not an ELF core file. exiting with failure", path);
 		return NULL;
 	}
 	
@@ -239,13 +239,13 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 			textVaddr = memdesc->maps[i].base;
 	}
 	if (textVaddr == 0) {
-		ffperror("Could not find textvaddr\n", __LINE__);
+		log_msg(__LINE__, "(From merge_texts_into_core function) Could not find text address");
 		return -1;
 	}
 	
 	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, in, 0);
 	if (mem == MAP_FAILED) {
-		ffperror("mmap", __LINE__);
+		log_msg(__LINE__, "mmap %s", strerror(errno));
 		return -1;
 	}
 	ehdr = (ElfW(Ehdr) *)mem;
@@ -270,25 +270,19 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 		}
 	}
 	if (textVaddr == 0) {
-		ffperror("Failed to merge texts into core\n", __LINE__);
+		log_msg(__LINE__, "Failed to merge texts into core");
 		return -1;
 	}
 	if (write(out, mem, textOffset) < 0) {
-#if DEBUG
-		ffperror("write", __LINE__);
-#endif
+		log_msg(__LINE__, "write %s", strerror(errno));
 		return -1;
 	}
 	if (write(out, textseg, tlen) < 0) {
-#if DEBUG
-		ffperror("2:write", __LINE__);
-#endif
+		log_msg(__LINE__, "write %s", strerror(errno));
 		return -1;
 	}
 	if (write(out, &mem[dataOffset], st.st_size - (textOffset + 4096)) < 0) {
-#if DEBUG
-		ffperror("write", __LINE__);
-#endif
+		log_msg(__LINE__, "write %s", strerror(errno));
 		return -1;
 	}
 
@@ -297,7 +291,7 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 	close(in);
 	
 	if (rename(tmp, path) < 0) {
-		ffperror("rename", __LINE__);
+		log_msg(__LINE__, "rename %s", strerror(errno));
 		return -1;
 	}
 		
@@ -490,6 +484,7 @@ ssize_t read_pmem(pid_t pid, uint8_t *ptr, unsigned long vaddr, size_t len)
 	int fd = xopen(path, O_RDONLY);
 	ssize_t bytes = pread(fd, ptr, len, vaddr);
 	if (bytes != len) {
+		log_msg(__LINE__, "pread failed [read %d bytes]: %s", (int)bytes, strerror(errno));
 		fprintf(stderr, "pread failed [read %d bytes]: %s\n", (int)bytes, strerror(errno));
 		return -1;
 	}
@@ -711,8 +706,6 @@ static int get_maps(pid_t pid, mappings_t *maps, const char *path)
 		if (chp) 
 			*(char *)strchr(chp, '\n') = '\0';
 		if (chp && !strcmp(&chp[1], path)) {
-			//sprintf(errmsg, "%s is within %s\n", path, tmp);
-			//printf("%s is within %s\n", path, tmp);
                         if (!strstr(tmp, "---p")) {
                                 maps[lc].filename = xstrdup(strchr(tmp, '/'));
                                 maps[lc].elfmap++;
@@ -875,7 +868,7 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 	
 	memdesc->mapcount = get_map_count(pid);
         if (memdesc->mapcount < 0) {
-                printf("[!] failed to get mapcount from /proc/%d/maps\n", pid);
+                log_msg(__LINE__, "failed to get mapcount from /proc/%d/maps", pid);
                 return NULL;
         }
         memdesc->maps = (mappings_t *)heapAlloc(sizeof(mappings_t) * memdesc->mapcount);
@@ -886,7 +879,7 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 	memdesc->exe_path = get_exe_path(pid);
 
 	if (get_maps(pid, memdesc->maps, memdesc->path) < 0) {
-                printf("[!] failed to get data from /proc/%d/maps\n", pid);
+                log_msg(__LINE__, "failed to get data from /proc/%d/maps", pid);
                 return NULL;
         }
         
@@ -917,7 +910,7 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
         }
 	ssize_t tlen = get_segment_from_pmem(memdesc->text.base, memdesc, &memdesc->textseg);
         if (tlen < 0) {
-                fprintf(stderr, "get_segment_from_pmem() failed: %s\n", strerror(errno));
+		log_msg(__LINE__, "get_segment_from_pmem() failed: %s\n", strerror(errno));
                 return NULL;
         }
 	return memdesc;
@@ -961,7 +954,7 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 			text_base = memdesc->maps[i].base;
 
 	if (text_base == 0) {
-		printf("Unable to locate executable base necessary to find phdr's\n");
+		log_msg(__LINE__, "Unable to locate executable base address necessary to find phdr's");
 		return -1;
 	}
 	
@@ -969,7 +962,7 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 	fd = xopen(memdesc->exe_path, O_RDONLY);
 	mem = mmap(NULL, 8192, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (mem == MAP_FAILED) {
-		perror("4:mmap");
+		log_msg(__LINE__, "mmap %s", strerror(errno));
 		exit(-1);
 	}
  
@@ -1060,7 +1053,7 @@ int extract_dyntag_info(handle_t *handle)
 	}
 
 	if (elfdesc->dyn == NULL) {
-		fprintf(stderr, "Unable to find dynamic segment in core file, exiting...\n");
+		log_msg(__LINE__, "Unable to find dynamic segment in core file, exiting...");
 		return -1;
 	}
 	dyn = elfdesc->dyn;
@@ -1929,11 +1922,11 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         int e_shstrndx = scount - 1;
         for (i = 0; i < scount; i++) 
                 if (write(fd, (char *)&shdr[i], sizeof(ElfW(Shdr))) < 0)
-			ffperror("write", __LINE__);
+			log_msg(__LINE__, "write %s", strerror(errno));
         
         ssize_t b = write(fd, (char *)StringTable, stoffset);
 	if (b < 0) {
-		ffperror("write", __LINE__);
+		log_msg(__LINE__, "write %s", strerror(errno));
 		exit(-1);
 	}
         fsync(fd);
@@ -1942,13 +1935,13 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	fd = xopen(filepath, O_RDWR);
         
         if (fstat(fd, &st) < 0) {
-                ffperror("fstat", __LINE__);
+                log_msg(__LINE__, "fstat %s", strerror(errno));
                 exit(-1);
         }
 
         uint8_t *mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (mem == MAP_FAILED) {
-                ffperror("mmap", __LINE__);
+                log_msg(__LINE__, "mmap %s", strerror(errno));
                 exit(-1);
         }
 
@@ -2008,7 +2001,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 * write original body of core file
 	 */	
 	if (write(fd, elfdesc->mem, st.st_size) != st.st_size) {
-		ffperror("4:write", __LINE__);
+		log_msg(__LINE__, "write %s", strerror(errno));
 		exit(-1);
 	}
 
@@ -2053,7 +2046,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	stat(outfile, &st);
 	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	if (mem == MAP_FAILED) {
-		ffperror("mmap", __LINE__);
+		log_msg(__LINE__, "mmap %s", strerror(errno));
 		return -1;
 	}
 
@@ -2071,9 +2064,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	
 	ret = build_local_symtab_and_finalize(outfile, handle);
 	if (ret < 0) 
-#if DEBUG
-		fprintf(stderr, "local symtab reconstruction failed\n");
-#endif	
+		log_msg(__LINE__, "local symtab reconstruction failed");
 
 	/* Open just once more to fill in the dynamic symbol table values */
 
@@ -2093,7 +2084,7 @@ ElfW(Addr) get_original_ep(int pid)
 	xfstat(fd, &st);
 	uint8_t *mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (mem == MAP_FAILED) {
-		perror("mmap");
+		log_msg(__LINE__, "mmap");
 		return -1;
 	}
 	ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
@@ -2195,15 +2186,15 @@ int main(int argc, char **argv)
 	
 	if (opts.use_stdin == 0) {
 		if (corefile == NULL) {
-			printf("Must specify a corefile with -c\n");
+			log_msg(__LINE__, "Must specify a corefile with -c");
 			exit(0);
 		}
 		if (pid == 0) {
-			printf("Must specify a pid with -p\n");
+			log_msg(__LINE__, "Must specify a pid with -p");
 			exit(0);
 		}
 		if (outfile == NULL) {
-			printf("Did not specify an output file, defaulting to use 'ecfs.out'\n");
+			log_msg(__LINE__, "Did not specify an output file, defaulting to use 'ecfs.out'");
 			outfile = xfmtstrdup("%s/ecfs.out", ECFS_CORE_DIR);		
 		}
 	}
@@ -2213,35 +2204,35 @@ int main(int argc, char **argv)
 	 */
 	
     	if (setrlimit(RLIMIT_CORE, &limit_core) < 0) {
-		perror("setrlimit");
+		log_msg(__LINE__, "setrlimit %s", strerror(errno));
 		exit(-1);
 	}
 	
 	prctl(PR_SET_DUMPABLE, 0);
 
 	if (opts.use_stdin) {
-		printf("Using stdin, outfile is:%s\n", outfile);
+		log_msg(__LINE__, "Using stdin, outfile is:%s", outfile);
 		/*
 		 * If we are getting core directly from the kernel then we must
 		 * read /proc/<pid>/ before we read the corefile. The process stays
 		 * open as long as the corefile hasn't been read yet.
 	  	 */
         	if (exename == NULL) {
-			fprintf(stderr, "Must specify exename of process when using stdin mode; supplied by %%e of core_pattern\n");
+			log_msg(__LINE__, "Must specify exename of process when using stdin mode; supplied by %%e of core_pattern");
 			exit(-1);
 		}
 		if (pid == 0) {
-                        printf("Must specify a pid with -p\n");
+                        log_msg(__LINE__, "Must specify a pid with -p");
                         exit(0);
                 }
                 if (outfile == NULL) {
-                        printf("Did not specify an output file, defaulting to use 'ecfs.out'\n");
+                        log_msg(__LINE__, "Did not specify an output file, defaulting to use 'ecfs.out'");
                         outfile = xfmtstrdup("%s/ecfs.out", ECFS_CORE_DIR);
                 }
 		
 		memdesc = build_proc_metadata(pid, notedesc);
         	if (memdesc == NULL) {
-                	fprintf(stderr, "Failed to retrieve process metadata\n");
+                	log_msg(__LINE__, "Failed to retrieve process metadata");
                 	exit(-1);
         	}
 		memdesc->task.pid = pid;
@@ -2251,7 +2242,7 @@ int main(int argc, char **argv)
 
 #if DEBUG
 	if (corefile)
-		printf("Loading core file: %s\n", corefile);
+		log_msg(__LINE__, "Loading core file: %s", corefile);
 #endif
 	switch(opts.use_stdin) {
 		case 0:
@@ -2260,7 +2251,7 @@ int main(int argc, char **argv)
 			 */
 			elfdesc = load_core_file((const char *)corefile);
 			if (elfdesc == NULL) {
-				fprintf(stderr, "Failed to parse core file\n");
+				log_msg(__LINE__, "Failed to parse core file");
 				exit(-1);
 			}
 			break;
@@ -2280,7 +2271,7 @@ int main(int argc, char **argv)
 	 */
 	notedesc = (notedesc_t *)parse_notes_area(elfdesc);
 	if (notedesc == NULL) {
-		fprintf(stderr, "Failed to parse ELF notes segment\n");
+		log_msg(__LINE__, "Failed to parse ELF notes segment\n");
 		exit(-1);
 	}
 	
@@ -2298,7 +2289,7 @@ int main(int argc, char **argv)
 		memdesc = build_proc_metadata(pid, notedesc);
         	memdesc->o_entry = get_original_ep(pid); // get original entry point
 		if (memdesc == NULL) {
-                	fprintf(stderr, "Failed to retrieve process metadata\n");
+                	log_msg(__LINE__, "Failed to retrieve process metadata");
                 	exit(-1);
         	}
 		memdesc->task.pid = pid;
@@ -2319,12 +2310,10 @@ int main(int argc, char **argv)
 		corefile = tmp_corefile == NULL ? corefile : tmp_corefile;
 		if (merge_texts_into_core((const char *)corefile, memdesc) < 0) {
 			log_msg(__LINE__, "Failed to merge text into core file");
-			ffperror("Failed to merge text into corefile", __LINE__);
 		}
         	elfdesc = load_core_file((const char *)corefile);
         	if (elfdesc == NULL) {
         		log_msg(__LINE__, "Failed to parse text-merged core file");	
-			ffperror("Failed to parse remerged core file", __LINE__);
                 	exit(-1);
         	}
 	}
@@ -2343,7 +2332,7 @@ int main(int argc, char **argv)
 	 * to get more granular segment information.
 	 */
 	if (parse_orig_phdrs(elfdesc, memdesc, notedesc) < 0) {
-		fprintf(stderr, "Failed to parse program headers in memory\n");
+		log_msg(__LINE__, "Failed to parse program headers in memory");
 		exit(-1);
 	}
 
@@ -2374,7 +2363,6 @@ int main(int argc, char **argv)
 #if DEBUG
 	for (i = 0; i < notedesc->lm_files->libcount; i++)
 		log_msg(__LINE__, "libname: %s addr: %lx\n", notedesc->lm_files->libs[i].name, notedesc->lm_files->libs[i].addr);
-		printf("libname: %s addr: %lx\n", notedesc->lm_files->libs[i].name, notedesc->lm_files->libs[i].addr);
 #endif
 	/*
 	 * We get a plethora of information about where certain
@@ -2383,7 +2371,7 @@ int main(int argc, char **argv)
 	 */
 	ret = extract_dyntag_info(handle);
 	if (ret < 0) {
-		fprintf(stderr, "Failed to extract dynamic segment information\n");
+		log_msg(__LINE__, "Failed to extract dynamic segment information");
 		exit(-1);
 	}
 
@@ -2394,7 +2382,7 @@ int main(int argc, char **argv)
 	list_t *list_head;
 	ret = fill_dynamic_symtab(&list_head, notedesc->lm_files);
 	if (ret < 0) 
-		printf("Unable to load dynamic symbol table with runtime values\n");
+		log_msg(__LINE__, "Unable to load dynamic symbol table with runtime values");
 	
 	/*
 	 * Convert the core file into an actual ECFS file and write it
@@ -2402,7 +2390,7 @@ int main(int argc, char **argv)
 	 */
 	ret = core2ecfs(outfile, handle);
 	if (ret < 0) {
-		fprintf(stderr, "Failed to transform core file '%s' into ecfs\n", argv[2]);
+		log_msg(__LINE__, "Failed to transform core file '%s' into ecfs", argv[2]);
 		exit(-1);
 	}
 	
@@ -2416,7 +2404,7 @@ int main(int argc, char **argv)
 	 */
 	ret = store_dynamic_symvals(list_head, outfile);
 	if (ret < 0) 
-		printf("Unable to store runtime values into dynamic symbol table\n");
+		log_msg(__LINE__, "Unable to store runtime values into dynamic symbol table");
 
 }
 
