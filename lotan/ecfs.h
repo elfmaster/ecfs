@@ -24,6 +24,10 @@
 #include "dwarf.h"
 #include "libdwarf.h"
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #define HUGE_ALLOC(size)  \
       mmap(0, (size), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0)
 
@@ -91,9 +95,16 @@ struct fde_func_data {		/* For eh_frame.c */
 #define MAX_PATH 512
 #endif
 
-typedef struct fd_info {
+typedef struct fdinfo {
 	int fd;
 	char path[MAX_PATH];
+	struct {
+		struct in_addr src_addr;
+		struct in_addr dst_addr;
+		uint16_t src_port;
+		uint16_t dst_port;
+	} socket;
+	char net;
 } fd_info_t;
 
 struct section_meta {

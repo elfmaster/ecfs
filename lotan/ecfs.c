@@ -804,6 +804,30 @@ static int get_maps(pid_t pid, mappings_t *maps, const char *path)
         return 0;
 }
 
+static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
+{
+	FILE *fp = fopen("/proc/net/tcp", "r");
+	char buf[512], local_addr[64], rem_addr[64];
+	char more[512];
+	int num, local_port, rem_port, d, state, timer_run, uid, timeout;
+	unsigned long rxq, txq, time_len, retr, _inode;
+	fgets(buf, sizeof(buf), fp);
+	while (fgets(buf, sizeof(buf), fp)) {
+		sscanf(buf, "%d: %64[0-9A-Fa-f]:%X %64[0-9A-Fa-f]:%X %X %lX:%lX %X:%lX %lX %d %d %ld %512s\n",
+			&d, local_addr, &local_port, rem_addr, &rem_port, &state,
+			&txq, &rxq, &timer_run, &time_len, &retr, &uid, &timeout, &_inode, more);
+		log_msg(__LINE__, "comparing inodes %u and %u\n", _inode, inode);
+		if (_inode == inode) {
+			sscanf(local_addr, "%X", &fdinfo->socket.src_addr.s_addr);
+			sscanf(rem_addr, "%X", &fdinfo->socket.dst_addr.s_addr);
+			fdinfo->socket.src_port = local_port;
+			fdinfo->socket.dst_port = rem_port;
+			fdinfo->net = 1;
+			log_msg(__LINE__, "setting net");
+		}
+	}
+}
+
 static int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
 {
 	DIR *dp;
@@ -811,6 +835,9 @@ static int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
 	char tmp[256];
 	char *dpath = xfmtstrdup("/proc/%d/fd", memdesc->task.pid);
 	*fdinfo = (fd_info_t *)heapAlloc(sizeof(fd_info_t) * 256);
+	fd_info_t fdinfo_tmp;
+	unsigned int inode;
+	char *p;
 	int fdcount;
  	
         for (fdcount = 0, dp = opendir(dpath); dp != NULL;) {
@@ -821,6 +848,18 @@ static int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
 			continue;
 		snprintf(tmp, sizeof(tmp), "%s/%s", dpath, dptr->d_name); // i.e /proc/pid/fd/3
 		readlink(tmp, (*fdinfo)[fdcount].path, MAX_PATH);
+		if (strstr((*fdinfo)[fdcount].path, "socket")) {
+			p = strchr((*fdinfo)[fdcount].path, ':') + 2;
+			if (p == NULL) {
+				fdcount++;
+				continue;
+			}
+			inode = atoi(p);
+			log_msg(__LINE__, "inode from socket: %u\n", inode);
+			fill_sock_info(&fdinfo_tmp, inode);
+			if (fdinfo_tmp.net)
+				memcpy(&(*fdinfo)[fdcount].socket, &fdinfo_tmp.socket, sizeof(fdinfo_tmp.socket));
+		}
 		(*fdinfo)[fdcount].fd = atoi(dptr->d_name);
 		fdcount++;
 	}
