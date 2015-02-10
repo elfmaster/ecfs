@@ -19,6 +19,9 @@
 #include <sys/procfs.h>         /* struct elf_prstatus */
 #include <sys/resource.h>
 #include <stdio.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 typedef struct ecfs_elf {
          uint8_t *mem;          /* raw memory pointer */
@@ -59,10 +62,18 @@ typedef struct ecfs_sym {
 #ifndef MAX_PATH
 #define MAX_PATH 512
 #endif
-struct fdinfo {
-	int fd;
-	char file_path[MAX_PATH];
-};
+
+typedef struct fdinfo {
+        int fd;
+        char path[MAX_PATH];
+        struct {
+                int src_port;
+                int dst_port;
+                struct in_addr src_addr;
+                struct in_addr dst_addr;
+        } socket;
+        char net;
+} fd_info_t;
 
 void * heapAlloc(size_t);
 
