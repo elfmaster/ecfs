@@ -177,17 +177,10 @@ the binary. On failure NULL is returned.
 ECFS stores information about open file descriptors in an ELF section named .fdinfo which contains
 an array of structures named 'struct fdinfo'
 
-typedef struct fd_info {
-        int fd;
-        char path[MAX_PATH];
-        struct {
-                int src_port;
-                int dst_port;
-                struct in_addr src_addr;
-                struct in_addr dst_addr;
-        } socket;
-	bool net;
-} fd_info_t;
+struct fdinfo {
+	int fd;
+	char file_path[MAX_PATH];
+}; 
 
 -SYNOPSIS
 	

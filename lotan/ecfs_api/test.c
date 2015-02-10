@@ -32,14 +32,9 @@ int main(int argc, char **argv)
 
 	ret = get_fd_info(desc, &fdinfo);
 	
-	for (i = 0; i < ret; i++) {
-	 	printf("fd: %d path: %s\n", fdinfo[i].fd, fdinfo[i].path);
-		if (fdinfo[i].net) {
-			printf("src addr: %s:%d\n", inet_ntoa(fdinfo[i].socket.src_addr), fdinfo[i].socket.src_port);
-			printf("dst addr: %s:%d\n", inet_ntoa(fdinfo[i].socket.dst_addr), fdinfo[i].socket.dst_port);
-		}
-		printf("\n");
-	}
+	for (i = 0; i < ret; i++)
+		printf("fd: %d path: %s\n", fdinfo[i].fd, fdinfo[i].file_path);
+	
 	ret = get_dynamic_symbols(desc, &dsyms);
 	for (i = 0; i < ret; i++)
 		printf("dynamic symbol: %s\n", &desc->dynstr[dsyms[i].nameoffset]);
