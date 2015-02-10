@@ -60,6 +60,7 @@ struct {
 	ssize_t init_size;
 	ssize_t fini_size;
 	ssize_t got_size;
+	ssize_t ehframe_size;
 } global_hacks;
 
 ElfW(Addr) get_original_ep(int);
@@ -264,26 +265,6 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
 	int tc, found_text;
 	
-	/*
-	for (found_text = 0, i = 0; i < ehdr->e_phnum; i++) {
-		if (phdr[i].p_type == PT_NOTE) {
-			tc = i + 1;	
-			textOffset = phdr[tc].p_offset;
-			dataOffset = phdr[tc + 1].p_offset; // data segment is always i + 1 after the text
-			textVaddr = phdr[tc].p_vaddr;
-			textSize = phdr[tc].p_memsz; // get the memory size of text
-			phdr[tc].p_filesz = phdr[tc].p_memsz; // make filesz same as memsz
-			found_text++;
-		} 
-		else
-		if (found_text) {
-			if (i <= tc)
-				continue;
-			log_msg(__LINE__, "increasing offset");
-			phdr[i].p_offset += (tlen - 4096); // we must push the other segments forward to make room for the text
-		}
-	}
-	*/
 	for (found_text = 0, i = 0; i < ehdr->e_phnum; i++) {
 		if (phdr[i].p_vaddr <= textVaddr && phdr[i].p_vaddr + phdr[i].p_memsz > textVaddr) {
 			textOffset = phdr[i].p_offset;
@@ -1695,7 +1676,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         shdr[scount].sh_link = 0;
         shdr[scount].sh_entsize = 0;
         shdr[scount].sh_size = elfdesc->ehframe_Size;
-        shdr[scount].sh_addralign = 16;
+        shdr[scount].sh_addralign = 4;
         shdr[scount].sh_name = stoffset;
         strcpy(&StringTable[stoffset], ".eh_frame_hdr");
         stoffset += strlen(".eh_frame_hdr") + 1;
@@ -1716,8 +1697,9 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         shdr[scount].sh_info = 0;
         shdr[scount].sh_link = 0;
         shdr[scount].sh_entsize = 0;
-        shdr[scount].sh_size = (ElfW(Off))((elfdesc->ehframe_Vaddr + elfdesc->ehframe_Size) - elfdesc->textVaddr);
-        shdr[scount].sh_addralign = 16;
+        size_t ehsz = (ElfW(Off))((elfdesc->ehframe_Vaddr + elfdesc->ehframe_Size) - elfdesc->textVaddr);
+        shdr[scount].sh_size = global_hacks.ehframe_size <= 0 ? ehsz : global_hacks.ehframe_size;
+	shdr[scount].sh_addralign = 8;
         shdr[scount].sh_name = stoffset;
         strcpy(&StringTable[stoffset], ".eh_frame");
         stoffset += strlen(".eh_frame") + 1;
@@ -2246,6 +2228,7 @@ void pull_unknown_shdr_sizes(int pid)
 	global_hacks.init_size = get_original_shdr_size(pid, ".init");
 	global_hacks.fini_size = get_original_shdr_size(pid, ".fini");
 	global_hacks.got_size = get_original_shdr_size(pid, ".got.plt");
+	global_hacks.ehframe_size = get_original_shdr_size(pid, ".eh_frame");
 }
 
 

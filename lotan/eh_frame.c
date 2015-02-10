@@ -51,19 +51,19 @@ static struct fde_func_data * parse_frame_data(Dwarf_Debug dbg)
 
 	res = dwarf_get_fde_list_eh(dbg, &cie_data, &cie_element_count, &fde_data, &fde_element_count, &error);
     	if(res == DW_DLV_NO_ENTRY) {
-   		fprintf(stderr, "eh_frame parsing: No frame data present ");
+   		log_msg(__LINE__, "eh_frame parsing: No frame data present");
         	return NULL;
     	}
 
     	if(res == DW_DLV_ERROR) {
-        	fprintf(stderr, "eh_frame parsing: Error reading frame data ");
+        	log_msg(__LINE__, "eh_frame parsing: Error reading frame data");
         	return NULL;
     	}
 	
 	
 	fndata = malloc(sizeof(struct fde_func_data) * fde_element_count);
 	if (fndata == NULL) {
-		perror("malloc");
+		log_msg(__LINE__, "malloc %s", strerror(errno));
 		return NULL;
 	} 
 	
@@ -101,7 +101,7 @@ int get_func_data(Dwarf_Debug dbg, Dwarf_Fde fde, int fdenum, struct fde_func_da
 	res = dwarf_get_fde_range(fde, &lowpc, &func_length, &fde_bytes, &fde_byte_length, 
 				  &cie_offset, &cie_index, &fde_offset, &error);
 	if (res != DW_DLV_OK) {
-		fprintf(stderr, "Failed to get fde range\n");
+		log_msg(__LINE__, "Failed to get fde range");
 		return -1;
 	}
 		
@@ -136,12 +136,12 @@ int get_all_functions(const char *filepath, struct fde_func_data **funcs)
 	struct fde_func_data *fndata;
 
 	if ((fd = open(filepath, O_RDONLY)) < 0) {
-		perror("open");
+		log_msg(__LINE__, "open %s", strerror(errno));
 		return -1;
 	}
 
 	if ((res = dwarf_init(fd, /*DW_DLC_REA*/ 0, errhand, errarg, &dbg, &error)) != DW_DLV_OK) {
-		fprintf(stderr, "dwarf_init() failed\n");
+		log_msg(__LINE__, "dwarf_init() failed");
 		return -1;
 	}
 
@@ -154,18 +154,18 @@ int get_all_functions(const char *filepath, struct fde_func_data **funcs)
 	
 	res = dwarf_get_fde_list_eh(dbg, &cie_data, &cie_element_count, &fde_data, &fde_element_count, &error);
         if(res == DW_DLV_NO_ENTRY) {
-                fprintf(stderr, "eh_frame parsing err1: No frame data present\n");
+                log_msg(__LINE__, "eh_frame parsing err1: No frame data present");
                 return -1;
         }
 	
 	if ((*funcs = parse_frame_data(dbg)) == NULL) {
-		fprintf(stderr, "eh_frame parsing err2: parse_frame_data() failed\n");
+		log_msg(__LINE__, "eh_frame parsing err2: parse_frame_data() failed");
 		return -1;
 	}
 	fndata = *funcs;
 	res = dwarf_finish(dbg, &error);
 	if(res != DW_DLV_OK) 
-        	fprintf(stderr, "eh_frame parsing err3: dwarf_finish failed!\n");
+        	log_msg(__LINE__, "eh_frame parsing err3: dwarf_finish failed");
 
 	close(fd);
     	
