@@ -114,6 +114,11 @@ elfdesc_t * load_core_file(const char *path)
 		if (phdr[i].p_type == PT_NOTE) {
 			nhdr = (ElfW(Nhdr) *)&mem[phdr[i].p_offset];
 			elfdesc->noteSize = phdr[i].p_filesz;
+			/*
+			 * i + 1 will NOT be the text if this is a pie
+			 * executable. So we deal with this case at a 
+			 * later point in main()
+			 */
 			elfdesc->text_filesz = phdr[i + 1].p_filesz;
 			elfdesc->text_memsz = phdr[i + 1].p_memsz;
 			break;
@@ -204,6 +209,7 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
         struct stat st;
         ssize_t nread;
 	int in, out, i = 0;
+	int data_index;
 
 	in = xopen(path, O_RDWR);
 	xfstat(in, &st);
@@ -231,18 +237,24 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 	 */
 	uint8_t *textseg = memdesc->textseg;
 	ssize_t tlen = (ssize_t)memdesc->text.size;
+	log_msg(__LINE__, "textlen: %u\n", tlen);
+
 	/*
 	 * Get textVaddr as it pertains to the mappings
 	 */
+	/*
 	for (textVaddr = 0, i = 0; i < memdesc->mapcount; i++) {
 		if (memdesc->maps[i].textbase)
 			textVaddr = memdesc->maps[i].base;
 	}
+	*/
+	textVaddr = memdesc->text.base;
 	if (textVaddr == 0) {
 		log_msg(__LINE__, "(From merge_texts_into_core function) Could not find text address");
 		return -1;
 	}
-	
+	log_msg(__LINE__, "textvaddr: %lx\n", textVaddr);
+
 	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, in, 0);
 	if (mem == MAP_FAILED) {
 		log_msg(__LINE__, "mmap %s", strerror(errno));
@@ -251,7 +263,8 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 	ehdr = (ElfW(Ehdr) *)mem;
 	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
 	int tc, found_text;
-	/* Text is right after the note segment */
+	
+	/*
 	for (found_text = 0, i = 0; i < ehdr->e_phnum; i++) {
 		if (phdr[i].p_type == PT_NOTE) {
 			tc = i + 1;	
@@ -266,9 +279,31 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 		if (found_text) {
 			if (i <= tc)
 				continue;
+			log_msg(__LINE__, "increasing offset");
 			phdr[i].p_offset += (tlen - 4096); // we must push the other segments forward to make room for the text
 		}
 	}
+	*/
+	for (found_text = 0, i = 0; i < ehdr->e_phnum; i++) {
+		if (phdr[i].p_vaddr <= textVaddr && phdr[i].p_vaddr + phdr[i].p_memsz > textVaddr) {
+			textOffset = phdr[i].p_offset;
+			dataOffset = phdr[i + 1].p_offset;	// data segment is always i + 1 after text
+			textVaddr = phdr[i].p_vaddr;
+			textSize = phdr[i].p_memsz;	    // get memsz of text
+			phdr[i].p_filesz = phdr[i].p_memsz; // make filesz same as memsz
+			found_text++;
+			data_index = i + 1;
+			phdr[data_index].p_offset += (tlen - 4096);
+		}
+		else
+		if (found_text) {
+			if (i == data_index) 	
+				continue;
+			log_msg(__LINE__, "increasing offset of segment index %i", i);
+			phdr[i].p_offset += (tlen - 4096); // we must push the other segments forward to make room for whole text image
+		}
+	}
+				
 	if (textVaddr == 0) {
 		log_msg(__LINE__, "Failed to merge texts into core");
 		return -1;
@@ -462,6 +497,54 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 	}
 
 	return notedesc;
+}
+
+static  int check_for_pie(int pid)
+{
+	int i;
+	uint8_t *mem;
+	struct stat st;
+	
+	log_msg(__LINE__, "in check_for_pie");
+	char *path = xfmtstrdup("/proc/%d/exe", pid);
+	int fd = xopen(path, O_RDONLY);
+	fstat(fd, &st);
+	
+	mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (mem == MAP_FAILED) {
+		log_msg(__LINE__, "mmap %s", strerror(errno));
+		exit(-1);
+	}
+	log_msg(__LINE__, "check_for_pie mmap succeeded");
+	free(path);
+	ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
+	ElfW(Phdr) *phdr = (ElfW(Phdr) *)&mem[ehdr->e_phoff];
+	for (i = 0; i < ehdr->e_phnum; i++) {
+		if (phdr[i].p_type == PT_LOAD) {
+			if (phdr[i].p_flags & PF_X) {
+				log_msg(__LINE__, "check_for_pie found text at %lx\n", phdr[i].p_vaddr);
+				if (phdr[i].p_vaddr == 0)
+					return 1;
+			}
+		}
+	}
+	return 0;
+}
+	
+static void get_text_phdr_size_with_hint(elfdesc_t *elfdesc, unsigned long hint)
+{
+	ElfW(Phdr) *phdr = elfdesc->phdr;
+	int i;
+	
+	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
+		if (hint >= phdr[i].p_vaddr && hint < phdr[i].p_vaddr + phdr[i].p_memsz) {
+			log_msg(__LINE__, "setting filesz %lx memsz %lx\n", phdr[i].p_filesz, phdr[i].p_memsz);
+			elfdesc->text_filesz = phdr[i].p_filesz;
+			elfdesc->text_memsz = phdr[i].p_memsz;
+			break;
+		}
+	}
+
 }
 
 static ssize_t ptrace_get_text_mapping(memdesc_t *memdesc, elfdesc_t *elfdesc, uint8_t **ptr)
@@ -946,6 +1029,7 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 			memdesc->text.size = memdesc->maps[i].size;
 		}
         }
+	log_msg(__LINE__, "text base: %lx\n", memdesc->text.base);
 	ssize_t tlen = get_segment_from_pmem(memdesc->text.base, memdesc, &memdesc->textseg);
         if (tlen < 0) {
 		log_msg(__LINE__, "get_segment_from_pmem() failed: %s\n", strerror(errno));
@@ -954,6 +1038,7 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 	return memdesc;
 	
 }
+
 /*
  * This function parses the original phdr's which it must get using
  * ptrace. This is the only part where we use ptrace() and we should
@@ -2173,7 +2258,7 @@ int main(int argc, char **argv)
 	notedesc_t *notedesc = NULL;
 	handle_t *handle = alloca(sizeof(handle_t));
 	pid_t pid = 0;
-	int i, j, ret, c;
+	int i, j, ret, c, pie;
 	char *corefile = NULL;
 	char *outfile = NULL;
 	fd_info_t *fdinfo = NULL;
@@ -2274,6 +2359,7 @@ int main(int argc, char **argv)
                 	exit(-1);
         	}
 		memdesc->task.pid = pid;
+		pie = check_for_pie(pid);
 		pull_unknown_shdr_sizes(pid); // get size of certain shdrs from original exe
 		memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
 		memdesc->o_entry = get_original_ep(pid);
@@ -2301,7 +2387,7 @@ int main(int argc, char **argv)
 			elfdesc = load_core_file_stdin();
 			break;
 	}
-
+	
 	/*
 	 * Retrieve 'struct elf_prstatus' and other structures
 	 * that contain vital information (Such as registers).
@@ -2334,9 +2420,22 @@ int main(int argc, char **argv)
 		memdesc->task.pid = pid;
 		memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
 		pull_unknown_shdr_sizes(pid);
+		pie = check_for_pie(pid);
 	}
 	fill_in_pstatus(memdesc, notedesc);
-
+	
+	log_msg(__LINE__, "check_for_pie returned %d", pie);
+	if (pie > 0) {
+		unsigned long text_base = lookup_text_base(memdesc, notedesc->nt_files);
+		if (text_base == 0) {
+			log_msg(__LINE__, "Failed to locate text base address");
+			goto done;
+		}
+		unsigned long hint = text_base;
+		log_msg(__LINE__, "h0h0 text base: %lx", text_base);
+		get_text_phdr_size_with_hint(elfdesc, hint);
+	}
+	
 	/*
 	 * XXX the linux kernel only dumps 4096 bytes of any code segment
 	 * in order to save space, and this is generally OK since the code
@@ -2345,9 +2444,9 @@ int main(int argc, char **argv)
 	 * /proc/$pid/mem and merge it into our corefile which is a pain
 	 * and after we do this, we must re-load the corefile again.
 	 */
- 	  
 	if (elfdesc->text_memsz > elfdesc->text_filesz) {
 		corefile = tmp_corefile == NULL ? corefile : tmp_corefile;
+		log_msg(__LINE__, "merging text into core");
 		if (merge_texts_into_core((const char *)corefile, memdesc) < 0) {
 			log_msg(__LINE__, "Failed to merge text into core file");
 		}
@@ -2371,11 +2470,12 @@ int main(int argc, char **argv)
 	 * attach to process with ptrace and parse original phdr table
 	 * to get more granular segment information.
 	 */
+	
 	if (parse_orig_phdrs(elfdesc, memdesc, notedesc) < 0) {
 		log_msg(__LINE__, "Failed to parse program headers in memory");
 		exit(-1);
 	}
-
+	
 	/*
 	 * Combine all handles into 1 (Should work this into the code earlier on)
 	 */
@@ -2445,6 +2545,12 @@ int main(int argc, char **argv)
 	ret = store_dynamic_symvals(list_head, outfile);
 	if (ret < 0) 
 		log_msg(__LINE__, "Unable to store runtime values into dynamic symbol table");
+
+done: 
+ 	if (opts.use_stdin)
+         	unlink(elfdesc->path);
+        if (tmp_corefile) // incase we had to re-write file and mege in text
+                unlink(tmp_corefile);
 
 }
 
