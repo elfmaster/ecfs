@@ -1,0 +1,26 @@
+SYNOPSIS - Extended core file snapshot technology-
+
+The $CWD contains the source code for the ./ecfs program
+which is the primary component. This program is invoked by
+the kernel (through /proc/sys/kernel/core_pattern) to transform
+core files into ecfs files. 
+
+The ecfs_api directory contains a library (still in the works)
+that makes parsing ecfs files very easy.
+
+INSTALL -
+
+To build ecfs type:
+make
+
+* Then as root run (not sudo) *
+./setup.sh
+
+After this, you should observe that when a program crashes it creates
+an ECFS file in /opt/ecfs/cores/<some_file>.pid
+
+These files are of type ET_NONE so that objdump can read the section
+headers, but if you want to use the file as a core file mark it as
+ET_CORE before using with GDB.
+
+- elfmaster[at]zoho.com
