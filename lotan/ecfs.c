@@ -176,7 +176,7 @@ elfdesc_t * load_core_file_stdin(void)
         	bytes += nread;
 		bw = write(file, buf, nread);
 		if (bw < 0) {
-			perror("write");
+			log_msg(__LINE__, "write %s", strerror(errno));
 			exit(-1);
 		}
 		syncfs(file);
@@ -238,7 +238,6 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 	 */
 	uint8_t *textseg = memdesc->textseg;
 	ssize_t tlen = (ssize_t)memdesc->text.size;
-	log_msg(__LINE__, "textlen: %u\n", tlen);
 
 	/*
 	 * Get textVaddr as it pertains to the mappings
@@ -280,7 +279,6 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 		if (found_text) {
 			if (i == data_index) 	
 				continue;
-			log_msg(__LINE__, "increasing offset of segment index %i", i);
 			phdr[i].p_offset += (tlen - 4096); // we must push the other segments forward to make room for whole text image
 		}
 	}
@@ -496,7 +494,6 @@ static  int check_for_pie(int pid)
 		log_msg(__LINE__, "mmap %s", strerror(errno));
 		exit(-1);
 	}
-	log_msg(__LINE__, "check_for_pie mmap succeeded");
 	free(path);
 	ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
 	ElfW(Phdr) *phdr = (ElfW(Phdr) *)&mem[ehdr->e_phoff];
@@ -625,7 +622,7 @@ static ssize_t get_original_shdr_size(int pid, const char *name)
         xfstat(fd, &st);
         uint8_t *mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
         if (mem == MAP_FAILED) {
-                perror("3:mmap");
+                log_msg(__LINE__, "mmap %s", strerror(errno));
                 return -1;
         }
         ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
@@ -880,18 +877,16 @@ static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
 		sscanf(buf, "%d: %64[0-9A-Fa-f]:%X %64[0-9A-Fa-f]:%X %X %lX:%lX %X:%lX %lX %d %d %ld %512s\n",
 			&d, local_addr, &local_port, rem_addr, &rem_port, &state,
 			&txq, &rxq, &timer_run, &time_len, &retr, &uid, &timeout, &_inode, more);
-		log_msg(__LINE__, "comparing inodes %u and %u\n", _inode, inode);
 		if (_inode == inode) {
-			log_msg(__LINE__, "inode comparisong made");
+			log_msg(__LINE__, "inode match");
 			sscanf(local_addr, "%X", &(fdinfo->socket.src_addr.s_addr));
 			sscanf(rem_addr, "%X", &(fdinfo->socket.dst_addr.s_addr));
 			fdinfo->socket.src_port = local_port;
 			fdinfo->socket.dst_port = rem_port;
 			fdinfo->net = NET_TCP;
-			log_msg(__LINE__, "setting net TCP");
-			goto out;
 		}
 	}	/* Try for UDP if we don't find the socket inode in TCP */
+	/*
 	fclose(fp);
 	fp = fopen("/proc/net/udp", "r");
 	fgets(buf, sizeof(buf), fp);
@@ -901,7 +896,7 @@ static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
                         &txq, &rxq, &timer_run, &time_len, &retr, &uid, &timeout, &_inode, more);
                 log_msg(__LINE__, "comparing inodes %u and %u\n", _inode, inode);
                 if (_inode == inode) {
-                        log_msg(__LINE__, "inode comparisong made");
+                        log_msg(__LINE__, "inode match");
                         sscanf(local_addr, "%X", &(fdinfo->socket.src_addr.s_addr));
                         sscanf(rem_addr, "%X", &(fdinfo->socket.dst_addr.s_addr));
                         fdinfo->socket.src_port = local_port;
@@ -911,6 +906,7 @@ static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
                 }
         }
 out:
+	*/
 	fclose(fp);
 }
 
@@ -976,6 +972,7 @@ char * get_exe_path(int pid)
 {
 	char *path = xfmtstrdup("/proc/%d/exe", pid);
 	char *ret = (char *)heapAlloc(MAX_PATH);
+	memset(ret, 0, MAX_PATH); // for null termination padding
 	readlink(path, ret, MAX_PATH);
 	free(path);
 	return ret;
@@ -1006,7 +1003,7 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
         
 	memdesc->path = exename; // supplied by core_pattern %e
 	memdesc->exe_path = get_exe_path(pid);
-
+	
 	if (get_maps(pid, memdesc->maps, memdesc->path) < 0) {
                 log_msg(__LINE__, "failed to get data from /proc/%d/maps", pid);
                 return NULL;
@@ -1068,6 +1065,7 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 	ElfW(Ehdr) *ehdr;
 	ElfW(Phdr) *phdr;
 	ElfW(Addr) text_base = 0;
+	struct stat st;
 	int i;
 
 	/*
@@ -1079,19 +1077,22 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 	 * the maps. We can change this much later on.
 	 */
 	//text_base = lookup_text_base(memdesc, notedesc->nt_files);
-	
+	text_base = memdesc->text.base;
+	/*
 	for (i = 0; i < memdesc->mapcount; i++)
 		if (memdesc->maps[i].textbase)
 			text_base = memdesc->maps[i].base;
-
+	*/
 	if (text_base == 0) {
 		log_msg(__LINE__, "Unable to locate executable base address necessary to find phdr's");
 		return -1;
 	}
 	
 	/* Instead we use mmap on the original executable file */
+	log_msg(__LINE__, "exe_path: %s", memdesc->exe_path);
 	fd = xopen(memdesc->exe_path, O_RDONLY);
-	mem = mmap(NULL, 8192, PROT_READ, MAP_PRIVATE, fd, 0);
+	xfstat(fd, &st);
+	mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (mem == MAP_FAILED) {
 		log_msg(__LINE__, "mmap %s", strerror(errno));
 		exit(-1);
@@ -1433,25 +1434,25 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
          * We append symbol table sections last 
          */
         if ((fd = open(outfile, O_RDWR)) < 0) {
-                perror("open");
+                log_msg(__LINE__, "open %s", strerror(errno));
                 exit(-1);
         }
 
         if (fstat(fd, &st) < 0) {
-                perror("fstat");
+                log_msg(__LINE__, "fstat %s", strerror(errno));
                 exit(-1);
         }
 
         mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (mem == MAP_FAILED) {
-                perror("mmap");
+                log_msg(__LINE__, "mmap %s", strerror(errno));
                 exit(-1);
         }
         ehdr = (ElfW(Ehdr) *)mem;
         shdr = (ElfW(Shdr) *)&mem[ehdr->e_shoff];
 
         if (lseek(fd, 0, SEEK_END) < 0) {
-                perror("open");
+                log_msg(__LINE__, "lseek %s", strerror(errno));
                 exit(-1);
         }
 	
@@ -2341,7 +2342,7 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 	
-	prctl(PR_SET_DUMPABLE, 0);
+	//prctl(PR_SET_DUMPABLE, 0);
 
 	if (opts.use_stdin) {
 		log_msg(__LINE__, "Using stdin, outfile is:%s", outfile);
@@ -2480,7 +2481,7 @@ int main(int argc, char **argv)
 	 * attach to process with ptrace and parse original phdr table
 	 * to get more granular segment information.
 	 */
-	
+	log_msg(__LINE__, "parsing original phdr's in memory");
 	if (parse_orig_phdrs(elfdesc, memdesc, notedesc) < 0) {
 		log_msg(__LINE__, "Failed to parse program headers in memory");
 		exit(-1);
@@ -2493,6 +2494,7 @@ int main(int argc, char **argv)
 	handle->memdesc = memdesc;
 	handle->notedesc = notedesc;
 	
+	log_msg(__LINE__, "calling xref_phdrs_for_offsets()");
 	/*
 	 * Figure out where the offsets to certain parts of the
 	 * file are, such as .dynamic, .interp, etc.
@@ -2507,6 +2509,7 @@ int main(int argc, char **argv)
 	 * Out of the parsed NT_FILES get a list of which ones are
 	 * shared libraries so we can create shdrs for them.
 	 */
+	log_msg(__LINE__, "calling lookup_lib_maps()");
 	notedesc->lm_files = (struct lib_mappings *)heapAlloc(sizeof(struct lib_mappings));
 	lookup_lib_maps(elfdesc, memdesc, notedesc->nt_files, notedesc->lm_files);
 	
@@ -2519,6 +2522,7 @@ int main(int argc, char **argv)
 	 * data and code is from the dynamic segment by parsing
 	 * it by D_TAG values.
 	 */
+	log_msg(__LINE__, "calling extract_dyntag_info()");
 	ret = extract_dyntag_info(handle);
 	if (ret < 0) {
 		log_msg(__LINE__, "Failed to extract dynamic segment information");
@@ -2529,6 +2533,7 @@ int main(int argc, char **argv)
 	 * Parse the symtab of each shared library and store its
 	 * results in linked list. Each node holds a symentry_t vector
 	 */
+	log_msg(__LINE__, "calling fill_dynamic_symtab()");
 	list_t *list_head;
 	ret = fill_dynamic_symtab(&list_head, notedesc->lm_files);
 	if (ret < 0) 
@@ -2538,6 +2543,7 @@ int main(int argc, char **argv)
 	 * Convert the core file into an actual ECFS file and write it
 	 * to disk.
 	 */
+	log_msg(__LINE__, "calling core2ecfs()");
 	ret = core2ecfs(outfile, handle);
 	if (ret < 0) {
 		log_msg(__LINE__, "Failed to transform core file '%s' into ecfs", argv[2]);
@@ -2549,13 +2555,15 @@ int main(int argc, char **argv)
 	if (tmp_corefile) // incase we had to re-write file and mege in text
 		unlink(tmp_corefile);
 	
+	log_msg(__LINE__, "calling store_dynamic_symvals()");
 	/*
 	 * XXX should move into core2ecfs?
 	 */
 	ret = store_dynamic_symvals(list_head, outfile);
 	if (ret < 0) 
 		log_msg(__LINE__, "Unable to store runtime values into dynamic symbol table");
-
+	
+	log_msg(__LINE__, "finished storing symvals");
 done: 
  	if (opts.use_stdin)
          	unlink(elfdesc->path);

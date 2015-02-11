@@ -32,6 +32,7 @@ void * heapAlloc(size_t len)
 {
 	void *p = malloc(len);
 	if (p == NULL) {
+		fprintf(stderr, "malloc len: %u\n", len);
 		perror("malloc");
 		exit(-1);
 	}

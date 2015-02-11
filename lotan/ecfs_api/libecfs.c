@@ -147,6 +147,7 @@ int get_dynamic_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
 		if (shdr[i].sh_type == SHT_DYNSYM) {
 			symcount = shdr[i].sh_size / sizeof(ElfW(Sym));
                         size_t alloc_len = symcount * sizeof(ecfs_sym_t);
+			printf("alloc_len: %d\n", alloc_len);
 			*syms = (ecfs_sym_t *)heapAlloc(alloc_len);
 			for (j = 0; j < symcount; j++) {
 				(*syms)[j].strtab = desc->dynstr;
