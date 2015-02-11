@@ -35,6 +35,7 @@ int main(int argc, char **argv)
 	for (i = 0; i < ret; i++) {
 		printf("fd: %d path: %s\n", fdinfo[i].fd, fdinfo[i].path);
 		if (fdinfo[i].net) {
+			printf("printing extra socket info\n");
 			printf("SRC: %s:%d\n", inet_ntoa(fdinfo[i].socket.src_addr), fdinfo[i].socket.src_port);
 			printf("DST: %s:%d\n", inet_ntoa(fdinfo[i].socket.dst_addr), fdinfo[i].socket.dst_port);
 		}

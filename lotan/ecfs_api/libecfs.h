@@ -24,6 +24,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#define NET_TCP 1
+#define NET_UDP 2
 
 typedef struct ecfs_elf {
          uint8_t *mem;          /* raw memory pointer */

@@ -882,14 +882,36 @@ static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
 			&txq, &rxq, &timer_run, &time_len, &retr, &uid, &timeout, &_inode, more);
 		log_msg(__LINE__, "comparing inodes %u and %u\n", _inode, inode);
 		if (_inode == inode) {
-			sscanf(local_addr, "%X", &fdinfo->socket.src_addr.s_addr);
-			sscanf(rem_addr, "%X", &fdinfo->socket.dst_addr.s_addr);
+			log_msg(__LINE__, "inode comparisong made");
+			sscanf(local_addr, "%X", &(fdinfo->socket.src_addr.s_addr));
+			sscanf(rem_addr, "%X", &(fdinfo->socket.dst_addr.s_addr));
 			fdinfo->socket.src_port = local_port;
 			fdinfo->socket.dst_port = rem_port;
-			fdinfo->net = 1;
-			log_msg(__LINE__, "setting net");
+			fdinfo->net = NET_TCP;
+			log_msg(__LINE__, "setting net TCP");
+			goto out;
 		}
-	}
+	}	/* Try for UDP if we don't find the socket inode in TCP */
+	fclose(fp);
+	fp = fopen("/proc/net/udp", "r");
+	fgets(buf, sizeof(buf), fp);
+        while (fgets(buf, sizeof(buf), fp)) {
+                sscanf(buf, "%d: %64[0-9A-Fa-f]:%X %64[0-9A-Fa-f]:%X %X %lX:%lX %X:%lX %lX %d %d %ld %512s\n",
+                        &d, local_addr, &local_port, rem_addr, &rem_port, &state,
+                        &txq, &rxq, &timer_run, &time_len, &retr, &uid, &timeout, &_inode, more);
+                log_msg(__LINE__, "comparing inodes %u and %u\n", _inode, inode);
+                if (_inode == inode) {
+                        log_msg(__LINE__, "inode comparisong made");
+                        sscanf(local_addr, "%X", &(fdinfo->socket.src_addr.s_addr));
+                        sscanf(rem_addr, "%X", &(fdinfo->socket.dst_addr.s_addr));
+                        fdinfo->socket.src_port = local_port;
+                        fdinfo->socket.dst_port = rem_port;
+                        fdinfo->net = NET_UDP;
+                        log_msg(__LINE__, "setting net UDP");
+                }
+        }
+out:
+	fclose(fp);
 }
 
 static int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
@@ -918,11 +940,16 @@ static int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
 				fdcount++;
 				continue;
 			}
+			
 			inode = atoi(p);
 			log_msg(__LINE__, "inode from socket: %u\n", inode);
 			fill_sock_info(&fdinfo_tmp, inode);
-			if (fdinfo_tmp.net)
-				memcpy(&(*fdinfo)[fdcount].socket, &fdinfo_tmp.socket, sizeof(fdinfo_tmp.socket));
+			if (fdinfo_tmp.net) {
+				log_msg(__LINE__, "doing socket memcpy");
+				(*fdinfo)[fdcount].net = fdinfo_tmp.net;
+				(*fdinfo)[fdcount].socket = fdinfo_tmp.socket;
+				//memcpy(&(*fdinfo)[fdcount].socket, &(fdinfo_tmp.socket), sizeof(fdinfo_tmp.socket));
+			}
 		}
 		(*fdinfo)[fdcount].fd = atoi(dptr->d_name);
 		fdcount++;
