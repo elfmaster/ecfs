@@ -2342,7 +2342,10 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 	
-	//prctl(PR_SET_DUMPABLE, 0);
+	/*
+	 * Prevents ecfs from coring itself
+	 */
+	prctl(PR_SET_DUMPABLE, 0);
 
 	if (opts.use_stdin) {
 		log_msg(__LINE__, "Using stdin, outfile is:%s", outfile);
@@ -2434,8 +2437,9 @@ int main(int argc, char **argv)
 		pie = check_for_pie(pid);
 	}
 	fill_in_pstatus(memdesc, notedesc);
-	
+#if DEBUG
 	log_msg(__LINE__, "check_for_pie returned %d", pie);
+#endif
 	if (pie > 0) {
 		unsigned long text_base = lookup_text_base(memdesc, notedesc->nt_files);
 		if (text_base == 0) {
@@ -2457,7 +2461,9 @@ int main(int argc, char **argv)
 	 */
 	if (elfdesc->text_memsz > elfdesc->text_filesz) {
 		corefile = tmp_corefile == NULL ? corefile : tmp_corefile;
+#if DEBUG
 		log_msg(__LINE__, "merging text into core");
+#endif
 		if (merge_texts_into_core((const char *)corefile, memdesc) < 0) {
 			log_msg(__LINE__, "Failed to merge text into core file");
 		}
@@ -2481,7 +2487,9 @@ int main(int argc, char **argv)
 	 * attach to process with ptrace and parse original phdr table
 	 * to get more granular segment information.
 	 */
+#if DEBUG
 	log_msg(__LINE__, "parsing original phdr's in memory");
+#endif
 	if (parse_orig_phdrs(elfdesc, memdesc, notedesc) < 0) {
 		log_msg(__LINE__, "Failed to parse program headers in memory");
 		exit(-1);
@@ -2493,8 +2501,9 @@ int main(int argc, char **argv)
 	handle->elfdesc = elfdesc;
 	handle->memdesc = memdesc;
 	handle->notedesc = notedesc;
-	
+#if DEBUG
 	log_msg(__LINE__, "calling xref_phdrs_for_offsets()");
+#endif
 	/*
 	 * Figure out where the offsets to certain parts of the
 	 * file are, such as .dynamic, .interp, etc.
@@ -2509,7 +2518,9 @@ int main(int argc, char **argv)
 	 * Out of the parsed NT_FILES get a list of which ones are
 	 * shared libraries so we can create shdrs for them.
 	 */
+#if DEBUG
 	log_msg(__LINE__, "calling lookup_lib_maps()");
+#endif
 	notedesc->lm_files = (struct lib_mappings *)heapAlloc(sizeof(struct lib_mappings));
 	lookup_lib_maps(elfdesc, memdesc, notedesc->nt_files, notedesc->lm_files);
 	
@@ -2522,7 +2533,9 @@ int main(int argc, char **argv)
 	 * data and code is from the dynamic segment by parsing
 	 * it by D_TAG values.
 	 */
+#if DEBUG
 	log_msg(__LINE__, "calling extract_dyntag_info()");
+#endif
 	ret = extract_dyntag_info(handle);
 	if (ret < 0) {
 		log_msg(__LINE__, "Failed to extract dynamic segment information");
@@ -2533,7 +2546,9 @@ int main(int argc, char **argv)
 	 * Parse the symtab of each shared library and store its
 	 * results in linked list. Each node holds a symentry_t vector
 	 */
+#if DEBUG
 	log_msg(__LINE__, "calling fill_dynamic_symtab()");
+#endif
 	list_t *list_head;
 	ret = fill_dynamic_symtab(&list_head, notedesc->lm_files);
 	if (ret < 0) 
@@ -2543,7 +2558,9 @@ int main(int argc, char **argv)
 	 * Convert the core file into an actual ECFS file and write it
 	 * to disk.
 	 */
+#if DEBUG
 	log_msg(__LINE__, "calling core2ecfs()");
+#endif
 	ret = core2ecfs(outfile, handle);
 	if (ret < 0) {
 		log_msg(__LINE__, "Failed to transform core file '%s' into ecfs", argv[2]);
@@ -2554,8 +2571,9 @@ int main(int argc, char **argv)
 		unlink(elfdesc->path);
 	if (tmp_corefile) // incase we had to re-write file and mege in text
 		unlink(tmp_corefile);
-	
+#if DEBUG
 	log_msg(__LINE__, "calling store_dynamic_symvals()");
+#endif
 	/*
 	 * XXX should move into core2ecfs?
 	 */
@@ -2563,7 +2581,9 @@ int main(int argc, char **argv)
 	if (ret < 0) 
 		log_msg(__LINE__, "Unable to store runtime values into dynamic symbol table");
 	
+#if DEBUG
 	log_msg(__LINE__, "finished storing symvals");
+#endif
 done: 
  	if (opts.use_stdin)
          	unlink(elfdesc->path);
