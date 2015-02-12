@@ -179,7 +179,6 @@ elfdesc_t * load_core_file_stdin(void)
 			log_msg(__LINE__, "write %s", strerror(errno));
 			exit(-1);
 		}
-		syncfs(file);
 	}
 	syncfs(file);
 	close(file);
