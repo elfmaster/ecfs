@@ -38,7 +38,7 @@
 #define MAX_LIB_PATH 512
 
 #define LOGGING_PATH "/home/ryan/bin/logging.txt"
-#define ECFS_CORE_DIR "/home/ryan/bin" // XXX change this?
+#define ECFS_CORE_DIR "/opt/ecfs/cores/" // XXX change this?
 #define UNKNOWN_SHDR_SIZE 64
 #define PAGE_ALIGN(x) (x & ~(PAGE_SIZE - 1))
 #define PAGE_ALIGN_UP(x) (PAGE_ALIGN(x) + PAGE_SIZE)
@@ -265,9 +265,10 @@ typedef struct mappings {
 typedef struct memdesc {
 	pid_t pid;
 	uint8_t *exe;		/* Points to /proc/<pid>/exe */
-	char *path;		// path to executable
-	char *exe_path;
-	char *comm;		//name of executable
+	char *path;		// path to executable (might be a symlnk)
+	char *comm;		// filename of executable (might be a symlink)
+	char *exe_path;		// path to executable (real path not symlink)
+	char *exe_comm; 	// real filename, not symlink
 	int mapcount;		// overall # of memory maps
 	int type;		// ET_EXEC or ET_DYN
 	uint8_t *textseg;	// gets heapallocated and has text segment read into it
@@ -366,3 +367,4 @@ int insert_item_front(list_t **list, void *data, size_t sz);
 
 int fill_dynamic_symtab(list_t **list, struct lib_mappings *lm);
 unsigned long lookup_from_symlist(const char *name, list_t *list);
+

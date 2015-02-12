@@ -651,7 +651,7 @@ static ElfW(Addr) lookup_text_base(memdesc_t *memdesc, struct nt_file_struct *fm
 
 	for (i = 0; i < fmaps->fcount; i++) {
 		p = strrchr(fmaps->files[i].path, '/') + 1;
-		if (!strcmp(memdesc->path, p))
+		if (!strcmp(memdesc->exe_comm, p))
 			return fmaps->files[i].addr;
 	}
 	return 0;
@@ -664,7 +664,7 @@ static ElfW(Addr) lookup_text_size(memdesc_t *memdesc, struct nt_file_struct *fm
 
         for (i = 0; i < fmaps->fcount; i++) {
                 p = strrchr(fmaps->files[i].path, '/') + 1;
-                if (!strcmp(memdesc->path, p))
+                if (!strcmp(memdesc->exe_comm, p))
                         return fmaps->files[i].size;
         }
         return 0;
@@ -680,9 +680,10 @@ static ElfW(Addr) lookup_data_base(memdesc_t *memdesc, struct nt_file_struct *fm
 
         for (i = 0; i < fmaps->fcount; i++) {
                 p = strrchr(fmaps->files[i].path, '/') + 1;
-                if (!strcmp(memdesc->path, p)) {
+		log_msg(__LINE__, "lookup_data_base() comparing %s and %s", memdesc->exe_path, p);
+                if (!strcmp(memdesc->exe_comm, p)) {
 			p = strrchr(fmaps->files[i + 1].path, '/') + 1;
-			if (!strcmp(memdesc->path, p))
+			if (!strcmp(memdesc->exe_comm, p))
 				return fmaps->files[i + 1].addr;
         	}
 	}
@@ -696,9 +697,9 @@ static ElfW(Addr) lookup_data_size(memdesc_t *memdesc, struct nt_file_struct *fm
 
         for (i = 0; i < fmaps->fcount; i++) {
                 p = strrchr(fmaps->files[i].path, '/') + 1;
-                if (!strcmp(memdesc->path, p)) {
+                if (!strcmp(memdesc->exe_comm, p)) {
                         p = strrchr(fmaps->files[i + 1].path, '/') + 1;
-                        if (!strcmp(memdesc->path, p))
+                        if (!strcmp(memdesc->exe_comm, p))
                                 return fmaps->files[i + 1].size;
                 }
         }
@@ -886,7 +887,7 @@ static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
 			fdinfo->net = NET_TCP;
 		}
 	}	/* Try for UDP if we don't find the socket inode in TCP */
-	/*
+	
 	fclose(fp);
 	fp = fopen("/proc/net/udp", "r");
 	fgets(buf, sizeof(buf), fp);
@@ -906,7 +907,7 @@ static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
                 }
         }
 out:
-	*/
+
 	fclose(fp);
 }
 
@@ -968,14 +969,21 @@ static int get_map_count(pid_t pid)
         return lc;
 }
 
+/*
+ * Handle the case where say: /bin/someprog is a symbolic link
+ */
 char * get_exe_path(int pid)
 {
 	char *path = xfmtstrdup("/proc/%d/exe", pid);
 	char *ret = (char *)heapAlloc(MAX_PATH);
+	char *ret2 = (char *)heapAlloc(MAX_PATH);
+	
 	memset(ret, 0, MAX_PATH); // for null termination padding
 	readlink(path, ret, MAX_PATH);
 	free(path);
-	return ret;
+	/* Now is our new path also a symbolic link? */
+	int rval = readlink(ret, ret2, MAX_PATH);
+	return rval < 0 ? ret : ret2;
 }
 
 /*
@@ -1001,10 +1009,21 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
         
         memset((void *)memdesc->maps, 0, sizeof(mappings_t) * memdesc->mapcount);
         
-	memdesc->path = exename; // supplied by core_pattern %e
-	memdesc->exe_path = get_exe_path(pid);
-	
-	if (get_maps(pid, memdesc->maps, memdesc->path) < 0) {
+	/*
+	 * comm and path should be different. comm should be just the filename
+	 * whereas path should be the complete filepath. Although due to an early
+	 * on coding mistake I named comm, as path. There was no comm. path contained
+	 * the filename, and exe_path contained the file path. Then came in a complication
+	 * where some executable paths are actually symbolic links. So I had to make
+	 * some changes, but still need to clear some things up. Currently memdesc->comm
+	 * and memdesc->path both contain the filename (Which might just be a symbolic link)
+	 * and exe_path and exe_comm contain the path and filename of the real file that
+	 * the link points to.
+	 */
+	memdesc->comm = memdesc->path = exename; // supplied by core_pattern %e
+	memdesc->exe_path = get_exe_path(pid); 
+	memdesc->exe_comm = strrchr(memdesc->exe_path, '/') + 1;
+	if (get_maps(pid, memdesc->maps, memdesc->exe_comm) < 0) {
                 log_msg(__LINE__, "failed to get data from /proc/%d/maps", pid);
                 return NULL;
         }
@@ -1076,13 +1095,7 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 	 * we won't use lookup_text_base() but instead get it from
 	 * the maps. We can change this much later on.
 	 */
-	//text_base = lookup_text_base(memdesc, notedesc->nt_files);
 	text_base = memdesc->text.base;
-	/*
-	for (i = 0; i < memdesc->mapcount; i++)
-		if (memdesc->maps[i].textbase)
-			text_base = memdesc->maps[i].base;
-	*/
 	if (text_base == 0) {
 		log_msg(__LINE__, "Unable to locate executable base address necessary to find phdr's");
 		return -1;
@@ -1133,6 +1146,7 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 				break;
 			case PT_DYNAMIC:
 				elfdesc->dynVaddr = phdr[i].p_vaddr + (elfdesc->pie ? text_base : 0);
+				log_msg(__LINE__, "the fuqin dynvaddr: %lx", elfdesc->dynVaddr);
 				elfdesc->dynSize = phdr[i].p_memsz;
 				break;
 			case PT_GNU_EH_FRAME:
@@ -1179,6 +1193,7 @@ int extract_dyntag_info(handle_t *handle)
 	
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
 		if (phdr[i].p_vaddr == elfdesc->dataVaddr) {
+			log_msg(__LINE__, "dynamic segment is at: %lx compared to %lx", phdr[i].p_vaddr, elfdesc->dataVaddr);
 			elfdesc->dyn = (ElfW(Dyn) *)&elfdesc->mem[phdr[i].p_offset + (elfdesc->dynVaddr - elfdesc->dataVaddr)];
 			break;
 		}
@@ -2229,7 +2244,7 @@ void fill_in_pstatus(memdesc_t *memdesc, notedesc_t *notedesc)
                 memdesc->task.gid = notedesc->psinfo->pr_gid;
                 memdesc->task.ppid = notedesc->psinfo->pr_ppid;
                 memdesc->task.exit_signal = notedesc->prstatus->pr_info.si_signo;
-                memdesc->path = notedesc->psinfo->pr_fname;
+                memdesc->path = memdesc->comm = notedesc->psinfo->pr_fname;
 }
 
 void build_elf_stats(handle_t *handle)
