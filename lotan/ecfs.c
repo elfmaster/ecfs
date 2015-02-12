@@ -500,7 +500,6 @@ static  int check_for_pie(int pid)
 	for (i = 0; i < ehdr->e_phnum; i++) {
 		if (phdr[i].p_type == PT_LOAD) {
 			if (phdr[i].p_flags & PF_X) {
-				log_msg(__LINE__, "check_for_pie found text at %lx\n", phdr[i].p_vaddr);
 				if (phdr[i].p_vaddr == 0)
 					return 1;
 			}

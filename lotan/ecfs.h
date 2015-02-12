@@ -38,7 +38,7 @@
 #define MAX_LIB_PATH 512
 
 #define LOGGING_PATH "/home/ryan/bin/logging.txt"
-#define ECFS_CORE_DIR "/opt/ecfs/cores/" // XXX change this?
+#define ECFS_CORE_DIR "/opt/ecfs/cores" // XXX change this?
 #define UNKNOWN_SHDR_SIZE 64
 #define PAGE_ALIGN(x) (x & ~(PAGE_SIZE - 1))
 #define PAGE_ALIGN_UP(x) (PAGE_ALIGN(x) + PAGE_SIZE)
