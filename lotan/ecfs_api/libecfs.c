@@ -147,7 +147,6 @@ int get_dynamic_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
 		if (shdr[i].sh_type == SHT_DYNSYM) {
 			symcount = shdr[i].sh_size / sizeof(ElfW(Sym));
                         size_t alloc_len = symcount * sizeof(ecfs_sym_t);
-			printf("alloc_len: %d\n", alloc_len);
 			*syms = (ecfs_sym_t *)heapAlloc(alloc_len);
 			for (j = 0; j < symcount; j++) {
 				(*syms)[j].strtab = desc->dynstr;
@@ -283,6 +282,28 @@ ssize_t get_section_pointer(ecfs_elf_t *desc, const char *name, uint8_t **ptr)
 	*ptr = NULL;
 	return -1;
 }
+
+
+unsigned long get_text_va(ecfs_elf_t *desc)
+{
+	return desc->textVaddr;
+}
+
+unsigned long get_data_va(ecfs_elf_t *desc)
+{
+	return desc->dataVaddr;
+}
+
+size_t get_text_size(ecfs_elf_t *desc)
+{
+	return desc->textSize;
+}
+
+size_t get_data_size(ecfs_elf_t *desc)
+{
+	return desc->dataSize;
+}
+
 
 
 		
