@@ -1,3 +1,4 @@
+
 - [SYNOPSIS - Extended core file snapshot technology-
 
 The $CWD contains the source code for the ./ecfs program
@@ -9,6 +10,9 @@ The ecfs_api directory contains a library (still in the works)
 that makes parsing ecfs files very easy.
 
 - [INSTALL -
+
+Dependecies:
+apt-get install libelf-dev libdwarf-dev
 
 To build ecfs type:
 make
