@@ -1,4 +1,4 @@
-SYNOPSIS - Extended core file snapshot technology-
+- [SYNOPSIS - Extended core file snapshot technology-
 
 The $CWD contains the source code for the ./ecfs program
 which is the primary component. This program is invoked by
@@ -8,7 +8,7 @@ core files into ecfs files.
 The ecfs_api directory contains a library (still in the works)
 that makes parsing ecfs files very easy.
 
-INSTALL -
+- [INSTALL -
 
 To build ecfs type:
 make
@@ -22,5 +22,33 @@ an ECFS file in /opt/ecfs/cores/<some_file>.pid
 These files are of type ET_NONE so that objdump can read the section
 headers, but if you want to use the file as a core file mark it as
 ET_CORE before using with GDB.
+
+After a reboot you will have to run setup.sh again if you don't echo
+the following line into one of two files:
+
+(For systemd based systems like arch Linux)
+
+/usr/lib/sysctl.d/50-coredump.conf
+
+
+(For ubuntu and other systems that don't use systemd)
+
+/etc/sysctl.conf
+
+
+The line you want to echo into one of the files above:
+
+kernel.core_pattern=|/opt/ecfs/bin/ecfs -i -e %e -p %p -o /opt/ecfs/cores/%e.%p
+
+(For example):
+
+echo '|/opt/ecfs/bin/ecfs -i -e %e -p %p -o /opt/ecfs/cores/%e.%p >> /etc/sysctl.conf'
+
+- [ECFS LOGGING/DEBUGGING -
+
+Debug output is logged using syslog() and can be found in either /var/log/syslog or
+on some systems such as arch Linux you will need to look at 'journalctl -b'
+
+
 
 - elfmaster[at]zoho.com
