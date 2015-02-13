@@ -610,6 +610,30 @@ static ssize_t get_original_shdr_size(int pid, const char *name)
 	return 0;
 }
 
+static ssize_t get_original_shdr_addr(int pid, const char *name)
+{
+	   struct stat st;
+        int i;
+        char *path = xfmtstrdup("/proc/%d/exe", pid);
+        int fd = xopen(path, O_RDONLY);
+        xfree(path);
+        xfstat(fd, &st);
+        uint8_t *mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        if (mem == MAP_FAILED) {
+                log_msg(__LINE__, "mmap %s", strerror(errno));
+                return -1;
+        }
+        ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
+        ElfW(Shdr) *shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
+        if (ehdr->e_shstrndx == 0 || ehdr->e_shnum == 0)
+                return -1;
+        char *StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
+        for (i = 0; i < ehdr->e_shnum; i++)
+                if (!strcmp(&StringTable[shdr[i].sh_name], name))
+			return shdr[i].sh_addr;
+	return 0;
+}
+
 
 /*
  * Can only be called after the notes file has been parsed.
@@ -1675,6 +1699,31 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         stoffset += strlen(".init") + 1;
         scount++;
 	
+	/*
+	 * .plt
+	 */
+	shdr[scount].sh_type = SHT_PROGBITS;
+	shdr[scount].sh_offset = smeta->initOff + (global_hacks.init_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.init_size);
+	/* NOTE: plt has an align of 16, and needs to be aligned to that in the address, which sometimes leaves space between
+	 * the end of .init and the beggining of plt. So we handle that alignment by increasing the sh_offset in an aligned
+	 * way.
+	 */
+	shdr[scount].sh_offset += 
+	((smeta->initVaddr + (global_hacks.init_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.init_size) + 16) & ~15) - 
+	(smeta->initVaddr + (global_hacks.init_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.init_size));
+	
+	shdr[scount].sh_addr = global_hacks.plt_vaddr;
+	shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 16;
+	shdr[scount].sh_size = global_hacks.plt_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.plt_size;
+	shdr[scount].sh_addralign = 16;
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".plt");
+	stoffset += strlen(".plt") + 1;
+	scount++;
+
 	 /*
          * .text
          */
@@ -2265,6 +2314,10 @@ void build_elf_stats(handle_t *handle)
 
 }
 
+void pull_unknown_shdr_addrs(int pid)
+{
+	global_hacks.plt_vaddr = get_original_shdr_addr(pid, ".plt");
+}
 /*
  * Notice we read these and store them in global variables
  * this was an after-the-fact hack that is ugly and needs
@@ -2279,10 +2332,21 @@ void pull_unknown_shdr_sizes(int pid)
 	global_hacks.init_size = get_original_shdr_size(pid, ".init");
 	global_hacks.fini_size = get_original_shdr_size(pid, ".fini");
 	global_hacks.got_size = get_original_shdr_size(pid, ".got.plt");
+	global_hacks.plt_size = get_original_shdr_size(pid, ".plt");
 	global_hacks.ehframe_size = get_original_shdr_size(pid, ".eh_frame");
 }
 
+/*
+ * XXX This function calls pull_unknown_shdr_ functions
+ * to fill up global_hacks structure with information
+ * needed for section headers. This is ugly and temporary
+ */
+void fill_global_hacks(int pid)
+{
+	pull_unknown_shdr_sizes(pid);
+	pull_unknown_shdr_addrs(pid);
 
+}
 int main(int argc, char **argv)
 {
 		
@@ -2397,7 +2461,8 @@ int main(int argc, char **argv)
         	}
 		memdesc->task.pid = pid;
 		pie = check_for_pie(pid);
-		pull_unknown_shdr_sizes(pid); // get size of certain shdrs from original exe
+		fill_global_hacks(pid);
+		//pull_unknown_shdr_sizes(pid); // get size of certain shdrs from original exe
 		memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
 		memdesc->o_entry = get_original_ep(pid);
 	}
@@ -2456,7 +2521,8 @@ int main(int argc, char **argv)
         	}
 		memdesc->task.pid = pid;
 		memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
-		pull_unknown_shdr_sizes(pid);
+		fill_global_hacks(pid);
+		//pull_unknown_shdr_sizes(pid);
 		pie = check_for_pie(pid);
 	}
 	fill_in_pstatus(memdesc, notedesc);

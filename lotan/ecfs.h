@@ -372,6 +372,8 @@ struct {
         ssize_t got_size;
         ssize_t ehframe_size;
         ssize_t plt_rela_size;
+	ssize_t plt_size;
+	unsigned long plt_vaddr;
         int eh_frame_offset_workaround;
 } global_hacks;
 
