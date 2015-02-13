@@ -354,6 +354,27 @@ typedef struct symentry {
 	
 } symentry_t;
 
+
+/*
+ * XXX smoothly transition these globals in somewhere else
+ * these were added for another after the fact strangeness
+ * to account for the fact that /proc/$pid disappears as soon
+ * as the corefile has been read from stdin. so certain problems
+ * don't show up when passing corefiles directly to ecfs that
+ * do show up when use core_pattern. 
+ */
+
+struct {
+        ssize_t hash_size;
+        ssize_t rela_size;
+        ssize_t init_size;
+        ssize_t fini_size;
+        ssize_t got_size;
+        ssize_t ehframe_size;
+        ssize_t plt_rela_size;
+        int eh_frame_offset_workaround;
+} global_hacks;
+
 void *heapAlloc(size_t);
 char *xstrdup(const char *);
 char *xfmtstrdup(char *fmt, ...);

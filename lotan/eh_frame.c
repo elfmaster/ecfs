@@ -111,7 +111,8 @@ int get_func_data(Dwarf_Debug dbg, Dwarf_Fde fde, int fdenum, struct fde_func_da
 	 * we add 4 though to offset a weird misalignment issue
 	 * in reconstructing the sections for eh_frame and eh_frame_hdr.
 	 */
-	func_data->addr = (lowpc + 4);
+	int workaround_offset = global_hacks.eh_frame_offset_workaround ? 4 : 0;
+	func_data->addr = (lowpc + workaround_offset);
 	func_data->size = func_length;
 
 	return 0;

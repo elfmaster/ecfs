@@ -82,6 +82,7 @@ typedef struct gotinfo {
 	unsigned long got_site; // address of where the GOT entry exists
 	unsigned long got_entry_va; // address that is in the GOT entry (the pointer address)
 	unsigned long plt_entry_va; // the PLT address that the GOT entry should point to if not yet resolved
+	unsigned long shl_entry_va; // the shared library address the GOT should point to if it has been resolved
 } got_info_t;
 
 void * heapAlloc(size_t);

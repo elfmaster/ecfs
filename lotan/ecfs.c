@@ -53,7 +53,7 @@ static char *tmp_corefile = NULL;
  * don't show up when passing corefiles directly to ecfs that
  * do show up when use core_pattern. 
  */
-
+/*
 struct {
 	ssize_t hash_size;
 	ssize_t rela_size;
@@ -62,8 +62,9 @@ struct {
 	ssize_t got_size;
 	ssize_t ehframe_size;
 	ssize_t plt_rela_size;
+	int eh_frame_offset_workaround;
 } global_hacks;
-
+*/
 ElfW(Addr) get_original_ep(int);
 ssize_t get_segment_from_pmem(unsigned long, memdesc_t *, uint8_t **);
 /*
@@ -1443,7 +1444,7 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
                 symtab[i].st_other = 0;
                 symtab[i].st_shndx = text_shdr_index;
                 symtab[i].st_name = symstroff;
-                sname = xfmtstrdup("sub_%lx", fdp[i].addr);
+                sname = xfmtstrdup("func_%lx", fdp[i].addr);
                 strcpy(&strtab[symstroff], sname);
                 symstroff += strlen(sname) + 1;
                 free(sname);    
@@ -1762,8 +1763,10 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	// XXX workaround for an alignment bug where eh_frame has 4 bytes of zeroes
 	// that should not be there at the beggining
 	shdr[scount].sh_offset = elfdesc->ehframeOffset + elfdesc->ehframe_Size;
-        if (*(uint32_t *)&elfdesc->mem[shdr[scount].sh_offset] == (uint32_t)0x00000000)
+        if (*(uint32_t *)&elfdesc->mem[shdr[scount].sh_offset] == (uint32_t)0x00000000) {
 		shdr[scount].sh_offset += 4;
+		global_hacks.eh_frame_offset_workaround = 1; // XXX ugly hack
+	}
 	shdr[scount].sh_addr = elfdesc->ehframe_Vaddr + elfdesc->ehframe_Size;
         shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
         shdr[scount].sh_info = 0;
@@ -2295,6 +2298,7 @@ void build_elf_stats(handle_t *handle)
  */
 void pull_unknown_shdr_sizes(int pid)
 {
+	memset(&global_hacks, 0, sizeof(global_hacks));
 	global_hacks.hash_size = get_original_shdr_size(pid, ".gnu.hash");
 	global_hacks.rela_size = get_original_shdr_size(pid, ".rela.dyn");
 	global_hacks.plt_rela_size = get_original_shdr_size(pid, ".rela.plt");
