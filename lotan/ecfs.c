@@ -45,26 +45,6 @@ typedef struct handle {
  */
 static char *tmp_corefile = NULL;
 
-/*
- * XXX smoothly transition these globals in somewhere else
- * these were added for another after the fact strangeness
- * to account for the fact that /proc/$pid disappears as soon
- * as the corefile has been read from stdin. so certain problems
- * don't show up when passing corefiles directly to ecfs that
- * do show up when use core_pattern. 
- */
-/*
-struct {
-	ssize_t hash_size;
-	ssize_t rela_size;
-	ssize_t init_size;
-	ssize_t fini_size;
-	ssize_t got_size;
-	ssize_t ehframe_size;
-	ssize_t plt_rela_size;
-	int eh_frame_offset_workaround;
-} global_hacks;
-*/
 ElfW(Addr) get_original_ep(int);
 ssize_t get_segment_from_pmem(unsigned long, memdesc_t *, uint8_t **);
 /*
@@ -243,12 +223,6 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 	/*
 	 * Get textVaddr as it pertains to the mappings
 	 */
-	/*
-	for (textVaddr = 0, i = 0; i < memdesc->mapcount; i++) {
-		if (memdesc->maps[i].textbase)
-			textVaddr = memdesc->maps[i].base;
-	}
-	*/
 	textVaddr = memdesc->text.base;
 	if (textVaddr == 0) {
 		log_msg(__LINE__, "(From merge_texts_into_core function) Could not find text address");
@@ -1444,7 +1418,7 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
                 symtab[i].st_other = 0;
                 symtab[i].st_shndx = text_shdr_index;
                 symtab[i].st_name = symstroff;
-                sname = xfmtstrdup("func_%lx", fdp[i].addr);
+                sname = xfmtstrdup("sub_%lx", fdp[i].addr);
                 strcpy(&strtab[symstroff], sname);
                 symstroff += strlen(sname) + 1;
                 free(sname);    
