@@ -61,6 +61,7 @@ struct {
 	ssize_t fini_size;
 	ssize_t got_size;
 	ssize_t ehframe_size;
+	ssize_t plt_rela_size;
 } global_hacks;
 
 ElfW(Addr) get_original_ep(int);
@@ -1218,6 +1219,12 @@ int extract_dyntag_info(handle_t *handle)
 				printf("relaVaddr: %lx relaOffset: %lx\n", smeta.relaVaddr, smeta.relaOff);
 #endif
                         	break;
+			case DT_JMPREL:
+				smeta.plt_relaVaddr = dyn[j].d_un.d_val;
+				smeta.plt_relaOff = elfdesc->textOffset + smeta.plt_relaVaddr - elfdesc->textVaddr;
+#if DEBUG
+				printf("plt_relaVaddr: %lx plt_relaOffset: %lx\n", smeta.plt_relaVaddr, smeta.plt_relaOff);
+#endif
                         case DT_PLTGOT:
                         	smeta.gotVaddr = dyn[j].d_un.d_val;
                                 smeta.gotOff = dyn[j].d_un.d_val - elfdesc->dataVaddr;
@@ -1522,7 +1529,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         char *StringTable = (char *)heapAlloc(MAX_SHDR_COUNT * 64);
 	struct stat st;
         unsigned int stoffset = 0;
-        int scount = 0;
+        int scount = 0, dynsym_index;
 	int i; 
 
 	/*
@@ -1599,6 +1606,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	 /*
          * .dynsym
          */
+	dynsym_index = scount;
         shdr[scount].sh_type = SHT_DYNSYM;
         shdr[scount].sh_offset = smeta->dsymOff;
         shdr[scount].sh_addr = smeta->dsymVaddr;
@@ -1638,7 +1646,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	shdr[scount].sh_addr = (__ELF_NATIVE_CLASS == 64) ? smeta->relaVaddr : smeta->relVaddr;
         shdr[scount].sh_flags = SHF_ALLOC;
         shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = scount - 1;
+        shdr[scount].sh_link = dynsym_index;
         shdr[scount].sh_entsize = (__ELF_NATIVE_CLASS == 64) ? sizeof(Elf64_Rela) : sizeof(Elf32_Rel);
         shdr[scount].sh_size = global_hacks.rela_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.rela_size;
         shdr[scount].sh_addralign = sizeof(long); 
@@ -1651,6 +1659,29 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
                 stoffset += strlen(".rel.dyn") + 1;
         }
         scount++;
+	
+	/*
+	 * rela.plt
+	 */
+	shdr[scount].sh_type = (__ELF_NATIVE_CLASS == 64) ? SHT_RELA : SHT_REL;
+        shdr[scount].sh_offset = (__ELF_NATIVE_CLASS == 64) ? smeta->plt_relaOff : smeta->plt_relOff;
+        shdr[scount].sh_addr = (__ELF_NATIVE_CLASS == 64) ? smeta->plt_relaVaddr : smeta->plt_relVaddr;
+        shdr[scount].sh_flags = SHF_ALLOC;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = dynsym_index;
+        shdr[scount].sh_entsize = (__ELF_NATIVE_CLASS == 64) ? sizeof(Elf64_Rela) : sizeof(Elf32_Rel);
+        shdr[scount].sh_size = global_hacks.plt_rela_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.plt_rela_size;
+        shdr[scount].sh_addralign = sizeof(long);
+        shdr[scount].sh_name = stoffset;
+        if (__ELF_NATIVE_CLASS == 64) {
+                strcpy(&StringTable[stoffset], ".rela.plt");
+                stoffset += strlen(".rela.plt") + 1;
+        } else {
+                strcpy(&StringTable[stoffset], ".rel.plt");
+                stoffset += strlen(".rel.plt") + 1;
+        }
+        scount++;
+
 
         /*
          * .init
@@ -2266,6 +2297,7 @@ void pull_unknown_shdr_sizes(int pid)
 {
 	global_hacks.hash_size = get_original_shdr_size(pid, ".gnu.hash");
 	global_hacks.rela_size = get_original_shdr_size(pid, ".rela.dyn");
+	global_hacks.plt_rela_size = get_original_shdr_size(pid, ".rela.plt");
 	global_hacks.init_size = get_original_shdr_size(pid, ".init");
 	global_hacks.fini_size = get_original_shdr_size(pid, ".fini");
 	global_hacks.got_size = get_original_shdr_size(pid, ".got.plt");

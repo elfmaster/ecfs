@@ -77,6 +77,13 @@ typedef struct fdinfo {
         } socket;
         char net;
 } fd_info_t;
+
+typedef struct gotinfo {
+	unsigned long got_site; // address of where the GOT entry exists
+	unsigned long got_entry_va; // address that is in the GOT entry (the pointer address)
+	unsigned long plt_entry_va; // the PLT address that the GOT entry should point to if not yet resolved
+} got_info_t;
+
 void * heapAlloc(size_t);
 
 ecfs_elf_t * load_ecfs_file(const char *);

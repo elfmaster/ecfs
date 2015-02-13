@@ -114,13 +114,15 @@ struct section_meta {
 	ElfW(Addr) bssVaddr, dynVaddr, relVaddr, relaVaddr, ehframeVaddr,
 	    textVaddr, o_textVaddr, dataVaddr, o_dataVaddr, gotVaddr, noteVaddr,
 	    hashVaddr, initVaddr, finiVaddr, pltVaddr, dsymVaddr, dstrVaddr,
-	    interpVaddr, tlsVaddr;
+	    interpVaddr, tlsVaddr, plt_relaVaddr, plt_relVaddr;
+
 	ElfW(Off) bssOff, dynOff, relOff, relaOff, noteOff, ehframeOff,
 	    textOffset, dataOffset, gotOff, hashOff, initOff, finiOff, pltOff,
-	    dsymOff, dstrOff, interpOff, tlsOff;
+	    dsymOff, dstrOff, interpOff, tlsOff, plt_relaOff, plt_relOff;
+	
 	ElfW(Word) bssSiz, dynSiz, hashSiz, ehframeSiz, textfSize, textSize,
 	    dataSize, strSiz, pltSiz, interpSiz, tlsSiz, noteSiz, dsymSiz,
-	    dstrSiz;
+	    dstrSiz, plt_relaSiz, plt_relSiz;
 };
 
 struct elf_thread_core_info {
