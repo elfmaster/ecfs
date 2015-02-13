@@ -27,6 +27,13 @@
 #define NET_TCP 1
 #define NET_UDP 2
 
+typedef struct elf_stats {
+#define ELF_STATIC (1 << 1) // if its statically linked (instead of dynamically)
+#define ELF_PIE (1 << 2)    // if its position indepdendent executable
+#define ELF_LOCSYM (1 << 3) // local symtab exists?
+        unsigned int personality; // if (personality & ELF_STATIC)
+} elf_stat_t;
+
 typedef struct ecfs_elf {
          uint8_t *mem;          /* raw memory pointer */
          char *shstrtab;        /* shdr string table */
@@ -58,6 +65,7 @@ typedef struct ecfs_elf {
 	 size_t pltSize;	/* size of .plt section */
          int fd;                /* A copy of the file descriptor to the file */
 	 int pie;		/* is the process from a PIE executable? */
+	 elf_stat_t *elfstats;
 } ecfs_elf_t;
 
 #define MAX_SYM_LEN 255
@@ -92,6 +100,7 @@ typedef struct pltgotinfo {
 	unsigned long plt_entry_va; // the PLT address that the GOT entry should point to if not yet resolved
 	unsigned long shl_entry_va; // the shared library address the GOT should point to if it has been resolved
 } pltgot_info_t;
+
 
 void * heapAlloc(size_t);
 

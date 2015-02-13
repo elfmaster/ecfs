@@ -28,7 +28,7 @@
 struct opts opts;
 
 typedef struct handle {
-	elf_stat_t *elfstat;
+	elf_stat_t elfstat;
 	elfdesc_t *elfdesc;
 	memdesc_t *memdesc;
 	notedesc_t *notedesc;
@@ -45,6 +45,7 @@ typedef struct handle {
  */
 static char *tmp_corefile = NULL;
 
+void build_elf_stats(handle_t *);
 ElfW(Addr) get_original_ep(int);
 ssize_t get_segment_from_pmem(unsigned long, memdesc_t *, uint8_t **);
 /*
@@ -2008,12 +2009,28 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         shdr[scount].sh_link = 0;
         shdr[scount].sh_entsize = 8;
         shdr[scount].sh_size = ecfs_file->exepath_size;
-        shdr[scount].sh_addralign = 0;
+        shdr[scount].sh_addralign = 1;
         shdr[scount].sh_name = stoffset;
         strcpy(&StringTable[stoffset], ".exepath");
         stoffset += strlen(".exepath") + 1;
         scount++;
 
+	/*
+	 * .personality
+	 */
+	shdr[scount].sh_type = SHT_PROGBITS;
+        shdr[scount].sh_offset = ecfs_file->personality_offset;
+        shdr[scount].sh_addr = 0;
+        shdr[scount].sh_flags = 0;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = sizeof(elf_stat_t);
+        shdr[scount].sh_size = ecfs_file->personality_size;
+        shdr[scount].sh_addralign = 1;
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], ".personality");
+        stoffset += strlen(".personality") + 1;
+        scount++;
 
 
 	/*
@@ -2199,7 +2216,9 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	ecfs_file->auxv_size = notedesc->auxv_size;
 	ecfs_file->exepath_offset = ecfs_file->auxv_offset + ecfs_file->auxv_size;
 	ecfs_file->exepath_size = strlen(memdesc->exe_path) + 1;
-	ecfs_file->stb_offset = ecfs_file->exepath_offset + ecfs_file->exepath_size;
+	ecfs_file->personality_offset = ecfs_file->exepath_offset + ecfs_file->exepath_size;
+	ecfs_file->personality_size = sizeof(elf_stat_t);
+	ecfs_file->stb_offset = ecfs_file->personality_offset + ecfs_file->personality_size;
 	
 	/*
 	 * write original body of core file
@@ -2236,6 +2255,12 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 */
 	write(fd, memdesc->exe_path, strlen(memdesc->exe_path) + 1);
 
+	/*
+	 * write ELF personality
+	 */
+	build_elf_stats(handle);
+	write(fd, &handle->elfstat, sizeof(elf_stat_t));
+	
 	/*
 	 * Build section header table
 	 */
@@ -2306,13 +2331,12 @@ void fill_in_pstatus(memdesc_t *memdesc, notedesc_t *notedesc)
 
 void build_elf_stats(handle_t *handle)
 {
-	handle->elfstat->personality = 0;
+	handle->elfstat.personality = 0;
 
 	if (handle->elfdesc->dynlinked == 0)
-		handle->elfstat->personality |= ELF_STATIC;
+		handle->elfstat.personality |= ELF_STATIC;
 	if (handle->elfdesc->pie)
-		handle->elfstat->personality |= ELF_PIE;
-	handle->elfstat->arch = 64;
+		handle->elfstat.personality |= ELF_PIE;
 
 }
 

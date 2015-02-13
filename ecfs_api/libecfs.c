@@ -110,6 +110,18 @@ ecfs_elf_t * load_ecfs_file(const char *path)
                 }
         }
 
+	/*
+	 * Get .personality info
+	 */
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".personality")) {
+			ecfs->elfstats = (elf_stat_t *)&mem[shdr[i].sh_offset];
+			break;
+		}
+	}
+	if (ecfs->elfstats->personality & ELF_PIE)
+		ecfs->pie = 1;
+
 	ecfs->ehdr = ehdr;
 	ecfs->phdr = phdr;
 	ecfs->shdr = shdr;
@@ -391,7 +403,7 @@ ssize_t get_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo)
 		 sym = (ElfW(Sym) *)&symtab[ELF64_R_SYM(desc->plt_rela[i].r_info)];
 		(*pginfo)[i].shl_entry_va = sym->st_value;
 		 // the + 6 is because it must point to the push instruction in the plt entry
-		(*pginfo)[i].plt_entry_va = (pltVaddr + 6) + desc->pie ? desc->textVaddr : 0; 
+		(*pginfo)[i].plt_entry_va = (pltVaddr + 6) + (desc->pie ? desc->textVaddr : 0); 
 		pltVaddr += 16;
 	}
 	return i;

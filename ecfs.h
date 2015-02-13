@@ -75,7 +75,6 @@ typedef struct elf_stats {
 #define ELF_PIE (1 << 2)    // if its position indepdendent executable
 #define ELF_LOCSYM (1 << 3) // local symtab exists?
         unsigned int personality; // if (personality & ELF_STATIC)
-        char arch;
 } elf_stat_t;
 
 struct opts {
@@ -142,12 +141,14 @@ typedef struct ecfs_file_fmt {
 	loff_t auxv_offset;
 	loff_t exepath_offset;
 	loff_t stb_offset;
+	loff_t personality_offset;
 	size_t prstatus_size;
 	size_t prpsinfo_size;
 	size_t fdinfo_size;
 	size_t siginfo_size;
 	size_t auxv_size;
 	size_t exepath_size;
+	size_t personality_size;
 	int thread_count;
 } ecfs_file_t;
 
