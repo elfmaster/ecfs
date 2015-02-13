@@ -1224,8 +1224,10 @@ int extract_dyntag_info(handle_t *handle)
 #if DEBUG
 				printf("plt_relaVaddr: %lx plt_relaOffset: %lx\n", smeta.plt_relaVaddr, smeta.plt_relaOff);
 #endif
+				break;
                         case DT_PLTGOT:
                         	smeta.gotVaddr = dyn[j].d_un.d_val;
+				log_msg(__LINE__, "gotvaddr: %lx\n", smeta.gotVaddr);
                                 smeta.gotOff = dyn[j].d_un.d_val - elfdesc->dataVaddr;
                                 smeta.gotOff += (ElfW(Off))dataOffset;
 #if DEBUG
