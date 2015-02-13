@@ -17,9 +17,31 @@
 #include <locale.h>
 #include <signal.h>
 #include <sys/user.h>
-#include <sys/procfs.h> /* struct elf_prstatus */
+#include <sys/procfs.h>		/* struct elf_prstatus */
+#include <sys/resource.h>
+#include <sys/prctl.h>
+#include <sys/socket.h>
 #include "dwarf.h"
 #include "libdwarf.h"
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#define NET_TCP 1
+#define NET_UDP 2
+
+#define HUGE_ALLOC(size)  \
+      mmap(0, (size), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0)
+
+#define MAX_LIB_NAME 255
+#define MAX_LIB_PATH 512
+
+#define LOGGING_PATH "/home/ryan/bin/logging.txt"
+#define ECFS_CORE_DIR "/opt/ecfs/cores" // XXX change this?
+#define UNKNOWN_SHDR_SIZE 64
+#define PAGE_ALIGN(x) (x & ~(PAGE_SIZE - 1))
+#define PAGE_ALIGN_UP(x) (PAGE_ALIGN(x) + PAGE_SIZE)
 
 #define MAX_TID 256
 #define PT_ATTACHED 1
@@ -38,74 +60,184 @@
 #define PS_RUNNING 32
 #define PS_UNKNOWN 64
 
-#define MAX_THREADS 256 // for each threads prstatus
+#define MAX_THREADS 256		// for each threads prstatus
 
 #define ELFNOTE_NAME(_n_) ((char*)(_n_) + sizeof(*(_n_)))
 #define ELFNOTE_ALIGN(_n_) (((_n_)+3)&~3)
 #define ELFNOTE_NAME(_n_) ((char*)(_n_) + sizeof(*(_n_)))
-#define ELFNOTE_DESC(_n_) (ELFNOTE_NAME(_n_) + ELFNOTE_ALIGN((_n_)->namesz))
-#define ELFNOTE_NEXT(_n_) ((ElfW(Note) *)(ELFNOTE_DESC(_n_) + ELFNOTE_ALIGN((_n_)->descsz)))
+#define ELFNOTE_DESC(_n_) (ELFNOTE_NAME(_n_) + ELFNOTE_ALIGN((_n_)->n_namesz))
+#define ELFNOTE_NEXT(_n_) ((ElfW(Nhdr) *)(ELFNOTE_DESC(_n_) + ELFNOTE_ALIGN((_n_)->n_descsz)))
+
+#define MAX_SHDR_COUNT 2048
+
+typedef struct elf_stats {
+#define ELF_STATIC (1 << 1) // if its statically linked (instead of dynamically)
+#define ELF_PIE (1 << 2)    // if its position indepdendent executable
+#define ELF_LOCSYM (1 << 3) // local symtab exists?
+        unsigned int personality; // if (personality & ELF_STATIC)
+        char arch;
+} elf_stat_t;
 
 struct opts {
-        int coretype;
-        int all;
-        int pid;
-        char *snapdir;
+	int use_stdin;
+	char *logfile;
 };
 
 typedef struct {
-        Elf64_Word namesz;
-        Elf64_Word descsz;
-        Elf64_Word type;
+	Elf64_Word namesz;
+	Elf64_Word descsz;
+	Elf64_Word type;
 } ElfW(Note);
 
-struct fde_func_data { /* For eh_frame.c */ 
-        uint64_t addr;
-        size_t size;
+struct fde_func_data {		/* For eh_frame.c */
+	uint64_t addr;
+	size_t size;
 };
 
+#ifndef MAX_PATH
+#define MAX_PATH 512
+#endif
 
-struct memelfnote
-{
-        const char *name;
-        int type;
-        unsigned int datasz;
-        void *data;
+typedef struct fdinfo {
+	int fd;
+	char path[MAX_PATH];
+	struct {
+		struct in_addr src_addr;
+		struct in_addr dst_addr;
+		uint16_t src_port;
+		uint16_t dst_port;
+	} socket;
+	char net;
+} fd_info_t;
+
+struct section_meta {
+	ElfW(Addr) bssVaddr, dynVaddr, relVaddr, relaVaddr, ehframeVaddr,
+	    textVaddr, o_textVaddr, dataVaddr, o_dataVaddr, gotVaddr, noteVaddr,
+	    hashVaddr, initVaddr, finiVaddr, pltVaddr, dsymVaddr, dstrVaddr,
+	    interpVaddr, tlsVaddr, plt_relaVaddr, plt_relVaddr;
+
+	ElfW(Off) bssOff, dynOff, relOff, relaOff, noteOff, ehframeOff,
+	    textOffset, dataOffset, gotOff, hashOff, initOff, finiOff, pltOff,
+	    dsymOff, dstrOff, interpOff, tlsOff, plt_relaOff, plt_relOff;
+	
+	ElfW(Word) bssSiz, dynSiz, hashSiz, ehframeSiz, textfSize, textSize,
+	    dataSize, strSiz, pltSiz, interpSiz, tlsSiz, noteSiz, dsymSiz,
+	    dstrSiz, plt_relaSiz, plt_relSiz;
 };
 
 struct elf_thread_core_info {
-        struct elf_thread_core_info *next;
-        struct elf_prstatus prstatus;
-        struct memelfnote notes[0];
+	struct elf_prstatus *prstatus;
+	struct elf_prpsinfo *psinfo;
+	struct user_regs_struct *regs;
+	elf_fpregset_t *fpu;
+	siginfo_t *siginfo;
+	 ElfW(Nhdr) * notes;
 };
 
-struct elf_note_info {
-        struct memelfnote *notes;
-        struct elf_prstatus *prstatus;  /* NT_PRSTATUS */
-        struct elf_prpsinfo *psinfo;    /* NT_PRPSINFO */
-        elf_fpregset_t *fpu;
-        int thread_status_size;
-        int numnote;
+typedef struct ecfs_file_fmt {
+	loff_t prstatus_offset; 
+	loff_t prpsinfo_offset;
+	loff_t fdinfo_offset;
+	loff_t siginfo_offset;
+	loff_t auxv_offset;
+	loff_t exepath_offset;
+	loff_t stb_offset;
+	size_t prstatus_size;
+	size_t prpsinfo_size;
+	size_t fdinfo_size;
+	size_t siginfo_size;
+	size_t auxv_size;
+	size_t exepath_size;
+	int thread_count;
+} ecfs_file_t;
+
+struct nt_file_struct {
+	struct {
+		unsigned long addr;
+		size_t size;
+		size_t pgoff;
+		char path[512];
+	} files[4096];
+	int fcount;
+	int page_size;
 };
+
+struct lib_mappings {
+	struct {
+		unsigned long addr;
+		unsigned long offset;
+		size_t size;
+		uint32_t flags; // PF_W|PF_R etc.
+		char name[MAX_LIB_NAME + 1];
+		char path[MAX_LIB_PATH + 1];
+	} libs[4096];
+	int libcount;
+};
+
+typedef struct notedesc {
+	ElfW(Nhdr) * notes;
+	struct elf_prstatus *prstatus;	/* NT_PRSTATUS */
+	struct elf_prpsinfo *psinfo;	/* NT_PRPSINFO */
+#if __x86_64__
+	Elf64_auxv_t *auxv;
+#else
+	Elf32_auxv_t *auxv;
+#endif
+	struct siginfo_t *siginfo;
+	struct elf_thread_core_info thread_core_info[MAX_THREADS];
+	elf_fpregset_t *fpu;
+	int thread_count;
+	int thread_status_size;
+	int numnote;
+	size_t auxv_size;
+	struct nt_file_struct *nt_files;
+	struct lib_mappings *lm_files;
+} notedesc_t;
 
 struct coredump_params {
-        siginfo_t *siginfo;
+	siginfo_t *siginfo;
 	struct pt_regs *regs;
-        unsigned long limit;
-        unsigned long mm_flags;
+	unsigned long limit;
+	unsigned long mm_flags;
 };
 
 typedef struct elfdesc {
 	uint8_t *mem;
-	ElfW(Ehdr) *ehdr;
-	ElfW(Phdr) *phdr;
-	ElfW(Shdr) *shdr;
-	ElfW(Addr) textVaddr;
-	ElfW(Addr) dataVaddr;
-	ElfW(Off) textOffset;
-	ElfW(Off) dataOffset;
-	ElfW(Off) dynamicOffset;
+	 ElfW(Ehdr) * ehdr;
+	 ElfW(Phdr) * phdr;
+	 ElfW(Shdr) * shdr;
+	 ElfW(Nhdr) * nhdr;
+	 ElfW(Dyn)  *dyn;
+	 ElfW(Addr) textVaddr;
+	 ElfW(Addr) dataVaddr;
+	 ElfW(Addr) dynVaddr;
+	 ElfW(Addr) ehframe_Vaddr;
+	 ElfW(Addr) noteVaddr;
+	 ElfW(Addr) bssVaddr;
+	 ElfW(Addr) interpVaddr;
+	 ElfW(Off) textOffset;
+	 ElfW(Off) dataOffset;
+	 ElfW(Off) ehframeOffset;
+	 ElfW(Off) dynOffset;
+	 ElfW(Off) bssOffset;
+	 ElfW(Off) interpOffset;
+	 ElfW(Off) noteOffset;
 	char *StringTable;
+	char *path;
+	size_t size;
+	size_t noteSize;
+	size_t gnu_noteSize;
+	size_t textSize;
+	size_t dataSize;
+	size_t dynSize;
+	size_t ehframe_Size;
+	size_t bssSize;
+	size_t interpSize;
+	size_t o_datafsize; // data filesz of executable (not core)
+	size_t text_memsz;
+	size_t text_filesz;
+	int dynlinked;
+	int pie;
 } elfdesc_t;
 
 typedef struct mappings {
@@ -114,6 +246,7 @@ typedef struct mappings {
 	unsigned long base;
 	size_t size;
 	int elfmap;
+	int textbase;		// is the text segment base of the processes exe
 	int stack;
 	int thread_stack;
 	int heap;
@@ -128,16 +261,21 @@ typedef struct mappings {
 	int stack_tid;
 	size_t sh_offset;
 	uint32_t p_flags;
+	int has_pt_load;
 } mappings_t;
 
 typedef struct memdesc {
-	pid_t pid;	
-	uint8_t *exe; /* Points to /proc/<pid>/exe */
-	char *path;   // path to executable
-	char *comm; //name of executable
-	int mapcount; // overall # of memory maps
-	int type; // ET_EXEC or ET_DYN
+	pid_t pid;
+	uint8_t *exe;		/* Points to /proc/<pid>/exe */
+	char *path;		// path to executable (might be a symlnk)
+	char *comm;		// filename of executable (might be a symlink)
+	char *exe_path;		// path to executable (real path not symlink)
+	char *exe_comm; 	// real filename, not symlink
+	int mapcount;		// overall # of memory maps
+	int type;		// ET_EXEC or ET_DYN
+	uint8_t *textseg;	// gets heapallocated and has text segment read into it
 	ElfW(Addr) base, data_base;
+	
 	struct {
 		unsigned long sh_offset;
 		unsigned long base;
@@ -158,14 +296,22 @@ typedef struct memdesc {
 		unsigned long base;
 		unsigned int size;
 	} heap;
-	struct { 
+	struct {
+		unsigned long sh_offset;
+		unsigned long base;
+		unsigned int size;
+	} text; // special case since coredumps don't dump complete text image
+	struct {
 		int fds[MAXFD];
 		int pid;
-		int uid, gid; 
+		int ppid;
+		int uid;
+		int gid;
 		int tidcount;
+		int exit_signal;
 		pid_t tid[MAX_TID];
 		pid_t leader;
-		pid_t tracer; // the pid of the tracer
+		pid_t tracer;	// the pid of the tracer
 		unsigned int state;
 	} task;
 	mappings_t *maps;
@@ -173,36 +319,77 @@ typedef struct memdesc {
 	char *stack_args;
 	size_t stack_args_len;
 	uint8_t *saved_auxv;
+	int pie;
+	unsigned long o_entry; 
+	fd_info_t *fdinfo;
+	ssize_t fdinfo_size;
 } memdesc_t;
-	
-		
-	
+
 typedef struct descriptor {
 	elfdesc_t binary;
 	memdesc_t memory;
-	struct elf_note_info info[MAX_THREADS];
+	notedesc_t info[MAX_THREADS];
 	int exe_type;
 	int dynlinking;
 	char *snapdir;
 } desc_t;
 
-
 typedef struct node {
-        struct node *next;
-        struct node *prev;
-        desc_t *desc;
+	struct node *next;
+	struct node *prev;
+	void *data;
 } node_t;
 
 typedef struct list {
-        node_t *head;
-        node_t *tail;
+	node_t *head;
+	node_t *tail;
 } list_t;
 
+typedef struct symentry {
+        ElfW(Addr) value;
+        size_t size;
+        size_t count; //# of sym entries
+	char *name;  //symname
+	char *library; //libname
+	
+} symentry_t;
 
 
-memdesc_t * take_process_snapshot(pid_t);
-void * heapAlloc(size_t);
-char * xstrdup(const char *);
-char * xfmtstrdup(char *fmt, ...);
+/*
+ * XXX smoothly transition these globals in somewhere else
+ * these were added for another after the fact strangeness
+ * to account for the fact that /proc/$pid disappears as soon
+ * as the corefile has been read from stdin. so certain problems
+ * don't show up when passing corefiles directly to ecfs that
+ * do show up when use core_pattern. 
+ */
+
+struct {
+        ssize_t hash_size;
+        ssize_t rela_size;
+        ssize_t init_size;
+        ssize_t fini_size;
+        ssize_t got_size;
+        ssize_t ehframe_size;
+        ssize_t plt_rela_size;
+	ssize_t plt_size;
+	unsigned long plt_vaddr;
+        int eh_frame_offset_workaround;
+} global_hacks;
+
+void *heapAlloc(size_t);
+char *xstrdup(const char *);
+char *xfmtstrdup(char *fmt, ...);
 int get_all_functions(const char *filepath, struct fde_func_data **funcs);
+void ecfs_print(char *, ...);
+int xopen(const char *, int);
+
+/* from list.c */
+int insert_item_end(list_t **list, void *data, size_t sz);
+int insert_item_front(list_t **list, void *data, size_t sz);
+
+/* from symresolve.c */
+
+int fill_dynamic_symtab(list_t **list, struct lib_mappings *lm);
+unsigned long lookup_from_symlist(const char *name, list_t *list);
 
