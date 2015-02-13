@@ -384,6 +384,7 @@ ssize_t get_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo)
 	
 	*pginfo = (pltgot_info_t *)heapAlloc(desc->plt_rela_count * sizeof(pltgot_info_t));
 	GOT = &desc->pltgot[3]; // the first 3 entries are reserved
+	pltVaddr += 16; // we want to start at the PLT entry after what is called PLT-0
 	for (i = 0; i < desc->plt_rela_count; i++) {
 		(*pginfo)[i].got_site = desc->plt_rela[i].r_offset;
 		(*pginfo)[i].got_entry_va = (unsigned long)GOT[i];

@@ -51,7 +51,8 @@ int main(int argc, char **argv)
 	pltgot_info_t *pltgot;
 	ret = get_pltgot_info(desc, &pltgot);
 	for (i = 0; i < ret; i++) 
-		printf("gotsite: %lx gotvalue: %lx gotshlib: %lx\n", pltgot[i].got_site, pltgot[i].got_entry_va, pltgot[i].shl_entry_va);
+		printf("gotsite: %lx gotvalue: %lx gotshlib: %lx pltval: %lx\n", pltgot[i].got_site, pltgot[i].got_entry_va, 
+						pltgot[i].shl_entry_va, pltgot[i].plt_entry_va);
 
 	uint8_t *ptr;
 	ssize_t len = get_ptr_for_va(desc, desc->textVaddr, &ptr);
