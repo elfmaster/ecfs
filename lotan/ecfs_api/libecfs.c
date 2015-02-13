@@ -99,6 +99,17 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 		}
 	}
 	
+	/*
+	 * Get plt addr and size
+	 */
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".plt")) {
+                        ecfs->pltVaddr = shdr[i].sh_addr;
+                	ecfs->pltSize = shdr[i].sh_size;
+		 	break;
+                }
+        }
+
 	ecfs->ehdr = ehdr;
 	ecfs->phdr = phdr;
 	ecfs->shdr = shdr;
@@ -336,6 +347,16 @@ size_t get_data_size(ecfs_elf_t *desc)
 	return desc->dataSize;
 }
 
+unsigned long get_plt_va(ecfs_elf_t *desc)
+{
+	return desc->pltVaddr;
+}
+
+unsigned long get_plt_size(ecfs_elf_t *desc)
+{
+	return desc->pltSize;
+}
+
 /*
  * This function fills in this struct:
    typedef struct pltgotinfo {
@@ -351,7 +372,13 @@ ssize_t get_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo)
 	unsigned long *GOT = NULL;
 	ElfW(Sym) *symtab = desc->dynsym;
 	ElfW(Sym) *sym;
-
+	ElfW(Addr) pltVaddr;
+ 	size_t pltSize;
+	
+	if ((pltVaddr = get_plt_va(desc)) == 0)
+		return -1;
+	if ((pltSize = get_plt_size(desc)) == 0)
+		return -1;
 	if (desc->plt_rela_count == 0 || desc->plt_rela == NULL || symtab == NULL)
 		return -1;
 	
@@ -362,6 +389,8 @@ ssize_t get_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo)
 		(*pginfo)[i].got_entry_va = (unsigned long)GOT[i];
 		 sym = (ElfW(Sym) *)&symtab[ELF64_R_SYM(desc->plt_rela[i].r_info)];
 		(*pginfo)[i].shl_entry_va = sym->st_value;
+		(*pginfo)[i].plt_entry_va = pltVaddr;
+		pltVaddr += 16;
 	}
 	return i;
 }

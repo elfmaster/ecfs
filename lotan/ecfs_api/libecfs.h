@@ -43,7 +43,8 @@ typedef struct ecfs_elf {
          ElfW(Addr) textVaddr;  /* Text segment virtual address */
          ElfW(Addr) dataVaddr;  /* data segment virtual address */
          ElfW(Addr) dynVaddr;   /* dynamic segment virtual address */
-         ElfW(Off) textOff;
+         ElfW(Addr) pltVaddr;
+	 ElfW(Off) textOff;
 	 ElfW(Off) dataOff;
 	 ElfW(Off) dynOff;
 	 ElfW(Rela) *plt_rela;  /* points to .rela.plt section */
@@ -54,6 +55,7 @@ typedef struct ecfs_elf {
          size_t dataSize;       /* p_memsz of data segment      */
          size_t textSize;       /* p_memsz of text segment      */
          size_t dynSize;        /* p_memsz of dynamnic segment  */
+	 size_t pltSize;
          int fd;                /* A copy of the file descriptor to the file */
 } ecfs_elf_t;
 
