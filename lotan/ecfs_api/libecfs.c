@@ -390,7 +390,8 @@ ssize_t get_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo)
 		(*pginfo)[i].got_entry_va = (unsigned long)GOT[i];
 		 sym = (ElfW(Sym) *)&symtab[ELF64_R_SYM(desc->plt_rela[i].r_info)];
 		(*pginfo)[i].shl_entry_va = sym->st_value;
-		(*pginfo)[i].plt_entry_va = (pltVaddr + 6); // the + 6 is because it must point to the push instruction in the plt entry
+		 // the + 6 is because it must point to the push instruction in the plt entry
+		(*pginfo)[i].plt_entry_va = (pltVaddr + 6) + desc->pie ? desc->textVaddr : 0; 
 		pltVaddr += 16;
 	}
 	return i;

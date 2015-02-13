@@ -55,8 +55,9 @@ typedef struct ecfs_elf {
          size_t dataSize;       /* p_memsz of data segment      */
          size_t textSize;       /* p_memsz of text segment      */
          size_t dynSize;        /* p_memsz of dynamnic segment  */
-	 size_t pltSize;
+	 size_t pltSize;	/* size of .plt section */
          int fd;                /* A copy of the file descriptor to the file */
+	 int pie;		/* is the process from a PIE executable? */
 } ecfs_elf_t;
 
 #define MAX_SYM_LEN 255

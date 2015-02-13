@@ -1,0 +1,12 @@
+[ ECFS API / libecfs]
+
+libecfs is the library that is used to parse the ecfs file format.
+It is designed in such a way that parsing this extended ELF format
+is done with minimal effort. 
+
+Use cases:
+
+Malware analysis of ecfs files
+Advanced debugging of ecfs files
+
+See man libecfs
