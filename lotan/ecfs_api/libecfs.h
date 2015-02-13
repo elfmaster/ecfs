@@ -32,6 +32,7 @@ typedef struct ecfs_elf {
          char *shstrtab;        /* shdr string table */
          char *strtab;          /* .symtab string table */
          char *dynstr;          /* .dynstr string table */
+	 unsigned long *pltgot;	/* pointer to .plt.got */
 	 ElfW(Ehdr) * ehdr;     /* ELF Header pointer */
          ElfW(Phdr) * phdr;     /* Program header table pointer */
          ElfW(Shdr) * shdr;     /* Section header table pointer */
@@ -45,6 +46,10 @@ typedef struct ecfs_elf {
          ElfW(Off) textOff;
 	 ElfW(Off) dataOff;
 	 ElfW(Off) dynOff;
+	 ElfW(Rela) *plt_rela;  /* points to .rela.plt section */
+	 ElfW(Rela) *dyn_rela;  /* points to .rela.dyn section */
+	 ssize_t plt_rela_count; /* number of .rela.plt entries */
+	 ssize_t dyn_rela_count; /* number of .rela.dyn entries */
 	 size_t filesize;       /* total file size              */
          size_t dataSize;       /* p_memsz of data segment      */
          size_t textSize;       /* p_memsz of text segment      */
@@ -78,12 +83,12 @@ typedef struct fdinfo {
         char net;
 } fd_info_t;
 
-typedef struct gotinfo {
+typedef struct pltgotinfo {
 	unsigned long got_site; // address of where the GOT entry exists
 	unsigned long got_entry_va; // address that is in the GOT entry (the pointer address)
 	unsigned long plt_entry_va; // the PLT address that the GOT entry should point to if not yet resolved
 	unsigned long shl_entry_va; // the shared library address the GOT should point to if it has been resolved
-} got_info_t;
+} pltgot_info_t;
 
 void * heapAlloc(size_t);
 

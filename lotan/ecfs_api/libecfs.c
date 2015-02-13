@@ -67,6 +67,38 @@ ecfs_elf_t * load_ecfs_file(const char *path)
                 }
 
 	}
+	/*
+	 * Get dynamic relocation sections
+	 */
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".rela.dyn")) {
+			ecfs->dyn_rela = (ElfW(Rela) *)&mem[shdr[i].sh_offset];
+			ecfs->dyn_rela_count = shdr[i].sh_size / shdr[i].sh_entsize;
+			break;
+		}
+	}
+
+	/*
+	 * Get plt relocation sections
+	 */
+	for (i = 0; i < ehdr->e_shnum; i++) {
+                if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".rela.plt")) {
+                        ecfs->plt_rela = (ElfW(Rela) *)&mem[shdr[i].sh_offset];
+                        ecfs->plt_rela_count = shdr[i].sh_size / shdr[i].sh_entsize;
+                        break;
+                }
+        }
+	
+	/*
+	 * set the pltgot pointer
+	 */
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".got.plt")) {
+			ecfs->pltgot = (unsigned long *)&mem[shdr[i].sh_offset];
+			break;
+		}
+	}
+	
 	ecfs->ehdr = ehdr;
 	ecfs->phdr = phdr;
 	ecfs->shdr = shdr;
@@ -304,8 +336,33 @@ size_t get_data_size(ecfs_elf_t *desc)
 	return desc->dataSize;
 }
 
+/*
+ * This function fills in this struct:
+   typedef struct pltgotinfo {
+        unsigned long got_site; // address of where the GOT entry exists
+        unsigned long got_entry_va; // address that is in the GOT entry (the pointer address)
+        unsigned long plt_entry_va; // the PLT address that the GOT entry should point to if not yet resolved
+        unsigned long shl_entry_va; // the shared library address the GOT should point to if it has been resolved
+} pltgot_info_t;
+*/
+ssize_t get_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo)
+{	
+	int i;
+	unsigned long *GOT = NULL;
+	ElfW(Sym) *symtab = desc->dynsym;
+	ElfW(Sym) *sym;
 
-
-		
-
+	if (desc->plt_rela_count == 0 || desc->plt_rela == NULL || symtab == NULL)
+		return -1;
+	
+	*pginfo = (pltgot_info_t *)heapAlloc(desc->plt_rela_count * sizeof(pltgot_info_t));
+	GOT = &desc->pltgot[3]; // the first 3 entries are reserved
+	for (i = 0; i < desc->plt_rela_count; i++) {
+		(*pginfo)[i].got_site = desc->plt_rela[i].r_offset;
+		(*pginfo)[i].got_entry_va = (unsigned long)GOT[i];
+		 sym = (ElfW(Sym) *)&symtab[ELF64_R_SYM(desc->plt_rela[i].r_info)];
+		(*pginfo)[i].shl_entry_va = sym->st_value;
+	}
+	return i;
+}
 

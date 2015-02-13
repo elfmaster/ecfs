@@ -48,7 +48,11 @@ int main(int argc, char **argv)
 	for (i = 0; i < ret; i++)
 		printf("local symbol: %s\n", &desc->strtab[lsyms[i].nameoffset]);
 	
-	
+	pltgot_info_t *pltgot;
+	ret = get_pltgot_info(desc, &pltgot);
+	for (i = 0; i < ret; i++) 
+		printf("gotsite: %lx gotvalue: %lx gotshlib: %lx\n", pltgot[i].got_site, pltgot[i].got_entry_va, pltgot[i].shl_entry_va);
+
 	uint8_t *ptr;
 	ssize_t len = get_ptr_for_va(desc, desc->textVaddr, &ptr);
 	printf("%d bytes left for segment\n", (int)len);
