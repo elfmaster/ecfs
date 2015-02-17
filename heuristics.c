@@ -58,8 +58,10 @@ static char * get_real_lib_path(char *name)
 	snprintf(tmp, 512, "/usr/lib/%s", name);
 	if (access(tmp, F_OK) == 0) {
 		ret = readlink(tmp, real, 512);
-        	if (ret > 0)
-                	return xstrdup(real);
+        	if (ret > 0) {
+			ptr = get_real_lib_path(real);
+                	return xstrdup(ptr);
+		}
 		else
 			return xstrdup(tmp);
 	}
@@ -68,8 +70,10 @@ static char * get_real_lib_path(char *name)
 	
 	if (access(tmp, F_OK) == 0) {
 		ret = readlink(tmp, real, 512);
-		if (ret > 0)
-			return xstrdup(real);
+		if (ret > 0) {
+			ptr = get_real_lib_path(real);
+			return xstrdup(ptr);
+		}
 		else
 			return xstrdup(tmp);
 	}
@@ -302,8 +306,7 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 		 	 * dynamic linker or something similar and it would
 			 * slip through.	
 	 		 */
-			if (!strncmp(lm_files->libs[i].name, "ld-", 3))
-				continue;
+			
 			/*
 			 * in the case that the lib path is a symlink
 			 */
@@ -311,7 +314,7 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 			if (real == NULL)
 				continue;
 			log_msg(__LINE__, "real libname: %s", real);
-			if (!strcmp(lm_files->libs[i].name, real)) {
+			if (!strcmp(lm_files->libs[i].name, real) || !strncmp(lm_files->libs[i].name, "ld-", 3)) {
 				valid++;
 				break;
 			}
