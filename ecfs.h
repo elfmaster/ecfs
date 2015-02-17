@@ -28,6 +28,15 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+/*
+ * Custom sections
+ */
+#define SHT_INJECTED 0x200000 
+
+
+/*
+ * Type of socket
+ */
 #define NET_TCP 1
 #define NET_UDP 2
 
@@ -354,6 +363,10 @@ typedef struct symentry {
 	char *library; //libname
 	
 } symentry_t;
+
+struct dlopen_libs {
+	char *libname;
+};
 
 
 /*

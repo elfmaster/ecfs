@@ -114,6 +114,8 @@ unsigned long lookup_from_symlist(const char *name, list_t *list)
 	return 0;
 }
 
+
+
 int store_dynamic_symvals(list_t *list, const char *path)
 {	
         struct stat st;
