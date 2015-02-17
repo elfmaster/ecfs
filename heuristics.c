@@ -32,6 +32,117 @@ int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
 	return index;
 }
 
+/* 
+ * Find the actual path to DT_NEEDED libraries
+ * and take possible symlinks into consideration 
+ */
+static char * get_real_lib_path(char *name)
+{
+	char tmp[512] = {0};
+	char real[512] = {0};
+	char *ptr;
+
+	int ret;
+	
+	snprintf(tmp, 512, "/lib/x86_64-linux-gnu/%s", name);
+	if (access(tmp, F_OK) == 0) {
+		ret = readlink(tmp, real, 512);
+		if (ret > 0) {
+			ptr = get_real_lib_path(real);
+			return xstrdup(ptr);
+		}
+		else
+			return xstrdup(tmp);
+	}
+
+	snprintf(tmp, 512, "/usr/lib/%s", name);
+	if (access(tmp, F_OK) == 0) {
+		ret = readlink(tmp, real, 512);
+        	if (ret > 0)
+                	return xstrdup(real);
+		else
+			return xstrdup(tmp);
+	}
+
+	snprintf(tmp, 512, "/lib/%s", name);
+	
+	if (access(tmp, F_OK) == 0) {
+		ret = readlink(tmp, real, 512);
+		if (ret > 0)
+			return xstrdup(real);
+		else
+			return xstrdup(tmp);
+	}
+	
+	return NULL;
+}
+
+/* 
+ * From DT_NEEDED (We pass the executable and each shared library to this function)
+ */
+int get_dt_needed_libs(const char *bin_path, struct needed_libs **needed_libs)
+{
+	ElfW(Ehdr) *ehdr;
+	ElfW(Phdr) *phdr;
+	ElfW(Dyn) *dyn;
+	ElfW(Shdr) *shdr;
+	int fd, i,  needed_count;
+	uint8_t *mem;
+	struct stat st;
+	char *dynstr;
+
+	fd = xopen(bin_path, O_RDONLY);
+	fstat(fd, &st);
+	mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (mem == MAP_FAILED) {
+		perror("mmap");
+		return -1;
+	}
+	ehdr = (ElfW(Ehdr) *)mem;
+	phdr = (ElfW(Phdr) *)&mem[ehdr->e_phoff];
+	shdr = (ElfW(Shdr) *)&mem[ehdr->e_shoff];
+	char *shstrtab = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
+	
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (!strcmp(&shstrtab[shdr[i].sh_name], ".dynstr")) {
+			dynstr = (char *)&mem[shdr[i].sh_offset];
+			break;
+		}
+	}
+
+	log_msg(__LINE__, "dynstr: %p", dynstr);
+	if (dynstr == NULL)
+		return 0;
+
+	for (i = 0; i < ehdr->e_phnum; i++) { 
+		if (phdr[i].p_type == PT_DYNAMIC) {	
+			dyn = (ElfW(Dyn) *)&mem[phdr[i].p_offset];
+			break;
+		}
+	}
+	log_msg(__LINE__, "dyn: %p\n", dyn);
+	if (dyn == NULL)
+		return 0;
+	
+	*needed_libs = (struct needed_libs *)heapAlloc(sizeof(**needed_libs) * 4096);
+	for (needed_count = 0, i = 0; dyn[i].d_tag != DT_NULL; i++) {
+		switch(dyn[i].d_tag) {
+			case DT_NEEDED:
+				(*needed_libs)[i].libname = xstrdup(&dynstr[dyn[i].d_un.d_val]);
+				(*needed_libs)[i].libpath = get_real_lib_path((*needed_libs)[i].libname);
+				log_msg(__LINE__, "found real libpath: %s", (*needed_libs)[i].libpath);
+				needed_count++;
+				break;
+			default:
+				log_msg(__LINE__, "DT_TAG: %lx", dyn[i].d_tag);
+				break;
+		}
+	}
+	return needed_count;
+}
+/*
+ * Get dlopen libs
+ */
 int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 {	
 	ElfW(Ehdr) *ehdr;
@@ -152,54 +263,70 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 	return scount;
 }
 
-/*
- * If there is a shared library showing in /proc/$pid/maps
- * that is not in NT_FILES from the original core, then it
- * was injected using a method other than dlopen()/LD_PRELOAD/DT_NEEDED
- * and is considered malicous.
- */
-static int validate_library(char *filename, struct lib_mappings *lm_files)
+void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elfdesc)
 {
-	int i;
-	char *p;
-	for (i = 0; i < lm_files->libcount; i++) {
-#if DEBUG
-		log_msg(__LINE__, "validate_library(): Comparing %s and %s", lm_files->libs[i].name, filename);
-#endif
-		if (!strcmp(lm_files->libs[i].name, filename)) {
-			return 1;
-		} 
-	}
-	log_msg(__LINE__, "invalid shlib: %s", filename);
-	return 0;
-
-}
-int mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elfdesc)
-{
-	struct mappings *maps = memdesc->maps;
 	struct lib_mappings *lm_files = notedesc->lm_files;
-	int i, ret;
-	char *p, *libname;
-
-	for (i = 0; i < memdesc->mapcount; i++) {
-		if (!maps[i].shlib)
-			continue;
-		p = strrchr(maps[i].filename, '/') + 1;
-		libname = (p == NULL ? maps[i].filename : p);
-		ret = validate_library(libname, lm_files);
-		if (ret == 0) {
+	struct needed_libs *needed_libs;
+	struct dlopen_libs *dlopen_libs;
+	int needed_count;
+	int dlopen_count;
+	int valid;
+	int i, j;
+	/*
+	 * We just check the immediate executable for dlopen calls
+	 */
+	/*
+	dlopen_count = get_dlopen_libs(memdesc->exe_path, &dlopen_libs);
 #if DEBUG
-			log_msg(__LINE__, "HEURISTIC: found injected shlib: %s", maps[i].filename);
-#endif
-		
-			maps[i].injected++;
-			maps[i].sh_offset = get_internal_sh_offset(elfdesc, memdesc, i); 		
-			if (maps[i].sh_offset == 0)
-				maps[i].sh_offset = INVALID_SH_OFFSET; // signifies not to create an shdr for this
-		}
-		/* otherwise do nothing */
+	if (dlopen_count <= 0) {
+		log_msg(__LINE__, "found %d dlopen loaded libraries", dlopen_count);
 	}
-	return 0;
+#endif
+	*/
+	/*
+	 * We check the dynamic segment of the executable and each valid
+	 * shared library, to see what the dependencies are.
+	 */
+	char *real;
+	int ret;
+	
+	log_msg(__LINE__, "exe_path: %s", memdesc->exe_path);
+	needed_count = get_dt_needed_libs(memdesc->exe_path, &needed_libs);
+	log_msg(__LINE__, "needed count: %d", needed_count);
+
+	for (i = 0; i < lm_files->libcount; i++) {
+		for (j = 0; j < needed_count; j++) {
+			/*
+			 * XXX make this heuristic more sound. This would
+			 * allow an attacker to name his evil lib after the
+		 	 * dynamic linker or something similar and it would
+			 * slip through.	
+	 		 */
+			if (!strncmp(lm_files->libs[i].name, "ld-", 3))
+				continue;
+			/*
+			 * in the case that the lib path is a symlink
+			 */
+			real = strrchr(needed_libs[j].libpath, '/') + 1;
+			if (real == NULL)
+				continue;
+			log_msg(__LINE__, "real libname: %s", real);
+			if (!strcmp(lm_files->libs[i].name, real)) {
+				valid++;
+				break;
+			}
+		}
+		if (valid == 0) {
+			lm_files->libs[i].injected++;
+#if DEBUG
+			log_msg(__LINE__, "injected library found: %s", lm_files->libs[i].name);
+#endif
+		}
+		else
+			valid = 0;
+				
+	}
+
 }
 
 

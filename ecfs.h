@@ -184,6 +184,7 @@ struct lib_mappings {
 		unsigned long offset;
 		size_t size;
 		uint32_t flags; // PF_W|PF_R etc.
+		int injected; // to signify that the file was an injected dll
 		char name[MAX_LIB_NAME + 1];
 		char path[MAX_LIB_PATH + 1];
 	} libs[4096];
@@ -376,6 +377,11 @@ struct dlopen_libs {
 	int count;
 };
 
+struct needed_libs {
+	char *libname;
+	char *libpath;
+	int count;
+};
 
 /*
  * XXX smoothly transition these globals in somewhere else

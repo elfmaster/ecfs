@@ -353,11 +353,12 @@ void parse_nt_files(struct nt_file_struct **nt_files, void *data, size_t size)
 static void print_nt_files(struct nt_file_struct *file_maps)
 {
 	int i;
+	log_msg(__LINE__, "ecfs NT_FILES print out");
 	for (i = 0; i < file_maps->fcount; i++) {
-		printf("%lx  %lx  %lx\n", file_maps->files[i].addr, 
+		log_msg(__LINE__, "%lx  %lx  %lx\n", file_maps->files[i].addr, 
 					  file_maps->files[i].addr + file_maps->files[i].size, 
 					  file_maps->files[i].pgoff);
-		printf("\t%s\n", file_maps->files[i].path);
+		log_msg(__LINE__,"\t%s\n", file_maps->files[i].path);
 	}
 }
 
@@ -716,6 +717,7 @@ static void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_fi
 	memset(lm, 0, sizeof(struct lib_mappings));
 
 	for (i = 0; i < fmaps->fcount; i++) {
+		log_msg(__LINE__, "filepath: %s", fmaps->files[i].path);
 		p = strrchr(fmaps->files[i].path, '/') + 1;
 		if (!strstr(p, ".so"))
 			continue;
@@ -728,6 +730,9 @@ static void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_fi
 	 	 */
 		strncpy(lm->libs[lm->libcount].path, fmaps->files[i].path, MAX_LIB_PATH);
 		strncpy(lm->libs[lm->libcount].name, tmp, MAX_LIB_NAME);
+#if DEBUG
+		log_msg(__LINE__, "libpath baby: %s", lm->libs[lm->libcount].name);
+#endif
 		lm->libs[lm->libcount].addr = fmaps->files[i].addr;
 		lm->libs[lm->libcount].size = fmaps->files[i].size;
 		lm->libs[lm->libcount].flags = get_mapping_flags(lm->libs[lm->libcount].addr, memdesc);
@@ -1921,7 +1926,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	int data_count;
 	char *str = NULL;
 	for (data_count = 0, i = 0; i < notedesc->lm_files->libcount; i++) {
-		shdr[scount].sh_type = SHT_SHLIB;
+		shdr[scount].sh_type = notedesc->lm_files->libs[i].injected ? SHT_INJECTED : SHT_SHLIB;
 		shdr[scount].sh_offset = notedesc->lm_files->libs[i].offset;
 		shdr[scount].sh_addr = notedesc->lm_files->libs[i].addr;
 		shdr[scount].sh_flags = SHF_ALLOC;
@@ -1951,7 +1956,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 		scount += 1;
 		xfree(str);
 	}
-		
+	
 	/*
 	 * .prstatus
 	 */
