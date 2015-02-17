@@ -35,6 +35,10 @@
 
 
 /*
+ * used in cases where we want to prevent an shdr for being written
+ */
+#define INVALID_SH_OFFSET (long)~0x0 
+/*
  * Type of socket
  */
 #define NET_TCP 1
@@ -151,6 +155,7 @@ typedef struct ecfs_file_fmt {
 	loff_t exepath_offset;
 	loff_t stb_offset;
 	loff_t personality_offset;
+	loff_t arglist_offset;
 	size_t prstatus_size;
 	size_t prpsinfo_size;
 	size_t fdinfo_size;
@@ -158,6 +163,7 @@ typedef struct ecfs_file_fmt {
 	size_t auxv_size;
 	size_t exepath_size;
 	size_t personality_size;
+	size_t arglist_size;
 	int thread_count;
 } ecfs_file_t;
 
@@ -260,8 +266,9 @@ typedef struct mappings {
 	int stack;
 	int thread_stack;
 	int heap;
-	int shlib;
-	int padding;
+	int shlib;	// this is a shared library
+	int injected; // illegally injected
+	int padding;  // this is padding or relro
 	int special;
 	int anonmap_exe;
 	int filemap;
@@ -366,6 +373,7 @@ typedef struct symentry {
 
 struct dlopen_libs {
 	char *libname;
+	int count;
 };
 
 
@@ -407,3 +415,7 @@ int insert_item_front(list_t **list, void *data, size_t sz);
 int fill_dynamic_symtab(list_t **list, struct lib_mappings *lm);
 unsigned long lookup_from_symlist(const char *name, list_t *list);
 
+/*
+ * from ecfs.c
+ */
+ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int type);

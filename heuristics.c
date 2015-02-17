@@ -10,7 +10,7 @@
 
 #define OFFSET_2_PUSH 6 // # of bytes int PLT entry where push instruction begins
 
-static int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
+int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
 {
 	int i, j, index = 0;
 	*stra = (char **)malloc(sizeof(char *) * rodata_size); // this gives us more room than needed
@@ -32,7 +32,7 @@ static int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata
 	return index;
 }
 
-int get_dlopen_libs(list_t *list, const char *exe_path, struct dlopen_libs **dl_libs)
+int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 {	
 	ElfW(Ehdr) *ehdr;
 	ElfW(Shdr) *shdr;
@@ -44,7 +44,7 @@ int get_dlopen_libs(list_t *list, const char *exe_path, struct dlopen_libs **dl_
 	uint8_t *mem;
 	uint8_t *text_ptr, *data_ptr, *rodata_ptr;
 	size_t text_size, dataSize, rodata_size, i; //text_size refers to size of .text not the text segment
-	int fd, scount, relcount;
+	int fd, scount, relcount, symcount, found_dlopen;
 	char **strings, *dynstr;
 	struct stat st;
 
@@ -54,8 +54,6 @@ int get_dlopen_libs(list_t *list, const char *exe_path, struct dlopen_libs **dl_
 	 * its possible __libc_dlopen_mode() was called by an
 	 * attacker
 	 */
-	if (lookup_from_symlist("dlopen", list) == 0)
-		return 0;
 	
 	fd = xopen(exe_path, O_RDONLY);
 	xfstat(&st, fd);
@@ -99,9 +97,21 @@ int get_dlopen_libs(list_t *list, const char *exe_path, struct dlopen_libs **dl_
 		} else
 		if (!strcmp(&shstrtab[shdr[i].sh_name], ".dynstr")) 
 			dynstr = (char *)&mem[shdr[i].sh_offset];
+		else
+		if (!strcmp(&shstrtab[shdr[i].sh_name], ".dynsym"))
+			symcount = shdr[i].sh_size / sizeof(ElfW(Sym));
 	}
 	if (text_ptr == NULL || rela == NULL || symtab == NULL)
 		return -1;
+	
+	for (found_dlopen = 0, i = 0; i < symcount; i++) {
+		if (!strcmp(&dynstr[symtab[i].st_name], "dlopen")) {
+			found_dlopen++;
+			break;
+		}
+	}
+	if (found_dlopen) 
+		return 0;			
 	
 	data_ptr = &mem[dataOffset];
 	uint8_t *ptr;
@@ -141,4 +151,57 @@ int get_dlopen_libs(list_t *list, const char *exe_path, struct dlopen_libs **dl_
 #endif
 	return scount;
 }
+
+/*
+ * If there is a shared library showing in /proc/$pid/maps
+ * that is not in NT_FILES from the original core, then it
+ * was injected using a method other than dlopen()/LD_PRELOAD/DT_NEEDED
+ * and is considered malicous.
+ */
+static int validate_library(char *filename, struct lib_mappings *lm_files)
+{
+	int i;
+	char *p;
+	for (i = 0; i < lm_files->libcount; i++) {
+#if DEBUG
+		log_msg(__LINE__, "validate_library(): Comparing %s and %s", lm_files->libs[i].name, filename);
+#endif
+		if (!strcmp(lm_files->libs[i].name, filename)) {
+			return 1;
+		} 
+	}
+	log_msg(__LINE__, "invalid shlib: %s", filename);
+	return 0;
+
+}
+int mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elfdesc)
+{
+	struct mappings *maps = memdesc->maps;
+	struct lib_mappings *lm_files = notedesc->lm_files;
+	int i, ret;
+	char *p, *libname;
+
+	for (i = 0; i < memdesc->mapcount; i++) {
+		if (!maps[i].shlib)
+			continue;
+		p = strrchr(maps[i].filename, '/') + 1;
+		libname = (p == NULL ? maps[i].filename : p);
+		ret = validate_library(libname, lm_files);
+		if (ret == 0) {
+#if DEBUG
+			log_msg(__LINE__, "HEURISTIC: found injected shlib: %s", maps[i].filename);
+#endif
+		
+			maps[i].injected++;
+			maps[i].sh_offset = get_internal_sh_offset(elfdesc, memdesc, i); 		
+			if (maps[i].sh_offset == 0)
+				maps[i].sh_offset = INVALID_SH_OFFSET; // signifies not to create an shdr for this
+		}
+		/* otherwise do nothing */
+	}
+	return 0;
+}
+
+
+
 	

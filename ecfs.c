@@ -27,7 +27,8 @@
 
 struct opts opts;
 
-typedef struct handle {
+typedef struct handle { 
+	char arglist[ELF_PRARGSZ];
 	elf_stat_t elfstat;
 	elfdesc_t *elfdesc;
 	memdesc_t *memdesc;
@@ -460,7 +461,6 @@ static  int check_for_pie(int pid)
 	uint8_t *mem;
 	struct stat st;
 	
-	log_msg(__LINE__, "in check_for_pie");
 	char *path = xfmtstrdup("/proc/%d/exe", pid);
 	int fd = xopen(path, O_RDONLY);
 	fstat(fd, &st);
@@ -1343,7 +1343,12 @@ static void xref_phdrs_for_offsets(memdesc_t *memdesc, elfdesc_t *elfdesc)
 	}
 }
 
-static ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int type)
+/*
+ * This function treats type as either HEAP/STACK/VDSO/VSYSCALL. But if it
+ * is none of these, then it is treated as an index into the 'mappings_t maps[]'
+ * array.
+ */
+ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int type)
 {
 #define HEAP 0
 #define STACK 1
@@ -1396,7 +1401,24 @@ static ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, 
                         }
                         break;
                 default:
-                        return 0;
+			/*
+	 		 * if type is unknown then it gets treated as an index
+		 	 * into maps array.
+			 */
+#if DEBUG
+			log_msg(__LINE__, "get_internal_sh_offset is treating 'type' as index into map array");
+#endif
+			if (type < 0 || type > memdesc->mapcount) {
+#if DEBUG
+			log_msg(__LINE__, "get_internal_sh_offset was passed an invalid index into map array: %d", type);
+#endif
+				return 0;
+			}
+
+			for (j = 0; j < elfdesc->ehdr->e_phnum; j++) 
+				if (phdr[j].p_vaddr == maps[type].base)
+					return phdr[j].p_offset;
+                       	break;
         }
         return 0;
 }
@@ -2032,6 +2054,22 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         stoffset += strlen(".personality") + 1;
         scount++;
 
+	/*
+ 	 * .arglist
+	 */
+	shdr[scount].sh_type = SHT_PROGBITS;
+	shdr[scount].sh_offset = ecfs_file->arglist_offset;
+	shdr[scount].sh_addr = 0;
+	shdr[scount].sh_flags = 0;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 1;
+	shdr[scount].sh_size = ecfs_file->arglist_size;
+	shdr[scount].sh_addralign = 1;
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".arglist");
+	stoffset += strlen(".arglist") + 1;
+	scount++;
 
 	/*
          * .stack
@@ -2218,7 +2256,9 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	ecfs_file->exepath_size = strlen(memdesc->exe_path) + 1;
 	ecfs_file->personality_offset = ecfs_file->exepath_offset + ecfs_file->exepath_size;
 	ecfs_file->personality_size = sizeof(elf_stat_t);
-	ecfs_file->stb_offset = ecfs_file->personality_offset + ecfs_file->personality_size;
+	ecfs_file->arglist_offset = ecfs_file->personality_offset + ecfs_file->personality_size;
+	ecfs_file->arglist_size = ELF_PRARGSZ;
+	ecfs_file->stb_offset = ecfs_file->arglist_offset + ecfs_file->arglist_size;
 	
 	/*
 	 * write original body of core file
@@ -2261,6 +2301,11 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	build_elf_stats(handle);
 	write(fd, &handle->elfstat, sizeof(elf_stat_t));
 	
+	/*
+	 * write .arglist section data
+	 */
+	write(fd, handle->arglist, ELF_PRARGSZ);
+
 	/*
 	 * Build section header table
 	 */
@@ -2333,11 +2378,23 @@ void build_elf_stats(handle_t *handle)
 {
 	handle->elfstat.personality = 0;
 
-	if (handle->elfdesc->dynlinked == 0)
+	if (handle->elfdesc->dynlinked == 0) {
+#if DEBUG
+		log_msg(__LINE__, "personality of ELF: statically linked");
+#endif
 		handle->elfstat.personality |= ELF_STATIC;
-	if (handle->elfdesc->pie)
+	}
+	if (handle->elfdesc->pie) {
+#if DEBUG
+		log_msg(__LINE__, "personality of ELF: position independent executable");
+#endif
 		handle->elfstat.personality |= ELF_PIE;
+	}
 
+#if DEBUG
+	if (!(handle->elfstat.personality & ELF_STATIC))
+		log_msg(__LINE__, "personality of ELF: dynamically linked");
+#endif
 }
 
 void pull_unknown_shdr_addrs(int pid)
@@ -2538,6 +2595,7 @@ int main(int argc, char **argv)
 	 */
 	if (opts.use_stdin == 0) {
 		exename = notedesc->psinfo->pr_fname;
+		memcpy(handle->arglist, notedesc->psinfo->pr_psargs, ELF_PRARGSZ); 
 		pid = pid ? pid : notedesc->prstatus->pr_pid;
 		memdesc = build_proc_metadata(pid, notedesc);
         	memdesc->o_entry = get_original_ep(pid); // get original entry point
@@ -2644,6 +2702,14 @@ int main(int argc, char **argv)
 		log_msg(__LINE__, "libname: %s addr: %lx\n", notedesc->lm_files->libs[i].name, notedesc->lm_files->libs[i].addr);
 #endif
 	/*
+	 * Build elf stats into personality
+	 */
+#if DEBUG
+	log_msg(__LINE__, "build_elf_stats() is being called");
+#endif
+	//build_elf_stats(handle);
+
+	/*
 	 * We get a plethora of information about where certain
 	 * data and code is from the dynamic segment by parsing
 	 * it by D_TAG values.
@@ -2669,6 +2735,18 @@ int main(int argc, char **argv)
 	if (ret < 0) 
 		log_msg(__LINE__, "Unable to load dynamic symbol table with runtime values");
 	
+	
+	/*
+	 * Before we call core2ecfs we need to make a list of which shared libraries
+	 * were maliciously injected, so that section headers can be created of type
+	 * SHT_INJECTED instead of SHT_SHLIB for those ones.
+	 */
+#if DEBUG
+	log_msg(__LINE__, "calling mark_dll_injection()");
+#endif
+	 if (!(handle->elfstat.personality & ELF_STATIC))
+	 	mark_dll_injection(notedesc, memdesc, elfdesc);
+
 	/*
 	 * Convert the core file into an actual ECFS file and write it
 	 * to disk.
