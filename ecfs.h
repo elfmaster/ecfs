@@ -374,6 +374,7 @@ typedef struct symentry {
 
 struct dlopen_libs {
 	char *libname;
+	char *libpath;
 	int count;
 };
 

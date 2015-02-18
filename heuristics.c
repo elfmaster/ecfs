@@ -9,11 +9,13 @@
 #include "ecfs.h"
 
 #define OFFSET_2_PUSH 6 // # of bytes int PLT entry where push instruction begins
+#define MAX_NEEDED_LIBS 512
+#define MAX_STRINGS 8192 * 2
 
 int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
 {
 	int i, j, index = 0;
-	*stra = (char **)malloc(sizeof(char *) * rodata_size); // this gives us more room than needed
+	*stra = (char **)malloc(sizeof(char *) * MAX_STRINGS); 
 	char *string = alloca(512);
 	char *p;
 
@@ -22,9 +24,10 @@ int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
 			string[j++] = p[i];
 			continue;
 		} else {
-			string[j + 1] = '\0';
-			if (strstr(string, ".so")) 
+			string[j] = '\0';
+			if (strstr(string, ".so")) {
 				*((*stra) + index++) = xstrdup(string);
+			}
 			j = 0;
 		}
 
@@ -114,7 +117,6 @@ int get_dt_needed_libs(const char *bin_path, struct needed_libs **needed_libs)
 		}
 	}
 
-	log_msg(__LINE__, "dynstr: %p", dynstr);
 	if (dynstr == NULL)
 		return 0;
 
@@ -124,21 +126,18 @@ int get_dt_needed_libs(const char *bin_path, struct needed_libs **needed_libs)
 			break;
 		}
 	}
-	log_msg(__LINE__, "dyn: %p\n", dyn);
 	if (dyn == NULL)
 		return 0;
 	
-	*needed_libs = (struct needed_libs *)heapAlloc(sizeof(**needed_libs) * 4096);
+	*needed_libs = (struct needed_libs *)heapAlloc(sizeof(**needed_libs) * MAX_NEEDED_LIBS);
 	for (needed_count = 0, i = 0; dyn[i].d_tag != DT_NULL; i++) {
 		switch(dyn[i].d_tag) {
 			case DT_NEEDED:
 				(*needed_libs)[i].libname = xstrdup(&dynstr[dyn[i].d_un.d_val]);
 				(*needed_libs)[i].libpath = get_real_lib_path((*needed_libs)[i].libname);
-				log_msg(__LINE__, "found real libpath: %s", (*needed_libs)[i].libpath);
 				needed_count++;
 				break;
 			default:
-				log_msg(__LINE__, "DT_TAG: %lx", dyn[i].d_tag);
 				break;
 		}
 	}
@@ -155,14 +154,14 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 	ElfW(Rela) *rela;
 	ElfW(Sym) *symtab, *symbol;
 	ElfW(Off) dataOffset;
-	ElfW(Addr) dataVaddr, textVaddr, dlopen_plt_addr;
+	ElfW(Addr) dataVaddr, textVaddr;
 	uint8_t *mem;
 	uint8_t *text_ptr, *data_ptr, *rodata_ptr;
 	size_t text_size, dataSize, rodata_size, i; //text_size refers to size of .text not the text segment
-	int fd, scount, relcount, symcount, found_dlopen;
-	char **strings, *dynstr;
+	int ret, fd, scount, relcount, symcount, found_dlopen;
+	char **strings, *dynstr, tmp[512];
 	struct stat st;
-
+	
 	/*
 	 * If there are is no dlopen() symbol then obviously
 	 * no libraries were legally loaded with dlopen. However
@@ -171,16 +170,16 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 	 */
 	
 	fd = xopen(exe_path, O_RDONLY);
-	xfstat(&st, fd);
+	xfstat(fd, &st);
 	mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (mem == MAP_FAILED) {
 		perror("mmap");
 		exit(-1);
 	}
 	ehdr = (ElfW(Ehdr) *)mem;
-	shdr = (ElfW(Shdr) *)&shdr[ehdr->e_shoff];
-	phdr = (ElfW(Phdr) *)&phdr[ehdr->e_phoff];
-
+	shdr = (ElfW(Shdr) *)&mem[ehdr->e_shoff];
+	phdr = (ElfW(Phdr) *)&mem[ehdr->e_phoff];
+	
 	for (i = 0; i < ehdr->e_phnum; i++) {
 		if (phdr[i].p_type == PT_LOAD) {	
 			if (phdr[i].p_offset == 0 && phdr[i].p_flags & PF_X) {
@@ -194,6 +193,7 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 			}
 		}
 	}
+	log_msg(__LINE__, "dlopen_libs, getting shdr stuff");
 	char *shstrtab = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
 	
 	for (i = 0; i < ehdr->e_shnum; i++) {
@@ -225,26 +225,8 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 			break;
 		}
 	}
-	if (found_dlopen) 
+	if (!found_dlopen) 
 		return 0;			
-	
-	data_ptr = &mem[dataOffset];
-	uint8_t *ptr;
-	for (i = 0; i < relcount; i++) {
-	
-		ptr = &data_ptr[rela[i].r_offset - dataVaddr];
-#if DEBUG
-		log_msg(__LINE__, "GOT entry points to PLT addr: %lx\n", *ptr);
-#endif
-	        symbol = (Elf64_Sym *)&symtab[ELF64_R_SYM(rela[i].r_info)];
-		if (!strcmp(&dynstr[symbol->st_name], "dlopen")) { 
-#if DEBUG
-			log_msg(__LINE__, "found dlopen PLT addr: %lx\n", *ptr);
-#endif		
-			dlopen_plt_addr = *(long *)ptr;
-			break;	
-		}
-	}
 	/*
 	 * For now (until we have integrated a disassembler in)
 	 * I am not going to check each individual dlopen call.	
@@ -257,12 +239,18 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 	if (scount == 0)
 		return 0;
 	*dl_libs = (struct dlopen_libs *)heapAlloc(scount * sizeof(**dl_libs));
-	for (i = 0; i < scount; i++) 
-		(*dl_libs)[i].libname = xstrdup(strings[scount]);
+	for (i = 0; i < scount; i++) {
+		ret = readlink(strings[i], tmp, 512);
+		(*dl_libs)[i].libpath = ret < 0 ? xstrdup(strings[i]) : xstrdup(tmp);
+		free(strings[i]);
+#if DEBUG
+		log_msg(__LINE__, "dlopen libstring: %s", (*dl_libs)[i].libpath);
+#endif
+	}
 	
 #if DEBUG
 	for (i = 0; i < scount; i++)
-		printf("dlopen lib: %s\n", (*dl_libs)[i].libname);
+		printf("dlopen lib: %s\n", (*dl_libs)[i].libpath);
 #endif
 	return scount;
 }
@@ -275,28 +263,30 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 	int needed_count;
 	int dlopen_count;
 	int valid;
-	int i, j;
+	int i, j, c;
 	/*
 	 * We just check the immediate executable for dlopen calls
 	 */
-	/*
+	
 	dlopen_count = get_dlopen_libs(memdesc->exe_path, &dlopen_libs);
 #if DEBUG
 	if (dlopen_count <= 0) {
 		log_msg(__LINE__, "found %d dlopen loaded libraries", dlopen_count);
 	}
 #endif
-	*/
+	
 	/*
-	 * We check the dynamic segment of the executable and each valid
-	 * shared library, to see what the dependencies are.
+	 * We check the dynamic segment of the executable 
+	 * (DT_NEEDED) to see what the dependencies are.
+	 * XXX ideally this should be done transitively so that
+	 * we check the DT_NEEDED of each shared library and get
+	 * its dependencies as well, otherwise we may get some
+	 * false positives.
 	 */
 	char *real;
 	int ret;
 	
-	log_msg(__LINE__, "exe_path: %s", memdesc->exe_path);
 	needed_count = get_dt_needed_libs(memdesc->exe_path, &needed_libs);
-	log_msg(__LINE__, "needed count: %d", needed_count);
 
 	for (i = 0; i < lm_files->libcount; i++) {
 		for (j = 0; j < needed_count; j++) {
@@ -310,13 +300,19 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 			/*
 			 * in the case that the lib path is a symlink
 			 */
-			real = strrchr(needed_libs[j].libpath, '/') + 1;
-			if (real == NULL)
-				continue;
-			log_msg(__LINE__, "real libname: %s", real);
-			if (!strcmp(lm_files->libs[i].name, real) || !strncmp(lm_files->libs[i].name, "ld-", 3)) {
+			//real = strrchr(needed_libs[j].libpath, '/') + 1;
+			//if (real == NULL)
+				//continue;
+			if (!strcmp(lm_files->libs[i].path, needed_libs[j].libpath) || !strncmp(lm_files->libs[i].name, "ld-", 3)) {
 				valid++;
 				break;
+			} else { 
+				for (c = 0; c < dlopen_count; c++) {
+					if (!strcmp(lm_files->libs[i].path, dlopen_libs[c].libpath)) {
+						valid++;
+						break;
+					}
+				}
 			}
 		}
 		if (valid == 0) {
@@ -329,7 +325,7 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 			valid = 0;
 				
 	}
-
+	
 }
 
 
