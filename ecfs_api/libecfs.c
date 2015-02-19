@@ -369,6 +369,24 @@ unsigned long get_plt_size(ecfs_elf_t *desc)
 	return desc->pltSize;
 }
 
+int get_auxiliary_vector64(ecfs_elf_t *desc, Elf64_auxv_t **auxv)
+{
+	ElfW(Ehdr) *ehdr = desc->ehdr;
+	ElfW(Shdr) *shdr = desc->shdr;
+	char *shstrtab = (char *)&desc->mem[shdr[ehdr->e_shstrndx].sh_offset];
+	int i, ac = 0;
+
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (!strcmp(&shstrtab[shdr[i].sh_name], ".auxvector")) {
+			ac = shdr[i].sh_size / sizeof(**auxv);
+			*auxv = (Elf64_auxv_t *)&desc->mem[shdr[i].sh_offset];
+			break;
+		}
+	}
+	return ac;
+}
+	
+
 /*
  * This function fills in this struct:
    typedef struct pltgotinfo {

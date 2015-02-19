@@ -10,14 +10,15 @@
 
 #define OFFSET_2_PUSH 6 // # of bytes int PLT entry where push instruction begins
 #define MAX_NEEDED_LIBS 512
-#define MAX_STRINGS 8192 * 2
+#define MAX_STRINGS 1024
 
 int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
 {
 	int i, j, index = 0;
-	*stra = (char **)malloc(sizeof(char *) * MAX_STRINGS); 
+	*stra = (char **)heapAlloc(sizeof(char *) * MAX_STRINGS); 
 	char *string = alloca(512);
 	char *p;
+	size_t cursize = MAX_STRINGS;
 
 	for (p = (char *)rodata_ptr, j = 0, i = 0; i < rodata_size; i++) {
 		if (p[i] != '\0') {
@@ -29,6 +30,10 @@ int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
 				*((*stra) + index++) = xstrdup(string);
 			}
 			j = 0;
+		}
+		if (index == MAX_STRINGS) {
+			cursize <<= 1;
+			*stra = (char **)realloc(*stra, sizeof(char *) * cursize);
 		}
 
 	}

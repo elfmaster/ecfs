@@ -14,24 +14,23 @@ int main(int argc, char **argv)
 	ecfs_sym_t *dsyms, *lsyms;
 	char *path;
 	siginfo_t siginfo;
-
+	Elf64_auxv_t *auxv;
+	
 	desc = load_ecfs_file(argv[1]);
 	path = get_exe_path(desc);
-	
 	printf("executable: %s\n", path);
-	ret = get_thread_count(desc);
 	
+	ret = get_thread_count(desc);
 	printf("# of threads: %d\n", ret);
 	
 	ret = get_siginfo(desc, &siginfo);
 	printf("Exited on signal %d\n", siginfo.si_signo);
-	ret = get_prstatus_structs(desc, &prstatus);
 	
+	ret = get_prstatus_structs(desc, &prstatus);
 	for (i = 0; i < ret; i++) 
 		printf("(thread %d) pid: %d\n", i + 1, prstatus[i].pr_pid);
 
 	ret = get_fd_info(desc, &fdinfo);
-	
 	for (i = 0; i < ret; i++) {
 		printf("fd: %d path: %s\n", fdinfo[i].fd, fdinfo[i].path);
 		if (fdinfo[i].net) {
@@ -40,6 +39,7 @@ int main(int argc, char **argv)
 			printf("DST: %s:%d\n", inet_ntoa(fdinfo[i].socket.dst_addr), fdinfo[i].socket.dst_port);
 		}
 	}
+
 	ret = get_dynamic_symbols(desc, &dsyms);
 	for (i = 0; i < ret; i++)
 		printf("dynamic symbol: %s\n", &desc->dynstr[dsyms[i].nameoffset]);
@@ -54,11 +54,30 @@ int main(int argc, char **argv)
 		printf("gotsite: %lx gotvalue: %lx gotshlib: %lx pltval: %lx\n", pltgot[i].got_site, pltgot[i].got_entry_va, 
 						pltgot[i].shl_entry_va, pltgot[i].plt_entry_va);
 
-	uint8_t *ptr;
-	ssize_t len = get_ptr_for_va(desc, desc->textVaddr, &ptr);
-	printf("%d bytes left for segment\n", (int)len);
-	for (i = 0; i < 16; i++)
-		printf("%02x ", ptr[i] & 0xff);
-	printf("\n");
+	int ac = get_auxiliary_vector64(desc, &auxv);
+	printf("Printing some of AUXV which has %d elements\n", ac);
+	for (i = 0; i < ac && auxv[i].a_type != AT_NULL; i++) {
+		switch(auxv[i].a_type) {
+			case AT_PHDR:
+				printf("AT_PHDR: %lx\n", auxv[i].a_un.a_val);
+				break;
+			case AT_PHENT:
+				printf("AT_PHENT: %lx\n", auxv[i].a_un.a_val);
+				break;
+			case AT_PHNUM:
+				printf("AT_PHNUM: %lx\n", auxv[i].a_un.a_val);
+				break;
+			case AT_PAGESZ:
+				printf("AT_PAGESZ: %lx\n", auxv[i].a_un.a_val);
+				break;
+			case AT_BASE:
+				printf("AT_BASE: %lx\n", auxv[i].a_un.a_val);
+				break;
+		}
+	}
+
+
+
+				
 }	
 

@@ -115,3 +115,5 @@ ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr);
 ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr);
 int get_local_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms);
 ssize_t get_ptr_for_va(ecfs_elf_t *desc, unsigned long vaddr, uint8_t **ptr);
+int get_auxiliary_vector(ecfs_elf_t *, Elf64_auxv_t **);
+ssize_t get_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo);
