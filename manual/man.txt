@@ -30,31 +30,41 @@ process image as a whole is trivial and primarily done through section headers, 
 the section name and in some cases the section type, such as with SHT_SHLIB sections.
 The following structure should be used as a handle to open ECFS files.
 
+		
 typedef struct ecfs_elf {
-         uint8_t *mem;		/* raw memory pointer */
-         char *shstrtab; 	/* shdr string table */
-	 char *strtab;		/* .symtab string table */
-	 char *dynstr; 		/* .dynstr string table */
-	 ElfW(Ehdr) * ehdr;	/* ELF Header pointer */
-         ElfW(Phdr) * phdr;	/* Program header table pointer */
-         ElfW(Shdr) * shdr;	/* Section header table pointer */
-         ElfW(Nhdr) * nhdr;	/* ELF Notes section pointer */
-         ElfW(Dyn)  *dyn;	/* Dynamic segment pointer */
-	 ElfW(Sym)  *symtab;	/* Pointer to array of symtab symbol structs */
-	 ElfW(Sym)  *dynsym;	/* Pointer to array of dynsym symbol structs */
-	 ElfW(Addr) textVaddr;  /* Text segment virtual address */
-	 ElfW(Addr) dataVaddr;  /* data segment virtual address */
-	 ElfW(Addr) dynVaddr;   /* dynamic segment virtual address */
-	 ElfW(Off) textOff;	/* text segment offset */
-	 ElfW(Off) dataOff;	/* data segment offset */
-	 ElfW(Off) dynOff;	/* dynamic section offset */
-	 size_t filesize;	/* total file size		*/
-	 size_t dataSize;	/* p_memsz of data segment	*/
-	 size_t textSize;	/* p_memsz of text segment	*/
-	 size_t dynSize;	/* p_memsz of dynamnic segment  */
-	 int fd;		/* A copy of the file descriptor to the file */
+         uint8_t *mem;          /* raw memory pointer */
+         char *shstrtab;        /* shdr string table */
+         char *strtab;          /* .symtab string table */
+         char *dynstr;          /* .dynstr string table */
+         unsigned long *pltgot; /* pointer to .plt.got */
+         ElfW(Ehdr) * ehdr;     /* ELF Header pointer */
+         ElfW(Phdr) * phdr;     /* Program header table pointer */
+         ElfW(Shdr) * shdr;     /* Section header table pointer */
+         ElfW(Nhdr) * nhdr;     /* ELF Notes section pointer */
+         ElfW(Dyn)  *dyn;       /* Dynamic segment pointer */
+         ElfW(Sym)  *symtab;    /* Pointer to array of symtab symbol structs */
+         ElfW(Sym)  *dynsym;    /* Pointer to array of dynsym symbol structs */
+         ElfW(Addr) textVaddr;  /* Text segment virtual address */
+         ElfW(Addr) dataVaddr;  /* data segment virtual address */
+         ElfW(Addr) dynVaddr;   /* dynamic segment virtual address */
+         ElfW(Addr) pltVaddr;
+         ElfW(Off) textOff;
+         ElfW(Off) dataOff;
+         ElfW(Off) dynOff;
+         ElfW(Rela) *plt_rela;  /* points to .rela.plt section */
+         ElfW(Rela) *dyn_rela;  /* points to .rela.dyn section */
+         ssize_t plt_rela_count; /* number of .rela.plt entries */
+         ssize_t dyn_rela_count; /* number of .rela.dyn entries */
+         size_t filesize;       /* total file size              */
+         size_t dataSize;       /* p_memsz of data segment      */
+         size_t textSize;       /* p_memsz of text segment      */
+         size_t dynSize;        /* p_memsz of dynamnic segment  */
+         size_t pltSize;        /* size of .plt section */
+         int fd;                /* A copy of the file descriptor to the file */
+         int pie;               /* is the process from a PIE executable? */
+         elf_stat_t *elfstats; /* contains stats about the elf file, such as personality see section 11 */
 } ecfs_elf_t;
-	 
+ 
 	
 -=[OPENING AN ECFS FILE]
 
@@ -163,12 +173,11 @@ The siginfo_t structure is stored in the .siginfo section of the ecfs file.
 
 SYNOPSIS
 
-	siginfo_t * get_siginfo(ecfs_elf_t *desc)
+	int get_siginfo(ecfs_elf_t *desc, siginfo_t *siginfo)
 
 - RETURN VALUE
 
-This function returns a pointer to the siginfo_t struct within the siginfo section of
-the binary. On failure NULL is returned.
+-1 is returned on error, and 0 is returned on success.
 
 
 
@@ -177,10 +186,17 @@ the binary. On failure NULL is returned.
 ECFS stores information about open file descriptors in an ELF section named .fdinfo which contains
 an array of structures named 'struct fdinfo'
 
-struct fdinfo {
-	int fd;
-	char file_path[MAX_PATH];
-}; 
+typedef struct fdinfo {
+        int fd;		     /* actual file descriptor */
+        char path[MAX_PATH]; /* file path or other info in the case of pipe or socket */
+        struct {
+                struct in_addr src_addr; /* source address of socket is binding */
+                struct in_addr dst_addr; /* destination address of socket is connected */
+                uint16_t src_port;	 /* source port socket is bound to 	*/
+                uint16_t dst_port;	 /* destination port socket is connecting to */
+        } socket;
+        char net;			/* protocol if fd is a socket
+} fd_info_t;
 
 -SYNOPSIS
 	
@@ -196,10 +212,21 @@ struct fdinfo's on the heap.
 	int i;
 	struct fdinfo *fdinfo;
 	int ret = get_fd_info(desc, &fdinfo);
-	if (ret < 0) 
-		error_out("get_fd_info");
-	for(i = 0; i < ret; i++)
-		printf("fd: %d path: %s\n", fdinfo[i].fd, fdinfo[i].path);
+        for (i = 0; i < ret; i++) {
+                printf("fd: %d path: %s\n", fdinfo[i].fd, fdinfo[i].path);
+                switch(fdinfo[i].net) {
+			case NET_TCP:
+				printf("TCP_SOCKET SRC: %s:%d\n", inet_ntoa(fdinfo[i].socket.src_addr), fdinfo[i].socket.src_port);
+                        	printf("TCP_SOCKET DST: %s:%d\n", inet_ntoa(fdinfo[i].socket.dst_addr), fdinfo[i].socket.dst_port);
+				break;
+			case NET_UDP:
+				printf("UDP_SOCKET SRC: %s:%d\n", inet_ntoa(fdinfo[i].socket.src_addr), fdinfo[i].socket.src_port);
+                                printf("UDP_SOCKET DST: %s:%d\n", inet_ntoa(fdinfo[i].socket.dst_addr), fdinfo[i].socket.dst_port);
+                                break;
+			default: 
+				break;
+		}
+     	} 
 
 
 
@@ -277,13 +304,5 @@ ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr);
 Returns the size of the heap on success, -1 on failure. Sets ptr to point to the
 heap inside of the desc struct on success, null on failure.
 
-
--=[GET LOCAL SYMBOLS]
-
-int get_local_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms);
-
--RETURN VALUE
-
-Returns the number of symbols found.
 
 
