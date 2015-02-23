@@ -1,3 +1,27 @@
+/*
+ * Copyright (c) 2015, Ryan O'Neill
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ * list of conditions and the following disclaimer. 
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 
 /* 
@@ -59,6 +83,17 @@ static char * get_real_lib_path(char *name)
 
 	int ret;
 	
+	snprintf(tmp, 512, "/usr/lib/x86_64-linux-gnu/%s", name);
+        if (access(tmp, F_OK) == 0) {
+                ret = readlink(tmp, real, 512);
+                if (ret > 0) {
+                        ptr = get_real_lib_path(real);
+                        return xstrdup(ptr);
+                }
+                else
+                        return xstrdup(tmp);
+        }
+
 	snprintf(tmp, 512, "/lib/x86_64-linux-gnu/%s", name);
 	if (access(tmp, F_OK) == 0) {
 		ret = readlink(tmp, real, 512);
@@ -99,7 +134,7 @@ static char * get_real_lib_path(char *name)
 /* 
  * From DT_NEEDED (We pass the executable and each shared library to this function)
  */
-int get_dt_needed_libs(const char *bin_path, struct needed_libs **needed_libs)
+static int get_dt_needed_libs(const char *bin_path, struct needed_libs *needed_libs, int index)
 {
 	ElfW(Ehdr) *ehdr;
 	ElfW(Phdr) *phdr;
@@ -115,7 +150,7 @@ int get_dt_needed_libs(const char *bin_path, struct needed_libs **needed_libs)
 	mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (mem == MAP_FAILED) {
 		perror("mmap");
-		return -1;
+		return 0;
 	}
 	ehdr = (ElfW(Ehdr) *)mem;
 	phdr = (ElfW(Phdr) *)&mem[ehdr->e_phoff];
@@ -141,12 +176,13 @@ int get_dt_needed_libs(const char *bin_path, struct needed_libs **needed_libs)
 	if (dyn == NULL)
 		return 0;
 	
-	*needed_libs = (struct needed_libs *)heapAlloc(sizeof(**needed_libs) * MAX_NEEDED_LIBS);
 	for (needed_count = 0, i = 0; dyn[i].d_tag != DT_NULL; i++) {
 		switch(dyn[i].d_tag) {
 			case DT_NEEDED:
-				(*needed_libs)[i].libname = xstrdup(&dynstr[dyn[i].d_un.d_val]);
-				(*needed_libs)[i].libpath = get_real_lib_path((*needed_libs)[i].libname);
+				needed_libs[index + needed_count].libname = xstrdup(&dynstr[dyn[i].d_un.d_val]);
+				needed_libs[index + needed_count].libpath = get_real_lib_path(needed_libs[index + needed_count].libname);
+				needed_libs[index + needed_count].master = xstrdup(bin_path);
+				log_msg(__LINE__, "real libpath: %s", needed_libs[index + needed_count].libpath);
 				needed_count++;
 				break;
 			default:
@@ -154,6 +190,62 @@ int get_dt_needed_libs(const char *bin_path, struct needed_libs **needed_libs)
 		}
 	}
 	return needed_count;
+}
+
+static int qsort_cmp_by_str(const void *a, const void *b)
+{ 
+    struct needed_libs *ia = (struct needed_libs *)a;
+    struct needed_libs *ib = (struct needed_libs *)b;
+    return strcmp(ia->libpath, ib->libpath);
+} 
+
+/*
+ * This function transitively enumerates a list
+ * of all needed dependencies in the process as
+ * marked by DT_NEEDED in the executable and its
+ * shared libraries.
+ */
+int get_dt_needed_libs_all(memdesc_t *memdesc, struct needed_libs **needed_libs)
+{
+	int i, init_count;
+	size_t currsize = 8192 * sizeof(struct needed_libs);
+	struct needed_libs *all_libs = heapAlloc(currsize);
+	struct needed_libs *initial_libs = heapAlloc(512 * sizeof(struct needed_libs));
+	
+	int total_needed = get_dt_needed_libs(memdesc->exe_path, all_libs, 0);
+	if (total_needed == 0)
+		return 0;
+	/*
+	 * Create initial dependencies then transitively check the other dependencies
+	 * of those.
+	 */
+	init_count = total_needed;
+	memcpy(initial_libs, all_libs, (total_needed * sizeof(struct needed_libs)));
+	
+	for (i = 0; i < init_count; i++) {
+		if (i >= 1) {
+			if (!strcmp(initial_libs[i].libpath, initial_libs[i - 1].libpath))
+				continue;
+		}
+		if ((total_needed * sizeof(struct needed_libs)) >= currsize) {// just to be safe
+			currsize <<= 1;
+			all_libs = (struct needed_libs *)heapAlloc(currsize);
+		}
+		total_needed += get_dt_needed_libs(initial_libs[i].libpath, all_libs, total_needed);
+
+	}
+	
+	qsort(all_libs, total_needed, sizeof(struct needed_libs), qsort_cmp_by_str);
+#if DEBUG
+	for (i = 0; i < total_needed; i++) {
+		if (i >= 1)
+			if (!strcmp(all_libs[i].libpath, all_libs[i - 1].libpath))
+				continue;
+		log_msg(__LINE__, "[%s] needs dependency: %s", all_libs[i].master, all_libs[i].libpath);
+	}
+#endif
+	*needed_libs = all_libs;
+	return total_needed;
 }
 /*
  * Get dlopen libs
@@ -205,7 +297,6 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 			}
 		}
 	}
-	log_msg(__LINE__, "dlopen_libs, getting shdr stuff");
 	char *shstrtab = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
 	
 	for (i = 0; i < ehdr->e_shnum; i++) {
@@ -255,9 +346,6 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 		ret = readlink(strings[i], tmp, 512);
 		(*dl_libs)[i].libpath = ret < 0 ? xstrdup(strings[i]) : xstrdup(tmp);
 		free(strings[i]);
-#if DEBUG
-		log_msg(__LINE__, "dlopen libstring: %s", (*dl_libs)[i].libpath);
-#endif
 	}
 	
 #if DEBUG
@@ -275,7 +363,7 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 	int needed_count;
 	int dlopen_count;
 	int valid;
-	int i, j, c;
+	int i, j, c, lc;
 	/*
 	 * We just check the immediate executable for dlopen calls
 	 */
@@ -295,26 +383,16 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 	 * its dependencies as well, otherwise we may get some
 	 * false positives.
 	 */
-	char *real;
-	int ret;
 	
-	needed_count = get_dt_needed_libs(memdesc->exe_path, &needed_libs);
-
+	needed_count = get_dt_needed_libs_all(memdesc, &needed_libs);
 	for (i = 0; i < lm_files->libcount; i++) {
 		for (j = 0; j < needed_count; j++) {
-			/*
-			 * XXX make this heuristic more sound. This would
-			 * allow an attacker to name his evil lib after the
-		 	 * dynamic linker or something similar and it would
-			 * slip through.	
-	 		 */
-			
-			/*
-			 * in the case that the lib path is a symlink
-			 */
-			//real = strrchr(needed_libs[j].libpath, '/') + 1;
-			//if (real == NULL)
-				//continue;
+			if (lm_files->libs[i].path == NULL || needed_libs[j].libpath == NULL)
+				break;
+			if (j >= 1) // avoid duplicates
+				if (!strcmp(needed_libs[j].libpath, needed_libs[j - 1].libpath))
+					continue;
+			log_msg(__LINE__, "Comparing %s and %s", lm_files->libs[i].path, needed_libs[j].libpath);
 			if (!strcmp(lm_files->libs[i].path, needed_libs[j].libpath) || !strncmp(lm_files->libs[i].name, "ld-", 3)) {
 				valid++;
 				break;
@@ -337,7 +415,8 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 			valid = 0;
 				
 	}
-	
+				
+
 }
 
 
