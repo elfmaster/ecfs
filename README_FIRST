@@ -53,6 +53,13 @@ echo '|/opt/ecfs/bin/ecfs -i -e %e -p %p -o /opt/ecfs/cores/%e.%p >> /etc/sysctl
 Debug output is logged using syslog() and can be found in either /var/log/syslog or
 on some systems such as arch Linux you will need to look at 'journalctl -b'
 
+- [ECFS HEURISTICS -
+
+ecfs can perform heuristics that do things such as mark shared libraries as being DLL injected.
+Sometimes false positives can arise. If you want to use the heuristics feature use the -h switch.
+For instance:
+
+echo '|/opt/ecfs/bin/ecfs -i -h -e %e -p %p -o /opt/ecfs/cores/%e.%p >> /etc/sysctl.conf'
 
 
 - elfmaster[at]zoho.com

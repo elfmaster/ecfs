@@ -44,7 +44,6 @@ int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
 	char *p;
 	size_t cursize = MAX_STRINGS;
 	
-	log_msg(__LINE__, "rodata_size: %u\n", rodata_size);
 	for (p = (char *)rodata_ptr, j = 0, i = 0; i < rodata_size; i++) {
 		if (p[i] != '\0') {
 			string[j++] = p[i];
@@ -226,7 +225,6 @@ static int get_dt_needed_libs(const char *bin_path, struct needed_libs *needed_l
 				needed_libs[index + needed_count].libname = xstrdup(&dynstr[dyn[i].d_un.d_val]);
 				needed_libs[index + needed_count].libpath = get_real_lib_path(needed_libs[index + needed_count].libname);
 				needed_libs[index + needed_count].master = xstrdup(bin_path);
-				log_msg(__LINE__, "real libpath: %s", needed_libs[index + needed_count].libpath);
 				needed_count++;
 				break;
 			default:
@@ -255,8 +253,6 @@ static int cmp_till_dot(const char *lib1, const char *lib2)
                         break;
                 }
         }
-	
-	log_msg(__LINE__, "cmp %s and %s", s1, s2);
 	
 	return strcmp(s1, s2);
 }
@@ -440,9 +436,7 @@ int get_dlopen_libs_all(memdesc_t *memdesc, struct needed_libs *needed_libs, int
 	size_t currsize = sizeof(struct dlopen_libs) * 8192;
 	struct dlopen_libs *all_libs = heapAlloc(sizeof(struct dlopen_libs) * 8192);
 	
-	log_msg(__LINE__, "calling get_dlopen_libs(%s, ...)", memdesc->exe_path);
 	dlopen_count = get_dlopen_libs(memdesc->exe_path, all_libs, 0);
-	log_msg(__LINE__, "dlopen_count initial: %d", dlopen_count);
 	for (i = 0; i < needed_count; i++) {
 		if (i >= 1) 
 			if (!strcmp(needed_libs[i].libpath, needed_libs[i - 1].libpath))
@@ -451,9 +445,7 @@ int get_dlopen_libs_all(memdesc_t *memdesc, struct needed_libs *needed_libs, int
 			currsize <<= 1;
 			all_libs = (struct dlopen_libs *)realloc(all_libs, currsize);
 		}		
-		log_msg(__LINE__, "calling get_dlopen_libs(%s, ...)", needed_libs[i].libpath);
 		dlopen_count += get_dlopen_libs(needed_libs[i].libpath, all_libs, dlopen_count);
-		log_msg(__LINE__, "dlopen_count increased to %d", dlopen_count);
 	}
 	*dlopen_libs = all_libs;
 	return dlopen_count;
@@ -468,27 +460,12 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 	int dlopen_count;
 	int valid;
 	int i, j, c, lc;
-	/*
-	 * We just check the immediate executable for dlopen calls
-	 */
 	
 	/*
-	dlopen_count = get_dlopen_libs(memdesc->exe_path, &dlopen_libs);
-#if DEBUG
-	if (dlopen_count <= 0) {
-		log_msg(__LINE__, "found %d dlopen loaded libraries", dlopen_count);
-	}
-#endif
-	*/
-	/*
-	 * We check the dynamic segment of the executable 
-	 * (DT_NEEDED) to see what the dependencies are.
-	 * XXX ideally this should be done transitively so that
-	 * we check the DT_NEEDED of each shared library and get
-	 * its dependencies as well, otherwise we may get some
-	 * false positives.
+ 	 * Get all dependencies from executable and its shared libraries
+	 * DT_NEEDED entries. Also get any shared library paths found in
+	 * the .rodata section of binaries that are calling dlopen()
 	 */
-	
 	needed_count = get_dt_needed_libs_all(memdesc, &needed_libs);
 	dlopen_count = get_dlopen_libs_all(memdesc, needed_libs, needed_count, &dlopen_libs);
 #if DEBUG
@@ -509,7 +486,9 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 			if (j >= 1) // avoid duplicates
 				if (!strcmp(needed_libs[j].libpath, needed_libs[j - 1].libpath))
 					continue;
-			log_msg(__LINE__, "Comparing %s and %s", lm_files->libs[i].path, needed_libs[j].libpath);
+#if DEBUG
+			log_msg(__LINE__, "mark_dll_injection(): Comparing %s and %s", lm_files->libs[i].path, needed_libs[j].libpath);
+#endif
 			if (!strcmp(lm_files->libs[i].path, needed_libs[j].libpath) || !strncmp(lm_files->libs[i].name, "ld-", 3)) {
 				valid++;
 				break;
@@ -525,7 +504,7 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 		if (valid == 0) {
 			lm_files->libs[i].injected++;
 #if DEBUG
-			log_msg(__LINE__, "injected library found: %s", lm_files->libs[i].name);
+			log_msg(__LINE__, "mark_dll_injection(): injected library found: %s", lm_files->libs[i].name);
 #endif
 		}
 		else
