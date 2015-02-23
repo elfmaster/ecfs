@@ -230,7 +230,6 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 		log_msg(__LINE__, "(From merge_texts_into_core function) Could not find text address");
 		return -1;
 	}
-	log_msg(__LINE__, "textvaddr: %lx\n", textVaddr);
 
 	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, in, 0);
 	if (mem == MAP_FAILED) {
@@ -353,7 +352,6 @@ void parse_nt_files(struct nt_file_struct **nt_files, void *data, size_t size)
 static void print_nt_files(struct nt_file_struct *file_maps)
 {
 	int i;
-	log_msg(__LINE__, "ecfs NT_FILES print out");
 	for (i = 0; i < file_maps->fcount; i++) {
 		log_msg(__LINE__, "%lx  %lx  %lx\n", file_maps->files[i].addr, 
 					  file_maps->files[i].addr + file_maps->files[i].size, 
@@ -717,7 +715,9 @@ static void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_fi
 	memset(lm, 0, sizeof(struct lib_mappings));
 
 	for (i = 0; i < fmaps->fcount; i++) {
+#if DEBUG	
 		log_msg(__LINE__, "filepath: %s", fmaps->files[i].path);
+#endif
 		p = strrchr(fmaps->files[i].path, '/') + 1;
 		if (!strstr(p, ".so"))
 			continue;
@@ -731,7 +731,7 @@ static void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_fi
 		strncpy(lm->libs[lm->libcount].path, fmaps->files[i].path, MAX_LIB_PATH);
 		strncpy(lm->libs[lm->libcount].name, tmp, MAX_LIB_NAME);
 #if DEBUG
-		log_msg(__LINE__, "libpath baby: %s", lm->libs[lm->libcount].name);
+		log_msg(__LINE__, "libname: %s", lm->libs[lm->libcount].name);
 #endif
 		lm->libs[lm->libcount].addr = fmaps->files[i].addr;
 		lm->libs[lm->libcount].size = fmaps->files[i].size;
@@ -883,7 +883,9 @@ static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
 			&d, local_addr, &local_port, rem_addr, &rem_port, &state,
 			&txq, &rxq, &timer_run, &time_len, &retr, &uid, &timeout, &_inode, more);
 		if (_inode == inode) {
-			log_msg(__LINE__, "inode match");
+#if DEBUG
+			log_msg(__LINE__, "socket (TCP) inode match");
+#endif
 			sscanf(local_addr, "%X", &(fdinfo->socket.src_addr.s_addr));
 			sscanf(rem_addr, "%X", &(fdinfo->socket.dst_addr.s_addr));
 			fdinfo->socket.src_port = local_port;
@@ -899,9 +901,10 @@ static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
                 sscanf(buf, "%d: %64[0-9A-Fa-f]:%X %64[0-9A-Fa-f]:%X %X %lX:%lX %X:%lX %lX %d %d %ld %512s\n",
                         &d, local_addr, &local_port, rem_addr, &rem_port, &state,
                         &txq, &rxq, &timer_run, &time_len, &retr, &uid, &timeout, &_inode, more);
-                log_msg(__LINE__, "comparing inodes %u and %u\n", _inode, inode);
                 if (_inode == inode) {
-                        log_msg(__LINE__, "inode match");
+#if DEBUG
+                        log_msg(__LINE__, "socket (UDP) inode match");
+#endif
                         sscanf(local_addr, "%X", &(fdinfo->socket.src_addr.s_addr));
                         sscanf(rem_addr, "%X", &(fdinfo->socket.dst_addr.s_addr));
                         fdinfo->socket.src_port = local_port;
@@ -943,13 +946,10 @@ static int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
 			}
 			
 			inode = atoi(p);
-			log_msg(__LINE__, "inode from socket: %u\n", inode);
 			fill_sock_info(&fdinfo_tmp, inode);
 			if (fdinfo_tmp.net) {
-				log_msg(__LINE__, "doing socket memcpy");
 				(*fdinfo)[fdcount].net = fdinfo_tmp.net;
 				(*fdinfo)[fdcount].socket = fdinfo_tmp.socket;
-				//memcpy(&(*fdinfo)[fdcount].socket, &(fdinfo_tmp.socket), sizeof(fdinfo_tmp.socket));
 			}
 		}
 		(*fdinfo)[fdcount].fd = atoi(dptr->d_name);
@@ -1057,7 +1057,9 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 			memdesc->text.size = memdesc->maps[i].size;
 		}
         }
-	log_msg(__LINE__, "text base: %lx\n", memdesc->text.base);
+#if DEBUG
+	log_msg(__LINE__, "executable text base: %lx\n", memdesc->text.base);
+#endif
 	ssize_t tlen = get_segment_from_pmem(memdesc->text.base, memdesc, &memdesc->textseg);
         if (tlen < 0) {
 		log_msg(__LINE__, "get_segment_from_pmem() failed: %s\n", strerror(errno));
@@ -1106,7 +1108,9 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 	}
 	
 	/* Instead we use mmap on the original executable file */
+#if DEBUG
 	log_msg(__LINE__, "exe_path: %s", memdesc->exe_path);
+#endif
 	fd = xopen(memdesc->exe_path, O_RDONLY);
 	xfstat(fd, &st);
 	mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -1214,51 +1218,50 @@ int extract_dyntag_info(handle_t *handle)
                         	smeta.relVaddr = dyn[j].d_un.d_val;
                                 smeta.relOff = elfdesc->textOffset + smeta.relVaddr - elfdesc->textVaddr;
 #if DEBUG
-				printf("relVaddr: %lx relOff: %lx\n", smeta.relVaddr, smeta.relOff);
+				log_msg(__LINE__, "relVaddr: %lx relOff: %lx", smeta.relVaddr, smeta.relOff);
 #endif
                         	break;
                         case DT_RELA:
                         	smeta.relaVaddr = dyn[j].d_un.d_val;
                                 smeta.relaOff = elfdesc->textOffset + smeta.relaVaddr - elfdesc->textVaddr; 
 #if DEBUG
-				printf("relaVaddr: %lx relaOffset: %lx\n", smeta.relaVaddr, smeta.relaOff);
+				log_msg(__LINE__, "relaVaddr: %lx relaOffset: %lx", smeta.relaVaddr, smeta.relaOff);
 #endif
                         	break;
 			case DT_JMPREL:
 				smeta.plt_relaVaddr = dyn[j].d_un.d_val;
 				smeta.plt_relaOff = elfdesc->textOffset + smeta.plt_relaVaddr - elfdesc->textVaddr;
 #if DEBUG
-				printf("plt_relaVaddr: %lx plt_relaOffset: %lx\n", smeta.plt_relaVaddr, smeta.plt_relaOff);
+				log_msg(__LINE__, "plt_relaVaddr: %lx plt_relaOffset: %lx", smeta.plt_relaVaddr, smeta.plt_relaOff);
 #endif
 				break;
                         case DT_PLTGOT:
                         	smeta.gotVaddr = dyn[j].d_un.d_val;
-				log_msg(__LINE__, "gotvaddr: %lx\n", smeta.gotVaddr);
                                 smeta.gotOff = dyn[j].d_un.d_val - elfdesc->dataVaddr;
                                 smeta.gotOff += (ElfW(Off))dataOffset;
 #if DEBUG
-				printf("gotVaddr: %lx gotOffset: %lx\n", smeta.gotVaddr, smeta.gotOff);
+				log_msg(__LINE__, "gotVaddr: %lx gotOffset: %lx", smeta.gotVaddr, smeta.gotOff);
 #endif
                                 break;
                         case DT_GNU_HASH:
                                 smeta.hashVaddr = dyn[j].d_un.d_val;
                                 smeta.hashOff = elfdesc->textOffset + smeta.hashVaddr - elfdesc->textVaddr;
 #if DEBUG
-				printf("hashVaddr: %lx hashOff: %lx\n", smeta.hashVaddr, smeta.hashOff);
+				log_msg(__LINE__, "hashVaddr: %lx hashOff: %lx", smeta.hashVaddr, smeta.hashOff);
 #endif
                                 break;
                         case DT_INIT: 
                                 smeta.initVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
                                 smeta.initOff = elfdesc->textOffset + smeta.initVaddr - elfdesc->textVaddr;
 #if DEBUG
-				printf("initVaddr: %lx initOff: %lx\n", smeta.initVaddr, smeta.initOff);
+				log_msg(__LINE__, "initVaddr: %lx initOff: %lx", smeta.initVaddr, smeta.initOff);
 #endif
                                 break;
                         case DT_FINI:
                                 smeta.finiVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
                                 smeta.finiOff = elfdesc->textOffset + smeta.finiVaddr - elfdesc->textVaddr;
 #if DEBUG
-				printf("finiVaddr: %lx finiOff: %lx\n", smeta.finiVaddr, smeta.finiOff);
+				log_msg(__LINE__, "finiVaddr: %lx finiOff: %lx", smeta.finiVaddr, smeta.finiOff);
 #endif
                                 break;
                         case DT_STRSZ:
@@ -1271,14 +1274,14 @@ int extract_dyntag_info(handle_t *handle)
                                 smeta.dsymVaddr = dyn[j].d_un.d_ptr;
                                 smeta.dsymOff = elfdesc->textOffset + smeta.dsymVaddr - elfdesc->textVaddr;
 #if DEBUG
-				printf(".dynsym addr: %lx offset: %lx\n", smeta.dsymVaddr, smeta.dsymOff);
+				log_msg(__LINE__, ".dynsym addr: %lx offset: %lx", smeta.dsymVaddr, smeta.dsymOff);
 #endif
 				break;
                         case DT_STRTAB:
                                 smeta.dstrVaddr = dyn[j].d_un.d_ptr;
                                 smeta.dstrOff = elfdesc->textOffset + smeta.dstrVaddr - elfdesc->textVaddr;
 #if DEBUG
-				printf(".dynstr addr: %lx  offset: %lx (%lx + (%lx - %lx)\n", smeta.dstrVaddr, smeta.dstrOff,
+				log_msg(__LINE__, ".dynstr addr: %lx  offset: %lx (%lx + (%lx - %lx)", smeta.dstrVaddr, smeta.dstrOff,
 				elfdesc->textOffset, smeta.dstrVaddr, elfdesc->textVaddr); 
 #endif
                                 break;
@@ -1455,7 +1458,7 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
 		fncount = 0;             	
 	
 #if DEBUG
-	printf("Found %d local functions from .eh_frame\n", fncount);
+	log_msg(__LINE__, "Found %d local functions from .eh_frame\n", fncount);
 #endif
         
 	ElfW(Sym) *symtab = (ElfW(Sym) *)heapAlloc(fncount * sizeof(ElfW(Sym)));
@@ -2396,6 +2399,12 @@ void build_elf_stats(handle_t *handle)
 		handle->elfstat.personality |= ELF_PIE;
 	}
 
+	if (opts.heuristics) {
+#if DEBUG
+		log_msg(__LINE__, "personality of ELF: heuristics turned on");
+#endif
+		handle->elfstat.personality |= ELF_HEURISTICS;
+	}
 #if DEBUG
 	if (!(handle->elfstat.personality & ELF_STATIC))
 		log_msg(__LINE__, "personality of ELF: dynamically linked");
@@ -2468,8 +2477,9 @@ int main(int argc, char **argv)
 		fprintf(stdout, "[-o]	output ecfs file\n\n");
 		exit(-1);
 	}
-	
-	while ((c = getopt(argc, argv, "c:io:p:e:")) != -1) {
+	memset(&opts, 0, sizeof(opts));
+
+	while ((c = getopt(argc, argv, "hc:io:p:e:")) != -1) {
 		switch(c) {
 			case 'c':	
 				opts.use_stdin = 0;
@@ -2486,6 +2496,9 @@ int main(int argc, char **argv)
 				break;
 			case 'p':
 				pid = atoi(optarg);
+				break;
+			case 'h':
+				opts.heuristics = 1;
 				break;
 			default:
 				fprintf(stderr, "Unknown option\n");
@@ -2712,7 +2725,7 @@ int main(int argc, char **argv)
 #if DEBUG
 	log_msg(__LINE__, "build_elf_stats() is being called");
 #endif
-	//build_elf_stats(handle);
+	build_elf_stats(handle);
 
 	/*
 	 * We get a plethora of information about where certain
@@ -2750,7 +2763,8 @@ int main(int argc, char **argv)
 	log_msg(__LINE__, "calling mark_dll_injection()");
 #endif
 	 if (!(handle->elfstat.personality & ELF_STATIC))
-	 	mark_dll_injection(notedesc, memdesc, elfdesc);
+		if (opts.heuristics)
+	 		mark_dll_injection(notedesc, memdesc, elfdesc);
 
 	/*
 	 * Convert the core file into an actual ECFS file and write it

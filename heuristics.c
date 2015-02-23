@@ -40,10 +40,11 @@ int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
 {
 	int i, j, index = 0;
 	*stra = (char **)heapAlloc(sizeof(char *) * MAX_STRINGS); 
-	char *string = alloca(512);
+	char *string = alloca(8192 * 2);
 	char *p;
 	size_t cursize = MAX_STRINGS;
-
+	
+	log_msg(__LINE__, "rodata_size: %u\n", rodata_size);
 	for (p = (char *)rodata_ptr, j = 0, i = 0; i < rodata_size; i++) {
 		if (p[i] != '\0') {
 			string[j++] = p[i];
@@ -55,11 +56,13 @@ int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
 			}
 			j = 0;
 		}
-		if (index == MAX_STRINGS) {
+		if (index >= MAX_STRINGS) {
+#if DEBUG
+			log_msg(__LINE__, "build_rodata_strings() performing realloc on %p", *stra);
+#endif
 			cursize <<= 1;
 			*stra = (char **)realloc(*stra, sizeof(char *) * cursize);
 		}
-
 	}
 	return index;
 }
@@ -295,7 +298,7 @@ int get_dt_needed_libs_all(memdesc_t *memdesc, struct needed_libs **needed_libs)
 		}
 		if ((total_needed * sizeof(struct needed_libs)) >= currsize) {// just to be safe
 			currsize <<= 1;
-			all_libs = (struct needed_libs *)heapAlloc(currsize);
+			all_libs = (struct needed_libs *)realloc(all_libs, currsize);
 		}
 		total_needed += get_dt_needed_libs(initial_libs[i].libpath, all_libs, total_needed);
 
@@ -316,7 +319,7 @@ int get_dt_needed_libs_all(memdesc_t *memdesc, struct needed_libs **needed_libs)
 /*
  * Get dlopen libs
  */
-int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
+int get_dlopen_libs(const char *exe_path, struct dlopen_libs *dl_libs, int index)
 {	
 	ElfW(Ehdr) *ehdr;
 	ElfW(Shdr) *shdr;
@@ -385,8 +388,12 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 		if (!strcmp(&shstrtab[shdr[i].sh_name], ".dynsym"))
 			symcount = shdr[i].sh_size / sizeof(ElfW(Sym));
 	}
-	if (text_ptr == NULL || rela == NULL || symtab == NULL)
+	if (text_ptr == NULL || rela == NULL || symtab == NULL) {
+#if DEBUG
+		log_msg(__LINE__, "get_dlopen_libs() failing for path: %s", exe_path);
+#endif
 		return -1;
+	}
 	
 	for (found_dlopen = 0, i = 0; i < symcount; i++) {
 		if (!strcmp(&dynstr[symtab[i].st_name], "dlopen")) {
@@ -394,8 +401,12 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 			break;
 		}
 	}
-	if (!found_dlopen) 
+	if (!found_dlopen) {
+#if DEBUG
+		log_msg(__LINE__, "no calls to dlopen found in %s", exe_path);
+#endif
 		return 0;			
+	}
 	/*
 	 * For now (until we have integrated a disassembler in)
 	 * I am not going to check each individual dlopen call.	
@@ -407,18 +418,45 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 	scount = build_rodata_strings(&strings, rodata_ptr, rodata_size);
 	if (scount == 0)
 		return 0;
-	*dl_libs = (struct dlopen_libs *)heapAlloc(scount * sizeof(**dl_libs));
 	for (i = 0; i < scount; i++) {
 		ret = readlink(strings[i], tmp, 512);
-		(*dl_libs)[i].libpath = ret < 0 ? xstrdup(strings[i]) : xstrdup(tmp);
+		dl_libs[index + i].libpath = ret < 0 ? xstrdup(strings[i]) : xstrdup(tmp);
 		free(strings[i]);
 	}
 	
 #if DEBUG
 	for (i = 0; i < scount; i++)
-		printf("dlopen lib: %s\n", (*dl_libs)[i].libpath);
+		printf("dlopen lib: %s\n", dl_libs[index + i].libpath);
 #endif
 	return scount;
+}
+
+/*
+ * This should be called after all needed libs have been found.
+ */
+int get_dlopen_libs_all(memdesc_t *memdesc, struct needed_libs *needed_libs, int needed_count, struct dlopen_libs **dlopen_libs)
+{
+	int dlopen_count, i;
+	size_t currsize = sizeof(struct dlopen_libs) * 8192;
+	struct dlopen_libs *all_libs = heapAlloc(sizeof(struct dlopen_libs) * 8192);
+	
+	log_msg(__LINE__, "calling get_dlopen_libs(%s, ...)", memdesc->exe_path);
+	dlopen_count = get_dlopen_libs(memdesc->exe_path, all_libs, 0);
+	log_msg(__LINE__, "dlopen_count initial: %d", dlopen_count);
+	for (i = 0; i < needed_count; i++) {
+		if (i >= 1) 
+			if (!strcmp(needed_libs[i].libpath, needed_libs[i - 1].libpath))
+				continue;
+		if ((dlopen_count * sizeof(struct dlopen_libs)) >= currsize) {
+			currsize <<= 1;
+			all_libs = (struct dlopen_libs *)realloc(all_libs, currsize);
+		}		
+		log_msg(__LINE__, "calling get_dlopen_libs(%s, ...)", needed_libs[i].libpath);
+		dlopen_count += get_dlopen_libs(needed_libs[i].libpath, all_libs, dlopen_count);
+		log_msg(__LINE__, "dlopen_count increased to %d", dlopen_count);
+	}
+	*dlopen_libs = all_libs;
+	return dlopen_count;
 }
 
 void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elfdesc)
@@ -434,13 +472,14 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 	 * We just check the immediate executable for dlopen calls
 	 */
 	
+	/*
 	dlopen_count = get_dlopen_libs(memdesc->exe_path, &dlopen_libs);
 #if DEBUG
 	if (dlopen_count <= 0) {
 		log_msg(__LINE__, "found %d dlopen loaded libraries", dlopen_count);
 	}
 #endif
-	
+	*/
 	/*
 	 * We check the dynamic segment of the executable 
 	 * (DT_NEEDED) to see what the dependencies are.
@@ -451,6 +490,11 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 	 */
 	
 	needed_count = get_dt_needed_libs_all(memdesc, &needed_libs);
+	dlopen_count = get_dlopen_libs_all(memdesc, needed_libs, needed_count, &dlopen_libs);
+#if DEBUG
+	for (i = 0; i < dlopen_count; i++)
+		log_msg(__LINE__, "dlopen lib from .rodata: %s", dlopen_libs[i]);
+#endif
 	for (i = 0; i < lm_files->libcount; i++) {
 		for (j = 0; j < needed_count; j++) {
 			if (lm_files->libs[i].path == NULL)
