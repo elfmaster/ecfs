@@ -129,6 +129,12 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 	return ecfs;
 }	
 
+int unload_ecfs_file(ecfs_elf_t *desc)
+{
+	return munmap(desc->mem, desc->filesize);
+}
+
+
 int get_fd_info(ecfs_elf_t *desc, struct fdinfo **fdinfo)
 {
 	char *StringTable = desc->shstrtab;

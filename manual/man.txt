@@ -285,7 +285,7 @@ EXAMPLE:
 		printf("Name: %s value: %lx\n", &strtab[dsyms[i].nameoffset], dsyms[i].symval);
 	
 
--=[GET STACK POINTER]
+-=[GET POINTER FUNCTIONS]
 
 ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr);
 
@@ -295,7 +295,6 @@ Returns the size of the stack on success, -1 on failure. Sets ptr to point to
 the stack inside of the desc struct on success, null on failure.
 
 
--=[GET STACK POINTER]
 
 ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr);
 
@@ -303,6 +302,12 @@ ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr);
 
 Returns the size of the heap on success, -1 on failure. Sets ptr to point to the
 heap inside of the desc struct on success, null on failure.
+
+
+
+ssize_t get_ptr_for_va(ecfs_elf_t *desc, unsigned long vaddr, uint8_t **ptr)
+
+
 
 
 

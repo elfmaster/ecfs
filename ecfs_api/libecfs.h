@@ -24,6 +24,14 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+/*
+ * Custom shdr type
+ */
+#define SHT_INJECTED 0x200000
+
+/*
+ * Socket protocol
+ */
 #define NET_TCP 1
 #define NET_UDP 2
 

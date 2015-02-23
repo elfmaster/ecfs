@@ -43,6 +43,13 @@ int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
 /* 
  * Find the actual path to DT_NEEDED libraries
  * and take possible symlinks into consideration 
+ * XXX this function will not work if the path is
+ * a symlink to a file in a different directory.
+ * fix this bug by seeing if readlink returns a
+ * totally different file path as the resultant link
+ * or if it returns just the base name (Which means
+ * that the linked file is in the same dir as the
+ * symlink.
  */
 static char * get_real_lib_path(char *name)
 {
