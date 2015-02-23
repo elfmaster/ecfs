@@ -64,6 +64,7 @@ int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
 	return index;
 }
 
+
 /* 
  * Find the actual path to DT_NEEDED libraries
  * and take possible symlinks into consideration 
@@ -77,12 +78,36 @@ int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
  */
 static char * get_real_lib_path(char *name)
 {
+	FILE *fd;
 	char tmp[512] = {0};
 	char real[512] = {0};
 	char *ptr;
 
 	int ret;
 	
+	/*
+	 * Since this function is recursive and since there are
+	 * times when 'name' is passed as a path (As the result of
+	 * some readlink() calls, we must handle that specially since
+	 * we don't want to append a path to a path which will be
+	 * incorrect.
+	 */
+	if (strchr(name, '/') != NULL) {
+		ret = readlink(name, real, 512);
+		if (ret > 0) {
+			if (strchr(real, '/') != NULL)
+				return xstrdup(real);
+			else {
+				ptr = get_real_lib_path(real);
+				return xstrdup(ptr);
+			}
+		}
+		return xstrdup(name);
+	}
+	/*
+	 * Check most common paths
+	 */
+
 	snprintf(tmp, 512, "/usr/lib/x86_64-linux-gnu/%s", name);
         if (access(tmp, F_OK) == 0) {
                 ret = readlink(tmp, real, 512);
@@ -127,6 +152,22 @@ static char * get_real_lib_path(char *name)
 		else
 			return xstrdup(tmp);
 	}
+	
+ 	snprintf(tmp, 512, "/usr/lib/x86_64-linux-gnu/gio/modules/%s", name);
+        if (access(tmp, F_OK) == 0) {
+                ret = readlink(tmp, real, 512);
+                if (ret > 0) {
+                        ptr = get_real_lib_path(real);
+                        return xstrdup(ptr);
+                }
+                else
+                        return xstrdup(tmp);
+        }
+
+	/*
+	 * If we get here then lets try directly from ld.so.cache
+	 */
+check_ld_cache:
 	
 	return NULL;
 }
@@ -190,6 +231,31 @@ static int get_dt_needed_libs(const char *bin_path, struct needed_libs *needed_l
 		}
 	}
 	return needed_count;
+}
+
+static int cmp_till_dot(const char *lib1, const char *lib2)
+{
+	char *p;
+	char *s1 = xstrdup(lib1);
+	char *s2 = xstrdup(lib2);
+	int i;
+
+	for (i = 0, p = s1; p[i] != '\0'; i++) {
+		if (p[i] == '.' && p[i + 1] == 's' && p[i + 2] == 'o') {
+			p[i] = '\0';	
+			break;
+		}
+	}
+        for (i = 0, p = s2; p[i] != '\0'; i++) {
+                if (p[i] == '.' && p[i + 1] == 's' && p[i + 2] == 'o') {
+                        p[i] = '\0';
+                        break;
+                }
+        }
+	
+	log_msg(__LINE__, "cmp %s and %s", s1, s2);
+	
+	return strcmp(s1, s2);
 }
 
 static int qsort_cmp_by_str(const void *a, const void *b)
@@ -387,8 +453,15 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 	needed_count = get_dt_needed_libs_all(memdesc, &needed_libs);
 	for (i = 0; i < lm_files->libcount; i++) {
 		for (j = 0; j < needed_count; j++) {
-			if (lm_files->libs[i].path == NULL || needed_libs[j].libpath == NULL)
+			if (lm_files->libs[i].path == NULL)
 				break;
+			if (needed_libs[j].libpath == NULL) {
+				/* Compare by name since full path couldn't be found */
+				if (!cmp_till_dot(needed_libs[j].libname, lm_files->libs[i].name)) {
+					valid++;
+					break;	
+				}
+			}	
 			if (j >= 1) // avoid duplicates
 				if (!strcmp(needed_libs[j].libpath, needed_libs[j - 1].libpath))
 					continue;
