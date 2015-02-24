@@ -179,7 +179,7 @@ elfdesc_t * load_core_file_stdin(void)
  * though we want the complete text of the main executable and
  * its shared libaries.
  */
-int merge_texts_into_core(const char *path, memdesc_t *memdesc)
+int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
 {
 	elfdesc_t *elfdesc = (elfdesc_t *)heapAlloc(sizeof(elfdesc_t));
         ElfW(Ehdr) *ehdr;
@@ -227,7 +227,7 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 	 */
 	textVaddr = memdesc->text.base;
 	if (textVaddr == 0) {
-		log_msg(__LINE__, "(From merge_texts_into_core function) Could not find text address");
+		log_msg(__LINE__, "(From merge_exe_text_into_core function) Could not find text address");
 		return -1;
 	}
 
@@ -2655,7 +2655,7 @@ int main(int argc, char **argv)
 #if DEBUG
 		log_msg(__LINE__, "merging text into core");
 #endif
-		if (merge_texts_into_core((const char *)corefile, memdesc) < 0) {
+		if (merge_exe_text_into_core((const char *)corefile, memdesc) < 0) {
 			log_msg(__LINE__, "Failed to merge text into core file");
 		}
         	elfdesc = load_core_file((const char *)corefile);
