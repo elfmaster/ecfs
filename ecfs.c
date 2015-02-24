@@ -177,7 +177,9 @@ elfdesc_t * load_core_file_stdin(void)
  * to save space; this is generally fine since the text presumably
  * doesn't ever change, and can be remarkably big. For our case
  * though we want the complete text of the main executable and
- * its shared libaries.
+ * its shared libaries. This function merges the executables complete
+ * text segment into the core file. And merge_shlib_texts_into_core
+ * will do the ones for each shared library.
  */
 int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
 {
@@ -287,6 +289,31 @@ int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
 		
 	return 0;
 }
+
+int merge_shlib_texts_into_core(memdesc_t *memdesc, elfdesc_t *elfdesc)
+{
+	int i;
+	mappings_t *maps = memdesc->maps;
+	uint8_t *text_image;
+	ssize_t tlen;
+
+	for (i = 0; i < memdesc->mapcount; i++) {
+		if (!maps[i].shlib)
+			continue;
+		if (!(maps[i].p_flags & PF_X))
+			continue;
+		/* If we got here we have an executable
+	 	 * segment of a shared library.
+	 	 */
+		tlen = get_segment_from_pmem(maps[i].base, memdesc, &text_image);
+		if (tlen < 0) {
+			log_msg(__LINE__, "get_segment_from_pmem(%lx, ...) failed\n", maps[i].base);
+			continue;
+		}
+			
+
+}
+
 /*
  * This function does the opposite of how the kernel packs files into
  * the notes entry. We do the opposite to extract the info out of the
