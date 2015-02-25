@@ -183,7 +183,6 @@ elfdesc_t * load_core_file_stdin(void)
  */
 int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
 {
-	elfdesc_t *elfdesc = (elfdesc_t *)heapAlloc(sizeof(elfdesc_t));
         ElfW(Ehdr) *ehdr;
         ElfW(Phdr) *phdr;
 	ElfW(Addr) textVaddr;
@@ -197,7 +196,7 @@ int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
 	int in, out, i = 0;
 	int data_index;
 
-	in = xopen(path, O_RDWR);
+	in = xopen(path, O_RDONLY);
 	xfstat(in, &st);
 	
 	/*
@@ -290,13 +289,130 @@ int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
 	return 0;
 }
 
-int merge_shlib_texts_into_core(memdesc_t *memdesc, elfdesc_t *elfdesc)
+/*
+ * This function is called by merge_shlib_texts_into_core() and merges a text segment
+ * from a given shared library into the core file.
+ */
+static int merge_text_image(const char *path, unsigned long text_addr, uint8_t *text_image, ssize_t text_len)
 {
-	int i;
+        ElfW(Ehdr) *ehdr;
+        ElfW(Phdr) *phdr;
+        ElfW(Off) textOffset;
+        ElfW(Off) dataOffset;
+        size_t textSize;
+        uint8_t *mem;
+        uint8_t *buf;
+        struct stat st;
+        ssize_t nread;
+        int in, out, i = 0;
+        int data_index;
+	ssize_t tlen = text_len;
+	
+	log_msg(__LINE__, "xopen path: %s", path);
+        in = xopen(path, O_RDONLY);
+        xfstat(in, &st);
+
+        /*
+         * tmp will point to the new temporary file that contains
+         * our corefile with a merged in program text segment and
+         * with updated p_filesz, and updated p_offsets for phdr's 
+         * that follow it.
+         */
+	log_msg(__LINE__, "merge_text_image() step 1");
+        char *tmp = xfmtstrdup("%s/tmp_merged_core_t2", ECFS_CORE_DIR);
+        do {
+                if (access(tmp, F_OK) == 0) {
+                        free(tmp);
+                        tmp = xfmtstrdup("%s/tmp_merged_core_t2.%d", ECFS_CORE_DIR, ++i);
+                } else
+                        break;
+
+        } while(1);
+        out = xopen(tmp, O_RDWR|O_CREAT);
+	
+	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, in, 0);
+        if (mem == MAP_FAILED) {
+                log_msg(__LINE__, "mmap %s", strerror(errno));
+                return -1;
+        }
+        ehdr = (ElfW(Ehdr) *)mem;
+        phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
+        int tc, found_text;
+	
+	for (i = 0; i < ehdr->e_phnum; i++) {
+		if (text_addr >= phdr[i].p_vaddr && text_addr < phdr[i].p_vaddr + phdr[i].p_memsz) {
+		 	textOffset = phdr[i].p_offset;
+                        dataOffset = phdr[i + 1].p_offset;      // data segment is always i + 1 after text
+                        textSize = phdr[i].p_memsz;         // get memsz of text
+                        phdr[i].p_filesz = phdr[i].p_memsz; // make filesz same as memsz
+                        found_text++;
+                }
+                else
+                if (found_text) {
+                        phdr[i].p_offset += (tlen - 4096); // we must push the other segments forward to make room for whole text image
+                }
+        }
+        if (found_text == 0) {
+                log_msg(__LINE__, "Failed to merge texts into core");
+                return -1;
+        }
+        if (write(out, mem, textOffset) < 0) {
+                log_msg(__LINE__, "write %s", strerror(errno));
+                return -1;
+        }
+        if (write(out, text_image, tlen) < 0) {
+                log_msg(__LINE__, "write %s", strerror(errno));
+                return -1;
+        }
+        if (write(out, &mem[dataOffset], st.st_size - (textOffset + 4096)) < 0) {
+                log_msg(__LINE__, "write %s", strerror(errno));
+                return -1;
+        }
+
+        fsync(out);
+        close(out);
+        close(in);
+#if DEBUG
+	log_msg(__LINE__, "merge_text_image(): renaming %s back to %s", tmp, path);
+#endif
+        if (rename(tmp, path) < 0) {
+                log_msg(__LINE__, "rename %s", strerror(errno));
+                return -1;
+        }
+
+        return 0;
+
+}
+
+static void create_shlib_text_mappings(memdesc_t *memdesc)
+{
+	int i, ret;
+	mappings_t *maps = memdesc->maps;
+	ssize_t tlen;
+	
+	for (i = 0; i < memdesc->mapcount; i++) {
+		if (!maps[i].shlib)
+			continue;
+		if (!(maps[i].p_flags & PF_X))
+			continue;
+		tlen = get_segment_from_pmem(maps[i].base, memdesc, &(maps[i].text_image));
+		if (tlen < 0) {
+			log_msg(__LINE__, "get_segment_from_pmem(%lx, ...) failed", maps[i].base);
+			continue;
+		}
+		maps[i].text_len = tlen;
+	}
+}
+
+int merge_shlib_texts_into_core(const char *corefile, memdesc_t *memdesc)
+{
+	int i, ret;
 	mappings_t *maps = memdesc->maps;
 	uint8_t *text_image;
 	ssize_t tlen;
-
+#if DEBUG
+	log_msg(__LINE__, "merge_shlib_texts_into_core() has been called");
+#endif
 	for (i = 0; i < memdesc->mapcount; i++) {
 		if (!maps[i].shlib)
 			continue;
@@ -305,13 +421,12 @@ int merge_shlib_texts_into_core(memdesc_t *memdesc, elfdesc_t *elfdesc)
 		/* If we got here we have an executable
 	 	 * segment of a shared library.
 	 	 */
-		tlen = get_segment_from_pmem(maps[i].base, memdesc, &text_image);
-		if (tlen < 0) {
+		ret = merge_text_image(corefile, maps[i].base, maps[i].text_image, maps[i].text_len); 
+		if (ret < 0) {
 			log_msg(__LINE__, "get_segment_from_pmem(%lx, ...) failed\n", maps[i].base);
 			continue;
 		}
-			
-
+	}
 }
 
 /*
@@ -705,7 +820,6 @@ static ElfW(Addr) lookup_data_base(memdesc_t *memdesc, struct nt_file_struct *fm
 
         for (i = 0; i < fmaps->fcount; i++) {
                 p = strrchr(fmaps->files[i].path, '/') + 1;
-		log_msg(__LINE__, "lookup_data_base() comparing %s and %s", memdesc->exe_path, p);
                 if (!strcmp(memdesc->exe_comm, p)) {
 			p = strrchr(fmaps->files[i + 1].path, '/') + 1;
 			if (!strcmp(memdesc->exe_comm, p))
@@ -830,6 +944,9 @@ static int get_maps(pid_t pid, mappings_t *maps, const char *path)
                 else
                 if ((p = strrchr(tmp, '/'))) {
                         if (strstr(p, ".so")) {
+#if DEBUG
+				log_msg(__LINE__, "marked %s as shared library", p);
+#endif
                                 maps[lc].shlib++;
                                 maps[lc].filename = xstrdup(strchr(tmp, '/'));
                         }
@@ -2506,7 +2623,7 @@ int main(int argc, char **argv)
 	}
 	memset(&opts, 0, sizeof(opts));
 
-	while ((c = getopt(argc, argv, "hc:io:p:e:")) != -1) {
+	while ((c = getopt(argc, argv, "thc:io:p:e:")) != -1) {
 		switch(c) {
 			case 'c':	
 				opts.use_stdin = 0;
@@ -2526,6 +2643,9 @@ int main(int argc, char **argv)
 				break;
 			case 'h':
 				opts.heuristics = 1;
+				break;
+			case 't':
+				opts.text_all = 1;
 				break;
 			default:
 				fprintf(stderr, "Unknown option\n");
@@ -2563,7 +2683,15 @@ int main(int argc, char **argv)
 	prctl(PR_SET_DUMPABLE, 0);
 
 	if (opts.use_stdin) {
+		/*
+		 * If we're reading from stdin we are probably waiting for the kernel
+		 * to write the corefile to us. Until we have read the core file completely
+		 * /proc/$pid/? will remain open to us, so we need to gather whatever we need
+		 * from this area now while our process is in a stopped zombie state.
+		 */
+#if DEBUG
 		log_msg(__LINE__, "Using stdin, outfile is:%s", outfile);
+#endif
 		/*
 		 * If we are getting core directly from the kernel then we must
 		 * read /proc/<pid>/ before we read the corefile. The process stays
@@ -2593,6 +2721,8 @@ int main(int argc, char **argv)
 		//pull_unknown_shdr_sizes(pid); // get size of certain shdrs from original exe
 		memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
 		memdesc->o_entry = get_original_ep(pid);
+		if (opts.text_all)
+			create_shlib_text_mappings(memdesc);
 	}
 
 #if DEBUG
@@ -2651,7 +2781,6 @@ int main(int argc, char **argv)
 		memdesc->task.pid = pid;
 		memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
 		fill_global_hacks(pid);
-		//pull_unknown_shdr_sizes(pid);
 		pie = check_for_pie(pid);
 	}
 	fill_in_pstatus(memdesc, notedesc);
@@ -2665,7 +2794,6 @@ int main(int argc, char **argv)
 			goto done;
 		}
 		unsigned long hint = text_base;
-		log_msg(__LINE__, "h0h0 text base: %lx", text_base);
 		get_text_phdr_size_with_hint(elfdesc, hint);
 	}
 	
@@ -2685,13 +2813,28 @@ int main(int argc, char **argv)
 		if (merge_exe_text_into_core((const char *)corefile, memdesc) < 0) {
 			log_msg(__LINE__, "Failed to merge text into core file");
 		}
+		
         	elfdesc = load_core_file((const char *)corefile);
         	if (elfdesc == NULL) {
         		log_msg(__LINE__, "Failed to parse text-merged core file");	
                 	exit(-1);
-        	}
+        	} 
 	}
-	
+	if (opts.text_all) {
+#if DEBUG
+		log_msg(__LINE__, "opts.text_all is enabled");
+#endif
+		corefile = tmp_corefile == NULL ? corefile : tmp_corefile;
+		if (merge_shlib_texts_into_core((const char *)corefile, memdesc) < 0) {
+			log_msg(__LINE__, "Failed to merge shlib texts into core");
+		}
+		elfdesc = load_core_file((const char *)corefile); // reload after our mods
+		if (elfdesc == NULL) {
+			log_msg(__LINE__, "Failed to parse shlib text merged core file");
+			exit(-1);
+		}
+	}
+
 	/*
 	 * Which mappings are stored in actual phdr segments?
 	 */

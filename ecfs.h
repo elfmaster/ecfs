@@ -117,6 +117,7 @@ typedef struct elf_stats {
 } elf_stat_t;
 
 struct opts {
+	int text_all; // write complete text segment (not just 4096 bytes) of each shared library
 	int heuristics; // heuristics for detecting dll injection etc.
 	int use_stdin;
 	char *logfile;
@@ -286,6 +287,7 @@ typedef struct elfdesc {
 
 typedef struct mappings {
 	uint8_t *mem;
+	uint8_t *text_image; // allocated mapping containing text segment (only if shlib)
 	char *filename;
 	unsigned long base;
 	size_t size;
@@ -307,6 +309,7 @@ typedef struct mappings {
 	size_t sh_offset;
 	uint32_t p_flags;
 	int has_pt_load;
+	ssize_t text_len; // only if an shlib is this used
 } mappings_t;
 
 typedef struct memdesc {
