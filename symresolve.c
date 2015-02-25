@@ -42,12 +42,12 @@ static int resolve_symbols(list_t **list, const char *path, unsigned long base)
 	int fd, ret;
 	char use_addend = 0;
 	uint8_t *mem;
-	ElfW(Ehdr) *ehdr;
-	ElfW(Shdr) *shdr;
-	ElfW(Phdr) *phdr;
-	ElfW(Sym) *symtab;
-	char *StringTable, *dynstr;
-	size_t i, symcount;
+	ElfW(Ehdr) *ehdr = NULL;
+	ElfW(Shdr) *shdr = NULL;
+	ElfW(Phdr) *phdr = NULL;
+	ElfW(Sym) *symtab = NULL;
+	char *StringTable = NULL, *dynstr = NULL;
+	size_t i, symcount =0;
 	symentry_t *symvector;
 
 	fd = xopen(path, O_RDONLY);
@@ -120,10 +120,10 @@ int store_dynamic_symvals(list_t *list, const char *path)
         struct stat st;
         int fd;
         uint8_t *mem;
-        ElfW(Ehdr) *ehdr;
-        ElfW(Shdr) *shdr;
-        ElfW(Sym) *symtab;
-        char *StringTable, *dynstr;
+        ElfW(Ehdr) *ehdr = NULL;
+        ElfW(Shdr) *shdr = NULL;
+        ElfW(Sym) *symtab = NULL;
+        char *StringTable = NULL, *dynstr = NULL;
         size_t i, j, symcount;
 
         fd = xopen(path, O_RDWR);
@@ -158,7 +158,7 @@ int store_dynamic_symvals(list_t *list, const char *path)
 
 int fill_dynamic_symtab(list_t **list, struct lib_mappings *lm)
 {
-	int i, ret;
+	int i, ret = -1;
         /*
          * The .dynsym section is in the output ecfs executable and does not exist
          * yet when this function is called. We therefore 

@@ -44,7 +44,7 @@ static struct fde_func_data * parse_frame_data(Dwarf_Debug dbg)
     	Dwarf_Fde *fde_data = 0;
     	int res = DW_DLV_ERROR;
 	Dwarf_Signed fdenum = 0;
-	struct fde_func_data func_data;
+	struct fde_func_data func_data = { 0 };
 	struct fde_func_data *fndata;
 
 	res = dwarf_get_fde_list_eh(dbg, &cie_data, &cie_element_count, &fde_data, &fde_element_count, &error);
@@ -130,7 +130,6 @@ int get_all_functions(const char *filepath, struct fde_func_data **funcs)
         Dwarf_Signed fde_element_count = 0;
         Dwarf_Cie *cie_data = 0;
         Dwarf_Fde *fde_data = 0;
-	struct fde_func_data *fndata;
 
 	if ((fd = open(filepath, O_RDONLY)) < 0) {
 		log_msg(__LINE__, "open %s", strerror(errno));
@@ -159,7 +158,6 @@ int get_all_functions(const char *filepath, struct fde_func_data **funcs)
 		log_msg(__LINE__, "eh_frame parsing err2: parse_frame_data() failed");
 		return -1;
 	}
-	fndata = *funcs;
 	res = dwarf_finish(dbg, &error);
 	if(res != DW_DLV_OK) 
         	log_msg(__LINE__, "eh_frame parsing err3: dwarf_finish failed");

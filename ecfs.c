@@ -23,7 +23,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <unistd.h> // for syncfs
+#include <unistd.h> // for syncfs, _GNU_SOURCE is a required build flag
 #include "ecfs.h"
 #include "util.h"
 #include "ptrace.h"
@@ -183,66 +183,66 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
         ElfW(Ehdr) *ehdr;
         ElfW(Phdr) *phdr;
 	ElfW(Addr) textVaddr;
-	ElfW(Off) textOffset;
-	ElfW(Off) dataOffset;
-	size_t textSize;
+	ElfW(Off) textOffset = 0;
+        ElfW(Off) dataOffset = 0;
+        //size_t textSize;
         uint8_t *mem;
         struct stat st;
-	int in, out, i = 0;
-	int data_index;
+        int in, out, i = 0;
+        int data_index;
 
-	in = xopen(path, O_RDWR);
-	xfstat(in, &st);
-	
-	/*
-	 * tmp will point to the new temporary file that contains
-	 * our corefile with a merged in program text segment and
-	 * with updated p_filesz, and updated p_offsets for phdr's 
-	 * that follow it.
-	 */
-	char *tmp = xfmtstrdup("%s/tmp_merged_core", ECFS_CORE_DIR);
+        in = xopen(path, O_RDWR);
+        xfstat(in, &st);
+
+        /*
+         * tmp will point to the new temporary file that contains
+         * our corefile with a merged in program text segment and
+         * with updated p_filesz, and updated p_offsets for phdr's 
+         * that follow it.
+         */
+        char *tmp = xfmtstrdup("%s/tmp_merged_core", ECFS_CORE_DIR);
         do {
-                if (access(tmp, F_OK) == 0) {
-                        free(tmp);
-                        tmp = xfmtstrdup("%s/tmp_merged_core.%d", ECFS_CORE_DIR, ++i);
-                } else
-                        break;
+            if (access(tmp, F_OK) == 0) {
+                free(tmp);
+                tmp = xfmtstrdup("%s/tmp_merged_core.%d", ECFS_CORE_DIR, ++i);
+            } else
+                break;
 
         } while(1);
-	out = xopen(tmp, O_RDWR|O_CREAT);
-		
-	/*
-	 * Earlier on we read the text segment from /proc/$pid/mem
-	 * into a heap allocated buffer memdesc->textseg 
-	 */
-	uint8_t *textseg = memdesc->textseg;
-	ssize_t tlen = (ssize_t)memdesc->text.size;
+        out = xopen(tmp, O_RDWR|O_CREAT);
 
-	/*
-	 * Get textVaddr as it pertains to the mappings
-	 */
-	textVaddr = memdesc->text.base;
-	if (textVaddr == 0) {
-		log_msg(__LINE__, "(From merge_texts_into_core function) Could not find text address");
-		return -1;
-	}
-	log_msg(__LINE__, "textvaddr: %lx\n", textVaddr);
+        /*
+         * Earlier on we read the text segment from /proc/$pid/mem
+         * into a heap allocated buffer memdesc->textseg 
+         */
+        uint8_t *textseg = memdesc->textseg;
+        ssize_t tlen = (ssize_t)memdesc->text.size;
 
-	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, in, 0);
-	if (mem == MAP_FAILED) {
-		log_msg(__LINE__, "mmap %s", strerror(errno));
-		return -1;
-	}
-	ehdr = (ElfW(Ehdr) *)mem;
-	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
-	int found_text;
-	
-	for (found_text = 0, i = 0; i < ehdr->e_phnum; i++) {
-		if (phdr[i].p_vaddr <= textVaddr && phdr[i].p_vaddr + phdr[i].p_memsz > textVaddr) {
-			textOffset = phdr[i].p_offset;
-			dataOffset = phdr[i + 1].p_offset;	// data segment is always i + 1 after text
+        /*
+         * Get textVaddr as it pertains to the mappings
+         */
+        textVaddr = memdesc->text.base;
+        if (textVaddr == 0) {
+            log_msg(__LINE__, "(From merge_texts_into_core function) Could not find text address");
+            return -1;
+        }
+        log_msg(__LINE__, "textvaddr: %lx\n", textVaddr);
+
+        mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, in, 0);
+        if (mem == MAP_FAILED) {
+            log_msg(__LINE__, "mmap %s", strerror(errno));
+            return -1;
+        }
+        ehdr = (ElfW(Ehdr) *)mem;
+        phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
+        int found_text;
+
+        for (found_text = 0, i = 0; i < ehdr->e_phnum; i++) {
+            if (phdr[i].p_vaddr <= textVaddr && phdr[i].p_vaddr + phdr[i].p_memsz > textVaddr) {
+                textOffset = phdr[i].p_offset;
+                dataOffset = phdr[i + 1].p_offset;	// data segment is always i + 1 after text
 			textVaddr = phdr[i].p_vaddr;
-			textSize = phdr[i].p_memsz;	    // get memsz of text
+			//textSize = phdr[i].p_memsz;	    // get memsz of text
 			phdr[i].p_filesz = phdr[i].p_memsz; // make filesz same as memsz
 			found_text++;
 			data_index = i + 1;
@@ -2467,12 +2467,12 @@ int main(int argc, char **argv)
 {
 		
 	struct rlimit limit_core = {0L, 0L};
-	memdesc_t *memdesc;
-	elfdesc_t *elfdesc;
+	memdesc_t *memdesc = NULL;
+	elfdesc_t *elfdesc = NULL;
 	notedesc_t *notedesc = NULL;
 	handle_t *handle = alloca(sizeof(handle_t));
 	pid_t pid = 0;
-	int i, j, ret, c, pie;
+	int i, j, ret, c, pie = 0;
 	char *corefile = NULL;
 	char *outfile = NULL;
 
@@ -2815,6 +2815,7 @@ done:
         if (tmp_corefile) // incase we had to re-write file and mege in text
                 unlink(tmp_corefile);
 
+        return 0;
 }
 
 

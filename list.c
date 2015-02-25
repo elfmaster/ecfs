@@ -40,7 +40,7 @@ int insert_item_end(list_t **list, void *data, size_t sz)
 	node_t *new = malloc(sizeof(node_t));
 	if (new == NULL)
 		return -1;
-	node_t *tmp;
+	node_t *tmp = NULL;
 	
 	new->data = (void *)heapAlloc(sz);
         memcpy((void *)new->data, (void *)data, sz);

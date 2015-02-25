@@ -154,17 +154,17 @@ int get_dt_needed_libs(const char *bin_path, struct needed_libs **needed_libs)
  */
 int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 {	
-	ElfW(Ehdr) *ehdr;
-	ElfW(Shdr) *shdr;
-	ElfW(Phdr) *phdr;
-	ElfW(Rela) *rela;
-	ElfW(Sym) *symtab;
-	ElfW(Off) dataOffset;
-	ElfW(Addr) dataVaddr, textVaddr;
-	uint8_t *mem;
-	uint8_t *text_ptr, *rodata_ptr;
-	size_t text_size, dataSize, rodata_size, i; //text_size refers to size of .text not the text segment
-	int ret, fd, scount, relcount, symcount, found_dlopen;
+	ElfW(Ehdr) *ehdr = NULL;
+	ElfW(Shdr) *shdr = NULL;
+	ElfW(Phdr) *phdr = NULL;
+	ElfW(Rela) *rela = NULL;
+	ElfW(Sym) *symtab = NULL;
+	//ElfW(Off) dataOffset;
+	//ElfW(Addr) dataVaddr, textVaddr;
+	uint8_t *mem = NULL;
+	uint8_t *text_ptr = NULL, *rodata_ptr = NULL;
+	size_t /*text_size, dataSize,*/ rodata_size = 0, i; //text_size refers to size of .text not the text segment
+	int ret, fd, scount = 0, /*relcount = 0,*/ symcount = 0, found_dlopen = 0;
 	char **strings, *dynstr, tmp[512];
 	struct stat st;
 	
@@ -189,12 +189,12 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 	for (i = 0; i < ehdr->e_phnum; i++) {
 		if (phdr[i].p_type == PT_LOAD) {	
 			if (phdr[i].p_offset == 0 && phdr[i].p_flags & PF_X) {
-				textVaddr = phdr[i].p_vaddr;
+				//textVaddr = phdr[i].p_vaddr;
 			} else
 			if (phdr[i].p_offset != 0 && phdr[i].p_flags & PF_W) {
-				dataOffset = phdr[i].p_offset;
-				dataVaddr = phdr[i].p_vaddr;
-				dataSize = phdr[i].p_memsz;
+				//dataOffset = phdr[i].p_offset;
+				//dataVaddr = phdr[i].p_vaddr;
+				//dataSize = phdr[i].p_memsz;
 				break;
 			}
 		}
@@ -205,12 +205,12 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 	for (i = 0; i < ehdr->e_shnum; i++) {
 		if (!strcmp(&shstrtab[shdr[i].sh_name], ".text")) {
 			text_ptr = (uint8_t *)&mem[shdr[i].sh_offset];
-			text_size = shdr[i].sh_size;	
+			//text_size = shdr[i].sh_size;	
 		} else
 		if (!strcmp(&shstrtab[shdr[i].sh_name], ".rela.plt")) {
 			rela = (ElfW(Rela) *)&mem[shdr[i].sh_offset];
 			symtab = (ElfW(Sym) *)&mem[shdr[shdr[i].sh_link].sh_offset];
-			relcount = shdr[i].sh_size / sizeof(ElfW(Rela));
+			//relcount = shdr[i].sh_size / sizeof(ElfW(Rela));
 		} else
 		if (!strcmp(&shstrtab[shdr[i].sh_name], ".rodata")) {
 			rodata_ptr = (uint8_t *)&mem[shdr[i].sh_offset];
