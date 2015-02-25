@@ -115,7 +115,6 @@ void ecfs_print(char *fmt, ...)
 {
 	FILE *fp;
         va_list va;
-        char buf[512];
 	
 	va_start (va, fmt);
 	if ((fp = fopen(LOGFILE, "w")) == NULL) {
@@ -130,7 +129,6 @@ void ecfs_print(char *fmt, ...)
 
 void log_msg(unsigned int lineno, char *fmt, ...)
 {
-	int fd;
         char buf[512];
 	va_list va;
         va_start (va, fmt);
@@ -141,7 +139,10 @@ void log_msg(unsigned int lineno, char *fmt, ...)
 }
 void ffperror(const char *s, int lineno)
 {
-	system("touch /tmp/ecfs.debug");
+	if( system("touch /tmp/ecfs.debug") == -1) {
+            log_msg(__LINE__, "system %s", strerror(errno));
+            exit(-1);
+        }
 	FILE *fp = fopen("/tmp/ecfs.debug", "w");
 	fprintf(fp, "%s failed on code line [%d]: %s\n", s, lineno, strerror(errno));
 	fclose(fp);

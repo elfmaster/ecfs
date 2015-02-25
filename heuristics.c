@@ -7,6 +7,7 @@
  */
 
 #include "ecfs.h"
+#include "util.h"
 
 #define OFFSET_2_PUSH 6 // # of bytes int PLT entry where push instruction begins
 #define MAX_NEEDED_LIBS 512
@@ -94,14 +95,14 @@ static char * get_real_lib_path(char *name)
  */
 int get_dt_needed_libs(const char *bin_path, struct needed_libs **needed_libs)
 {
-	ElfW(Ehdr) *ehdr;
-	ElfW(Phdr) *phdr;
-	ElfW(Dyn) *dyn;
-	ElfW(Shdr) *shdr;
+	ElfW(Ehdr) *ehdr = NULL;
+	ElfW(Phdr) *phdr = NULL;
+	ElfW(Dyn) *dyn = NULL;
+	ElfW(Shdr) *shdr = NULL;
 	int fd, i,  needed_count;
 	uint8_t *mem;
 	struct stat st;
-	char *dynstr;
+	char *dynstr = NULL;
 
 	fd = xopen(bin_path, O_RDONLY);
 	fstat(fd, &st);
@@ -157,11 +158,11 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 	ElfW(Shdr) *shdr;
 	ElfW(Phdr) *phdr;
 	ElfW(Rela) *rela;
-	ElfW(Sym) *symtab, *symbol;
+	ElfW(Sym) *symtab;
 	ElfW(Off) dataOffset;
 	ElfW(Addr) dataVaddr, textVaddr;
 	uint8_t *mem;
-	uint8_t *text_ptr, *data_ptr, *rodata_ptr;
+	uint8_t *text_ptr, *rodata_ptr;
 	size_t text_size, dataSize, rodata_size, i; //text_size refers to size of .text not the text segment
 	int ret, fd, scount, relcount, symcount, found_dlopen;
 	char **strings, *dynstr, tmp[512];
@@ -212,7 +213,7 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs)
 			relcount = shdr[i].sh_size / sizeof(ElfW(Rela));
 		} else
 		if (!strcmp(&shstrtab[shdr[i].sh_name], ".rodata")) {
-			rodata_ptr = (char *)&mem[shdr[i].sh_offset];
+			rodata_ptr = (uint8_t *)&mem[shdr[i].sh_offset];
 			rodata_size = shdr[i].sh_size;
 		} else
 		if (!strcmp(&shstrtab[shdr[i].sh_name], ".dynstr")) 
@@ -288,9 +289,6 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 	 * its dependencies as well, otherwise we may get some
 	 * false positives.
 	 */
-	char *real;
-	int ret;
-	
 	needed_count = get_dt_needed_libs(memdesc->exe_path, &needed_libs);
 
 	for (i = 0; i < lm_files->libcount; i++) {
@@ -305,7 +303,7 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 			/*
 			 * in the case that the lib path is a symlink
 			 */
-			//real = strrchr(needed_libs[j].libpath, '/') + 1;
+			//char *real = strrchr(needed_libs[j].libpath, '/') + 1;
 			//if (real == NULL)
 				//continue;
 			if (!strcmp(lm_files->libs[i].path, needed_libs[j].libpath) || !strncmp(lm_files->libs[i].name, "ld-", 3)) {

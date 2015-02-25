@@ -17,8 +17,6 @@ int insert_item_front(list_t **list, void *data, size_t sz)
 	if (new == NULL)
 		return -1;
 
-	node_t *tmp;
-
 	new->data = (desc_t *)heapAlloc(sz);
 	memcpy((void *)new->data, (void *)data, sz);
 

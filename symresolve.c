@@ -24,7 +24,7 @@
  */
 
 #include "ecfs.h"
-
+#include "util.h"
 
 /* 
  * Each library and its symbols are represented by an array
@@ -102,7 +102,6 @@ unsigned long lookup_from_symlist(const char *name, list_t *list)
 {
 	node_t *current;
 	symentry_t *symptr;
-	size_t count;
 	int i;
 
 	for (current = list->tail; current != NULL; current = current->prev) {
@@ -119,7 +118,7 @@ unsigned long lookup_from_symlist(const char *name, list_t *list)
 int store_dynamic_symvals(list_t *list, const char *path)
 {	
         struct stat st;
-        int fd, ret;
+        int fd;
         uint8_t *mem;
         ElfW(Ehdr) *ehdr;
         ElfW(Shdr) *shdr;

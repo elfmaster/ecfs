@@ -25,6 +25,7 @@
 
 
 #include "ecfs.h"
+#include "util.h"
 
 #define UNDEF_VAL 2000
 #define SAME_VAL 2001
@@ -39,14 +40,11 @@ static struct fde_func_data * parse_frame_data(Dwarf_Debug dbg)
 	Dwarf_Error error;
     	Dwarf_Signed cie_element_count = 0;
     	Dwarf_Signed fde_element_count = 0;
-    	Dwarf_Signed fde_count;
 	Dwarf_Cie *cie_data = 0;
     	Dwarf_Fde *fde_data = 0;
-	int index;
     	int res = DW_DLV_ERROR;
 	Dwarf_Signed fdenum = 0;
 	struct fde_func_data func_data;
-	struct fde_func_data *fdp;
 	struct fde_func_data *fndata;
 
 	res = dwarf_get_fde_list_eh(dbg, &cie_data, &cie_element_count, &fde_data, &fde_element_count, &error);
@@ -122,7 +120,6 @@ int get_func_data(Dwarf_Debug dbg, Dwarf_Fde fde, int fdenum, struct fde_func_da
 int get_all_functions(const char *filepath, struct fde_func_data **funcs)
 {
 	int fd;
-	int i;
 	int res = DW_DLV_ERROR;
 	int regtabrulecount = 0;
 	Dwarf_Debug dbg;
@@ -131,7 +128,6 @@ int get_all_functions(const char *filepath, struct fde_func_data **funcs)
 	Dwarf_Handler errhand = 0;
         Dwarf_Signed cie_element_count = 0;
         Dwarf_Signed fde_element_count = 0;
-        Dwarf_Signed fde_count;
         Dwarf_Cie *cie_data = 0;
         Dwarf_Fde *fde_data = 0;
 	struct fde_func_data *fndata;

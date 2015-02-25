@@ -22,8 +22,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-
+#include <sys/wait.h> //for waitpid
+#include "util.h"
 #include "ecfs.h"
 
 int waitpid2(pid_t pid, int *status, int options)
@@ -51,6 +51,45 @@ void toggle_ptrace_state(desc_t *h, int state)
                         break;
         }
 }
+
+int pid_detach_direct(pid_t pid)
+{
+        if (ptrace(PTRACE_DETACH, pid, NULL, NULL) < 0) {
+                if (errno) {
+                        fprintf(stderr, "ptrace: pid_detach() failed: %s\n", strerror(errno));
+                        return -1;
+                }
+        }
+#if DEBUG
+        printf("[+] PT_TID_DETACHED -> %d\n", pid);
+#endif
+        return 0;
+}
+
+int pid_detach(desc_t *h)
+{
+        pid_t pid = h->memory.task.pid;
+        
+        if (ptrace(PTRACE_DETACH, pid, NULL, NULL) < 0) {
+                if (errno) {
+                        fprintf(stderr, "ptrace: pid_detach() failed: %s\n", strerror(errno));
+                        return -1;
+                }
+        }
+        toggle_ptrace_state(h, PT_DETACHED);
+        return 0;
+}
+
+int pid_detach_stateful(desc_t *h)
+{
+        if (h->memory.task.state & PT_DETACHED)
+                return 0;
+        if (pid_detach(h) < 0)
+                return -1;
+
+        return -1;
+}
+
 
 int pid_attach(desc_t *h)
 {
@@ -95,6 +134,7 @@ int pid_attach_stateful(desc_t *h)
         if (pid_attach(h) < 0)
                 return -1;
 
+        return -1;
 }
 
 int pid_read(int pid, void *dst, const void *src, size_t len)
@@ -161,43 +201,6 @@ out_error:
         fprintf(stderr, "pid_write() failed, pid: %d: %s\n", pid, strerror(errno));
         return -1;
 }
-
-int pid_detach_direct(pid_t pid)
-{
-        if (ptrace(PTRACE_DETACH, pid, NULL, NULL) < 0) {
-                if (errno) {
-                        fprintf(stderr, "ptrace: pid_detach() failed: %s\n", strerror(errno));
-                        return -1;
-                }
-        }
-#if DEBUG
-        printf("[+] PT_TID_DETACHED -> %d\n", pid);
-#endif
-        return 0;
-}
-
-int pid_detach(desc_t *h)
-{
-        pid_t pid = h->memory.task.pid;
-        
-        if (ptrace(PTRACE_DETACH, pid, NULL, NULL) < 0) {
-                if (errno) {
-                        fprintf(stderr, "ptrace: pid_detach() failed: %s\n", strerror(errno));
-                        return -1;
-                }
-        }
-        toggle_ptrace_state(h, PT_DETACHED);
-        return 0;
-}
-
-int pid_detach_stateful(desc_t *h)
-{
-        if (h->memory.task.state & PT_DETACHED)
-                return 0;
-        if (pid_detach(h) < 0)
-                return -1;
-}
-
 
 int pid_attach_direct(pid_t pid)
 {

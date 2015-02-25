@@ -1,3 +1,6 @@
+#ifndef _ECFS_H
+#define _ECFS_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -75,9 +78,9 @@
 
 #define MAX_THREADS 256		// for each threads prstatus
 
-#define ELFNOTE_NAME(_n_) ((char*)(_n_) + sizeof(*(_n_)))
+#define ELFNOTE_NAME(_n_) ((unsigned char*)(_n_) + sizeof(*(_n_)))
 #define ELFNOTE_ALIGN(_n_) (((_n_)+3)&~3)
-#define ELFNOTE_NAME(_n_) ((char*)(_n_) + sizeof(*(_n_)))
+#define ELFNOTE_NAME(_n_) ((unsigned char*)(_n_) + sizeof(*(_n_)))
 #define ELFNOTE_DESC(_n_) (ELFNOTE_NAME(_n_) + ELFNOTE_ALIGN((_n_)->n_namesz))
 #define ELFNOTE_NEXT(_n_) ((ElfW(Nhdr) *)(ELFNOTE_DESC(_n_) + ELFNOTE_ALIGN((_n_)->n_descsz)))
 
@@ -426,3 +429,5 @@ unsigned long lookup_from_symlist(const char *name, list_t *list);
  * from ecfs.c
  */
 ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int type);
+
+#endif

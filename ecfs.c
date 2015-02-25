@@ -23,7 +23,12 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <unistd.h> // for syncfs
 #include "ecfs.h"
+#include "util.h"
+#include "ptrace.h"
+#include "symresolve.h"
+#include "heuristics.h"
 
 struct opts opts;
 
@@ -59,12 +64,12 @@ ssize_t get_segment_from_pmem(unsigned long, memdesc_t *, uint8_t **);
 elfdesc_t * load_core_file(const char *path)
 {	
 	elfdesc_t *elfdesc = (elfdesc_t *)heapAlloc(sizeof(elfdesc_t));
-	ElfW(Ehdr) *ehdr;
-	ElfW(Phdr) *phdr;
-	ElfW(Nhdr) *nhdr; //notes
-	uint8_t *mem;
+	ElfW(Ehdr) *ehdr = NULL;
+	ElfW(Phdr) *phdr = NULL;
+	ElfW(Nhdr) *nhdr = NULL; //notes
+	uint8_t *mem = NULL;
 	struct stat st;
-	int i, j, fd;
+	int i, fd;
 	
 	elfdesc->path = xstrdup(path);
 
@@ -128,17 +133,11 @@ elfdesc_t * load_core_file(const char *path)
  */
 elfdesc_t * load_core_file_stdin(void)
 {
-	elfdesc_t *elfdesc = (elfdesc_t *)heapAlloc(sizeof(elfdesc_t));
-        ElfW(Ehdr) *ehdr;
-        ElfW(Phdr) *phdr;
-        ElfW(Nhdr) *nhdr; //notes
-        uint8_t *mem;
-        uint8_t *buf;
-	struct stat st;
+        uint8_t *buf = NULL;
         ssize_t nread;
-	ssize_t bytes, bw;
-	int i = 0, j = 0;
-	int file, fd;
+	ssize_t bytes = 0, bw;
+	int i = 0;
+	int file;
 	
 	char *filepath = xfmtstrdup("%s/tmp_core", ECFS_CORE_DIR);
         do {
@@ -181,7 +180,6 @@ elfdesc_t * load_core_file_stdin(void)
  */
 int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 {
-	elfdesc_t *elfdesc = (elfdesc_t *)heapAlloc(sizeof(elfdesc_t));
         ElfW(Ehdr) *ehdr;
         ElfW(Phdr) *phdr;
 	ElfW(Addr) textVaddr;
@@ -189,9 +187,7 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 	ElfW(Off) dataOffset;
 	size_t textSize;
         uint8_t *mem;
-        uint8_t *buf;
         struct stat st;
-        ssize_t nread;
 	int in, out, i = 0;
 	int data_index;
 
@@ -239,7 +235,7 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 	}
 	ehdr = (ElfW(Ehdr) *)mem;
 	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
-	int tc, found_text;
+	int found_text;
 	
 	for (found_text = 0, i = 0; i < ehdr->e_phnum; i++) {
 		if (phdr[i].p_vaddr <= textVaddr && phdr[i].p_vaddr + phdr[i].p_memsz > textVaddr) {
@@ -370,8 +366,8 @@ static void print_nt_files(struct nt_file_struct *file_maps)
 notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 {
 	notedesc_t *notedesc = (notedesc_t *)heapAlloc(sizeof(notedesc_t));
-	size_t i, j, len;
-	int tc, ret;
+	size_t i, len;
+	int tc;
 	uint8_t *desc;
 	struct nt_file_struct *nt_files; // for parsing NT_FILE in corefile
 	ElfW(Nhdr) *notes = elfdesc->nhdr;
@@ -875,9 +871,12 @@ static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
 	FILE *fp = fopen("/proc/net/tcp", "r");
 	char buf[512], local_addr[64], rem_addr[64];
 	char more[512];
-	int num, local_port, rem_port, d, state, timer_run, uid, timeout;
+	int local_port, rem_port, d, state, timer_run, uid, timeout;
 	unsigned long rxq, txq, time_len, retr, _inode;
-	fgets(buf, sizeof(buf), fp);
+	if( fgets(buf, sizeof(buf), fp) == NULL ) {
+		log_msg(__LINE__, "fgets %s", strerror(errno));
+		exit(-1);
+        }
 	while (fgets(buf, sizeof(buf), fp)) {
 		sscanf(buf, "%d: %64[0-9A-Fa-f]:%X %64[0-9A-Fa-f]:%X %X %lX:%lX %X:%lX %lX %d %d %ld %512s\n",
 			&d, local_addr, &local_port, rem_addr, &rem_port, &state,
@@ -894,7 +893,10 @@ static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
 	
 	fclose(fp);
 	fp = fopen("/proc/net/udp", "r");
-	fgets(buf, sizeof(buf), fp);
+	if( fgets(buf, sizeof(buf), fp) == NULL ) {
+		log_msg(__LINE__, "fgets %s", strerror(errno));
+		exit(-1);
+        }
         while (fgets(buf, sizeof(buf), fp)) {
                 sscanf(buf, "%d: %64[0-9A-Fa-f]:%X %64[0-9A-Fa-f]:%X %X %lX:%lX %X:%lX %lX %d %d %ld %512s\n",
                         &d, local_addr, &local_port, rem_addr, &rem_port, &state,
@@ -910,7 +912,6 @@ static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
                         log_msg(__LINE__, "setting net UDP");
                 }
         }
-out:
 
 	fclose(fp);
 }
@@ -934,7 +935,10 @@ static int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
 		if (dptr->d_name[0] == '.')
 			continue;
 		snprintf(tmp, sizeof(tmp), "%s/%s", dpath, dptr->d_name); // i.e /proc/pid/fd/3
-		readlink(tmp, (*fdinfo)[fdcount].path, MAX_PATH);
+		if( readlink(tmp, (*fdinfo)[fdcount].path, MAX_PATH) == -1 ) {
+                    log_msg(__LINE__, "readlink %s", strerror(errno));
+                    exit(-1);
+                }
 		if (strstr((*fdinfo)[fdcount].path, "socket")) {
 			p = strchr((*fdinfo)[fdcount].path, ':') + 2;
 			if (p == NULL) {
@@ -965,9 +969,13 @@ static int get_map_count(pid_t pid)
         int lc;
   	      
         snprintf(cmd, sizeof(cmd), "/usr/bin/wc -l /proc/%d/maps", pid);
-	if ((pd = popen(cmd, "r")) == NULL)
-                return -1;
-        fgets(buf, sizeof(buf), pd);
+	if ((pd = popen(cmd, "r")) == NULL) {
+            return -1;
+        }
+        if( fgets(buf, sizeof(buf), pd) == NULL ) {
+            log_msg(__LINE__, "fgets %s", strerror(errno));
+            exit(-1);
+        }
         lc = atoi(buf);
         pclose(pd);
         return lc;
@@ -983,7 +991,10 @@ char * get_exe_path(int pid)
 	char *ret2 = (char *)heapAlloc(MAX_PATH);
 	
 	memset(ret, 0, MAX_PATH); // for null termination padding
-	readlink(path, ret, MAX_PATH);
+	if( readlink(path, ret, MAX_PATH) == -1) {
+            log_msg(__LINE__, "readlink %s", strerror(errno));
+            exit(-1);
+        }
 	free(path);
 	/* Now is our new path also a symbolic link? */
 	int rval = readlink(ret, ret2, MAX_PATH);
@@ -1082,7 +1093,6 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
  */
 static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *notedesc)
 {
-	int pid = memdesc->task.pid;
 	int fd;
 	uint8_t *mem;
 	ElfW(Ehdr) *ehdr;
@@ -1132,20 +1142,19 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 #if DEBUG
 				printf("Found PT_LOAD segments\n");
 #endif
-				switch(!(!phdr[i].p_offset)) {
-					case 0:
-						/* text segment */
-						elfdesc->textVaddr = text_base;
-						elfdesc->textSize = lookup_text_size(memdesc, notedesc->nt_files);
-						break;
-					case 1:
-						elfdesc->dataVaddr = lookup_data_base(memdesc, notedesc->nt_files);
-						elfdesc->dataSize = lookup_data_size(memdesc, notedesc->nt_files);
-						elfdesc->bssSize = phdr[i].p_memsz - phdr[i].p_filesz;
-						elfdesc->o_datafsize = phdr[i].p_filesz;
-						if (elfdesc->pie == 0)
-							elfdesc->bssVaddr = phdr[i].p_vaddr + phdr[i].p_filesz;
-						break;
+				if(!(!phdr[i].p_offset)) {
+                                        elfdesc->dataVaddr = lookup_data_base(memdesc, notedesc->nt_files);
+                                        elfdesc->dataSize = lookup_data_size(memdesc, notedesc->nt_files);
+                                        elfdesc->bssSize = phdr[i].p_memsz - phdr[i].p_filesz;
+                                        elfdesc->o_datafsize = phdr[i].p_filesz;
+                                        if (elfdesc->pie == 0)
+                                                elfdesc->bssVaddr = phdr[i].p_vaddr + phdr[i].p_filesz;
+
+                                } else {
+                                        /* text segment */
+                                        elfdesc->textVaddr = text_base;
+                                        elfdesc->textSize = lookup_text_size(memdesc, notedesc->nt_files);
+
 				}
 				break;
 			case PT_DYNAMIC:
@@ -1187,13 +1196,11 @@ int extract_dyntag_info(handle_t *handle)
 	int i, j;
 	elfdesc_t *elfdesc = handle->elfdesc;
 	memdesc_t *memdesc = handle->memdesc;
-	notedesc_t *notedesc = handle->notedesc;
 	ElfW(Phdr) *phdr = elfdesc->phdr;
 	ElfW(Dyn) *dyn;
 	ElfW(Off) dataOffset = elfdesc->dataOffset; // this was filled in from xref_phdrs_for_offsets
 	elfdesc->dyn = NULL;
 	struct section_meta smeta;
-	char *p;
 	
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
 		if (phdr[i].p_vaddr == elfdesc->dataVaddr) {
@@ -1436,10 +1443,6 @@ static int text_shdr_index;
 
 static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle)
 {
-	elfdesc_t *elfdesc = handle->elfdesc;
-        memdesc_t *memdesc = handle->memdesc;
-        notedesc_t *notedesc = handle->notedesc;
-        struct section_meta *smeta = &handle->smeta;
 	struct fde_func_data *fndata, *fdp;
         int fncount, fd;
         struct stat st;
@@ -1478,7 +1481,6 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
                 free(sname);    
                 
         }
-        size_t symtab_size = fncount * sizeof(ElfW(Sym));
  	 /*
          * We append symbol table sections last 
          */
@@ -1507,12 +1509,18 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
 	
         uint64_t symtab_offset = lseek(fd, 0, SEEK_CUR);
         for (i = 0; i < symcount; i++) {
-                write(fd, (char *)&symtab[i], sizeof(ElfW(Sym))); 
+                if( write(fd, (char *)&symtab[i], sizeof(ElfW(Sym))) == -1 ) {
+                    log_msg(__LINE__, "write %s", strerror(errno));
+                    exit(-1);
+                }
         }
       	StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
         /* Write section hdr string table */
         uint64_t stloff = lseek(fd, 0, SEEK_CUR);
-        write(fd, strtab, symstroff);
+        if( write(fd, strtab, symstroff) == -1) {
+            log_msg(__LINE__, "write %s", strerror(errno));
+            exit(-1);
+        }
         shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
 	
         for (i = 0; i < ehdr->e_shnum; i++) {
@@ -2137,7 +2145,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         shdr[scount].sh_info = 0;
         shdr[scount].sh_link = scount + 1;
         shdr[scount].sh_entsize = sizeof(ElfW(Sym));
-        shdr[scount].sh_size;
+        shdr[scount].sh_size = 0;
         shdr[scount].sh_addralign = 4;
         shdr[scount].sh_name = stoffset;
         strcpy(&StringTable[stoffset], ".symtab");
@@ -2210,8 +2218,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         }
 
         ElfW(Ehdr *)ehdr = (ElfW(Ehdr) *)mem;
-	ElfW(Addr) o_entry = memdesc->o_entry; 
-        ehdr->e_entry = o_entry < 0 ? 0 : o_entry;
+        ehdr->e_entry = memdesc->o_entry; // this is unsigned
 	ehdr->e_shoff = e_shoff;
         ehdr->e_shstrndx = e_shstrndx;
 	ehdr->e_shentsize = sizeof(ElfW(Shdr));
@@ -2232,16 +2239,12 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 int core2ecfs(const char *outfile, handle_t *handle)
 {
 	struct stat st;
-	int i, j, no_dynamic = 0;
-	ElfW(Dyn) *dyn = NULL;
+	int i;
 	elfdesc_t *elfdesc = handle->elfdesc;
 	memdesc_t *memdesc = handle->memdesc;
 	notedesc_t *notedesc = handle->notedesc;
-	struct section_meta *smeta = &handle->smeta;
 	ElfW(Ehdr) *ehdr = elfdesc->ehdr;
-	ElfW(Phdr) *phdr = elfdesc->phdr;
 	uint8_t *mem = elfdesc->mem;
-	fd_info_t *fdinfo = NULL;
 	ecfs_file_t *ecfs_file = heapAlloc(sizeof(ecfs_file_t));
 	int fd, ret;
 
@@ -2276,40 +2279,65 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	/*
 	 * write prstatus structs
 	 */
-	write(fd, notedesc->prstatus, sizeof(struct elf_prstatus));
-	for (i = 1; i < notedesc->thread_count; i++)	
-		write(fd, notedesc->thread_core_info[i].prstatus, sizeof(struct elf_prstatus));
+	if( write(fd, notedesc->prstatus, sizeof(struct elf_prstatus)) == -1 ) {
+            log_msg(__LINE__, "write %s", strerror(errno));
+            exit(-1);
+        }
+	for (i = 1; i < notedesc->thread_count; i++) {
+		if( write(fd, notedesc->thread_core_info[i].prstatus, sizeof(struct elf_prstatus)) == -1) {
+                    log_msg(__LINE__, "write %s", strerror(errno));
+                    exit(-1);
+                }
+        }
 	
 	/*
 	 * write fdinfo structs
 	 */
-	write(fd, memdesc->fdinfo, ecfs_file->fdinfo_size);
+	if( write(fd, memdesc->fdinfo, ecfs_file->fdinfo_size) == -1) {
+            log_msg(__LINE__, "write %s", strerror(errno));
+            exit(-1);
+        }
 
 	/*
 	 * write siginfo_t struct
 	 */
-	write(fd, notedesc->siginfo, sizeof(siginfo_t));
+	if( write(fd, notedesc->siginfo, sizeof(siginfo_t)) == -1) {
+            log_msg(__LINE__, "write %s", strerror(errno));
+            exit(-1);
+        }
 	
 	/*
  	 * write auxv data
 	 */
-	write(fd, notedesc->auxv, notedesc->auxv_size);
+	if( write(fd, notedesc->auxv, notedesc->auxv_size) == -1) {
+            log_msg(__LINE__, "write %s", strerror(errno));
+            exit(-1);
+        }
 	
 	/*
 	 * write exepath string
 	 */
-	write(fd, memdesc->exe_path, strlen(memdesc->exe_path) + 1);
+	if( write(fd, memdesc->exe_path, strlen(memdesc->exe_path) + 1) ) {
+            log_msg(__LINE__, "write %s", strerror(errno));
+            exit(-1);
+        }
 
 	/*
 	 * write ELF personality
 	 */
 	build_elf_stats(handle);
-	write(fd, &handle->elfstat, sizeof(elf_stat_t));
+	if( write(fd, &handle->elfstat, sizeof(elf_stat_t)) == -1) { 
+            log_msg(__LINE__, "write %s", strerror(errno));
+            exit(-1);
+        }
 	
 	/*
 	 * write .arglist section data
 	 */
-	write(fd, handle->arglist, ELF_PRARGSZ);
+	if( write(fd, handle->arglist, ELF_PRARGSZ) == -1) {
+            log_msg(__LINE__, "write %s", strerror(errno));
+            exit(-1);
+        }
 
 	/*
 	 * Build section header table
@@ -2447,7 +2475,6 @@ int main(int argc, char **argv)
 	int i, j, ret, c, pie;
 	char *corefile = NULL;
 	char *outfile = NULL;
-	fd_info_t *fdinfo = NULL;
 
 	/*
 	 * When testing use:
