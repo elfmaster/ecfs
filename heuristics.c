@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Ryan O'Neill
+ * Copyright (c) 2015, Ryan O'Neill 
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -28,6 +28,8 @@
  * ECFS performs certain heuristics to help aid in forensics analysis.
  * one of these heuristics is showing shared libraries that have been
  * injected vs. loaded by the linker/dlopen/preloaded
+ * NOTE: heuristics.c is a work in progress
+ *
  */
 
 #include "ecfs.h"
