@@ -20,6 +20,15 @@ make
 * Then as root run (not sudo) *
 ./setup.sh
 
+XXX NOTE XXX:
+If you see '-t' being passed to ecfs in setup.sh this means that it
+will write the entire text segment of each shared library (vs. just
+the first 4k). ecfs ALWAYS writes the entire text segment of the executable
+but limits the text of each shlib to only 4k unless you specify -t.
+Which means opts.text_all is set in ecfs.c. Having -t set will cause
+ecfs to take much longer as it has to write out sometimes hundreds of 
+megabytes of code segments.
+
 After this, you should observe that when a program crashes it creates
 an ECFS file in /opt/ecfs/cores/<some_file>.pid
 
