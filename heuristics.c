@@ -83,7 +83,6 @@ int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
  */
 static char * get_real_lib_path(char *name)
 {
-	FILE *fd;
 	char tmp[512] = {0};
 	char real[512] = {0};
 	char *ptr;
@@ -172,8 +171,6 @@ static char * get_real_lib_path(char *name)
 	/*
 	 * If we get here then lets try directly from ld.so.cache
 	 */
-check_ld_cache:
-	
 	return NULL;
 }
 
@@ -462,7 +459,7 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 	int needed_count;
 	int dlopen_count;
 	int valid;
-	int i, j, c, lc;
+	int i, j, c;
 	
 	/*
  	 * Get all dependencies from executable and its shared libraries
@@ -477,8 +474,9 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 #endif
 	for (i = 0; i < lm_files->libcount; i++) {
 		for (j = 0; j < needed_count; j++) {
-			if (lm_files->libs[i].path == NULL)
+			if (lm_files->libs[i].path[0] == '\0') { // empty string, no paths.
 				break;
+                        }
 			if (needed_libs[j].libpath == NULL) {
 				/* Compare by name since full path couldn't be found */
 				if (!cmp_till_dot(needed_libs[j].libname, lm_files->libs[i].name)) {

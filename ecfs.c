@@ -324,9 +324,7 @@ static int merge_text_image(const char *path, unsigned long text_addr, uint8_t *
         ElfW(Off) nextOffset; // offset of phdr after the text segment in question
         size_t textSize;
         uint8_t *mem;
-        uint8_t *buf;
         struct stat st;
-        ssize_t nread;
         int in, out, i = 0;
 	ssize_t tlen = text_len;
 	
@@ -358,7 +356,7 @@ static int merge_text_image(const char *path, unsigned long text_addr, uint8_t *
         }
         ehdr = (ElfW(Ehdr) *)mem;
         phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
-        int tc, found_text = 0;
+        int found_text = 0;
 	
 	/*
 	 * XXX
@@ -424,7 +422,7 @@ static int merge_text_image(const char *path, unsigned long text_addr, uint8_t *
 
 static void create_shlib_text_mappings(memdesc_t *memdesc)
 {
-	int i, ret;
+	int i;
 	mappings_t *maps = memdesc->maps;
 	ssize_t tlen;
 	
@@ -444,10 +442,8 @@ static void create_shlib_text_mappings(memdesc_t *memdesc)
 
 int merge_shlib_texts_into_core(const char *corefile, memdesc_t *memdesc)
 {
-	int i, ret;
+	int i, ret = -1;
 	mappings_t *maps = memdesc->maps;
-	uint8_t *text_image;
-	ssize_t tlen;
 #if DEBUG
 	log_msg(__LINE__, "merge_shlib_texts_into_core() has been called");
 #endif
@@ -468,6 +464,7 @@ int merge_shlib_texts_into_core(const char *corefile, memdesc_t *memdesc)
 			continue;
 		}
 	}
+        return ret;
 }
 
 /*
@@ -680,20 +677,6 @@ static void get_text_phdr_size_with_hint(elfdesc_t *elfdesc, unsigned long hint)
 		}
 	}
 
-}
-
-static ssize_t ptrace_get_text_mapping(memdesc_t *memdesc, elfdesc_t *elfdesc, uint8_t **ptr)
-{
-	void *addr = (void *)elfdesc->textVaddr;
-	uint8_t *mem = heapAlloc(elfdesc->textSize);
-	
-	if (pid_read(memdesc->task.pid, (void *)mem, addr, elfdesc->textSize) < 0) {
-		*ptr = NULL;
-		return -1;
-	}
-	*ptr = mem;
-	
-	return elfdesc->textSize;
 }
 
 ssize_t read_pmem(pid_t pid, uint8_t *ptr, unsigned long vaddr, size_t len)
