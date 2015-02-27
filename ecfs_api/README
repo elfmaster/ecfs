@@ -9,4 +9,5 @@ Use cases:
 Malware analysis of ecfs files
 Advanced debugging of ecfs files
 
-See man libecfs
+See man libecfs (in ../manual/man.txt)
+

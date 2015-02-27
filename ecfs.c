@@ -123,6 +123,20 @@ elfdesc_t * load_core_file(const char *path)
 	return elfdesc;
 }
 
+elfdesc_t * reload_core_file(elfdesc_t *old)
+{
+	char *path = xstrdup(old->path);
+	
+	munmap(old->mem, old->size);
+	free(old);
+
+	elfdesc_t *new = load_core_file(path);
+	if (new == NULL) {
+		log_msg(__LINE__, "reload_core_file(): internal call to load_core_file() failed");
+		return NULL;
+	}
+	return new;
+}
 
 #define RBUF_LEN 4096 * 8
 
@@ -176,9 +190,11 @@ elfdesc_t * load_core_file_stdin(void)
  * to save space; this is generally fine since the text presumably
  * doesn't ever change, and can be remarkably big. For our case
  * though we want the complete text of the main executable and
- * its shared libaries.
+ * its shared libaries. This function merges the executables complete
+ * text segment into the core file. And merge_shlib_texts_into_core
+ * will do the ones for each shared library.
  */
-int merge_texts_into_core(const char *path, memdesc_t *memdesc)
+int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
 {
         ElfW(Ehdr) *ehdr;
         ElfW(Phdr) *phdr;
@@ -191,22 +207,22 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
         int in, out, i = 0;
         int data_index;
 
-        in = xopen(path, O_RDWR);
-        xfstat(in, &st);
-
-        /*
-         * tmp will point to the new temporary file that contains
-         * our corefile with a merged in program text segment and
-         * with updated p_filesz, and updated p_offsets for phdr's 
-         * that follow it.
-         */
-        char *tmp = xfmtstrdup("%s/tmp_merged_core", ECFS_CORE_DIR);
+	in = xopen(path, O_RDWR);
+	xfstat(in, &st);
+	
+	/*
+	 * tmp will point to the new temporary file that contains
+	 * our corefile with a merged in program text segment and
+	 * with updated p_filesz, and updated p_offsets for phdr's 
+	 * that follow it.
+	 */
+	char *tmp = xfmtstrdup("%s/.tmp_merged_core", ECFS_CORE_DIR);
         do {
-            if (access(tmp, F_OK) == 0) {
-                free(tmp);
-                tmp = xfmtstrdup("%s/tmp_merged_core.%d", ECFS_CORE_DIR, ++i);
-            } else
-                break;
+                if (access(tmp, F_OK) == 0) {
+                        free(tmp);
+                        tmp = xfmtstrdup("%s/.tmp_merged_core.%d", ECFS_CORE_DIR, ++i);
+                } else
+                        break;
 
         } while(1);
         out = xopen(tmp, O_RDWR|O_CREAT);
@@ -217,6 +233,14 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
          */
         uint8_t *textseg = memdesc->textseg;
         ssize_t tlen = (ssize_t)memdesc->text.size;
+	/*
+	 * Get textVaddr as it pertains to the mappings
+	 */
+	textVaddr = memdesc->text.base;
+	if (textVaddr == 0) {
+		log_msg(__LINE__, "(From merge_exe_text_into_core function) Could not find text address");
+		return -1;
+	}
 
         /*
          * Get textVaddr as it pertains to the mappings
@@ -268,7 +292,7 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 		log_msg(__LINE__, "write %s", strerror(errno));
 		return -1;
 	}
-	if (write(out, &mem[dataOffset], st.st_size - (textOffset + 4096)) < 0) {
+	if (write(out, &mem[dataOffset], st.st_size - textOffset) < 0) {
 		log_msg(__LINE__, "write %s", strerror(errno));
 		return -1;
 	}
@@ -277,6 +301,9 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 	close(out);
 	close(in);
 	
+#if DEBUG
+	log_msg(__LINE__, "merge_exe_text_into_core(): renaming %s back to %s", tmp, path);
+#endif
 	if (rename(tmp, path) < 0) {
 		log_msg(__LINE__, "rename %s", strerror(errno));
 		return -1;
@@ -284,6 +311,165 @@ int merge_texts_into_core(const char *path, memdesc_t *memdesc)
 		
 	return 0;
 }
+
+/*
+ * This function is called by merge_shlib_texts_into_core() and merges a text segment
+ * from a given shared library into the core file.
+ */
+static int merge_text_image(const char *path, unsigned long text_addr, uint8_t *text_image, ssize_t text_len)
+{
+        ElfW(Ehdr) *ehdr;
+        ElfW(Phdr) *phdr;
+        ElfW(Off) textOffset; // offset of text segment in question
+        ElfW(Off) nextOffset; // offset of phdr after the text segment in question
+        size_t textSize;
+        uint8_t *mem;
+        uint8_t *buf;
+        struct stat st;
+        ssize_t nread;
+        int in, out, i = 0;
+	ssize_t tlen = text_len;
+	
+	log_msg(__LINE__, "xopen path: %s", path);
+        in = xopen(path, O_RDONLY);
+        xfstat(in, &st);
+
+        /*
+         * tmp will point to the new temporary file that contains
+         * our corefile with a merged in program text segment and
+         * with updated p_filesz, and updated p_offsets for phdr's 
+         * that follow it.
+         */
+        char *tmp = xfmtstrdup("%s/tmp_merged_core_t2", ECFS_CORE_DIR);
+        do {
+                if (access(tmp, F_OK) == 0) {
+                        free(tmp);
+                        tmp = xfmtstrdup("%s/tmp_merged_core_t2.%d", ECFS_CORE_DIR, ++i);
+                } else
+                        break;
+
+        } while(1);
+        out = xopen(tmp, O_RDWR|O_CREAT);
+	
+	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, in, 0);
+        if (mem == MAP_FAILED) {
+                log_msg(__LINE__, "mmap %s", strerror(errno));
+                return -1;
+        }
+        ehdr = (ElfW(Ehdr) *)mem;
+        phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
+        int tc, found_text = 0;
+	
+	/*
+	 * XXX
+	 * we must plan to make room for the case where the text segment
+	 * in question is the very last phdr in the file in which case phdr[i + 1]
+	 * will cause a segfault. (highly unlikely since any real shared library
+	 * should have a data segment following the text segment)
+	 */
+	for (i = 0; i < ehdr->e_phnum; i++) {
+		if (text_addr == phdr[i].p_vaddr) {
+			log_msg(__LINE__, "found text segment in core: addr %lx offset: %lx\n", phdr[i].p_vaddr, phdr[i].p_offset);
+		 	textOffset = phdr[i].p_offset;
+                        nextOffset = phdr[i + 1].p_offset;   // data segment usually always i + 1 after text
+                        textSize = phdr[i].p_memsz;         // get memsz of text
+                        phdr[i].p_filesz = phdr[i].p_memsz; // make filesz same as memsz
+                        found_text++;
+
+                }
+                else
+                if (found_text && phdr[i].p_type == PT_LOAD) {
+#if DEBUG
+			log_msg(__LINE__, "re-adjusting offset for phdr(0x%lx) from %lx to %lx\n", 
+				phdr[i].p_vaddr, phdr[i].p_offset, phdr[i].p_offset + (tlen - 4096));
+#endif
+                        phdr[i].p_offset += (tlen - 4096); // we must push the other segments forward to make room for whole text image
+                }
+        }
+        if (found_text == 0) {
+                log_msg(__LINE__, "Failed to merge texts into core");
+                return -1;
+        }
+	log_msg(__LINE__, "Writing first %lx bytes", textOffset);
+        if (write(out, mem, textOffset) < 0) {
+                log_msg(__LINE__, "[FAILURE] write(): %s", strerror(errno));
+                return -1;
+        }
+	log_msg(__LINE__, "Writing %lx bytes of text image", tlen);
+        if (write(out, text_image, tlen) < 0) {
+                log_msg(__LINE__, "[FAILURE] write(): %s", strerror(errno));
+                return -1;
+        }
+	
+	log_msg(__LINE__, "Writing rest of binary (%lx bytes) starting at data Offset %lx\n", st.st_size - textOffset, nextOffset);
+        if (write(out, &mem[nextOffset], st.st_size - textOffset) < 0) {
+                log_msg(__LINE__, "[FAILURE] write(): %s", strerror(errno));
+                return -1;
+        }
+
+        fsync(out);
+        close(out);
+        close(in);
+#if DEBUG
+	log_msg(__LINE__, "merge_text_image(): renaming %s back to %s", tmp, path);
+#endif
+        if (rename(tmp, path) < 0) {
+                log_msg(__LINE__, "rename %s", strerror(errno));
+                return -1;
+        }
+
+        return 0;
+
+}
+
+static void create_shlib_text_mappings(memdesc_t *memdesc)
+{
+	int i, ret;
+	mappings_t *maps = memdesc->maps;
+	ssize_t tlen;
+	
+	for (i = 0; i < memdesc->mapcount; i++) {
+		if (!maps[i].shlib)
+			continue;
+		if (!(maps[i].p_flags & PF_X))
+			continue;
+		tlen = get_segment_from_pmem(maps[i].base, memdesc, &(maps[i].text_image));
+		if (tlen < 0) {
+			log_msg(__LINE__, "get_segment_from_pmem(%lx, ...) failed", maps[i].base);
+			continue;
+		}
+		maps[i].text_len = tlen;
+	}
+}
+
+int merge_shlib_texts_into_core(const char *corefile, memdesc_t *memdesc)
+{
+	int i, ret;
+	mappings_t *maps = memdesc->maps;
+	uint8_t *text_image;
+	ssize_t tlen;
+#if DEBUG
+	log_msg(__LINE__, "merge_shlib_texts_into_core() has been called");
+#endif
+	for (i = 0; i < memdesc->mapcount; i++) {
+		if (!maps[i].shlib)
+			continue;
+		if (!(maps[i].p_flags & PF_X))
+			continue;
+		/* If we got here we have an executable
+	 	 * segment of a shared library.
+	 	 */
+#if DEBUG
+		log_msg(__LINE__, "call merge_text_image(%s, %lx, %p, %u)", corefile, maps[i].base, maps[i].text_image, maps[i].text_len);
+#endif
+		ret = merge_text_image(corefile, maps[i].base, maps[i].text_image, maps[i].text_len); 
+		if (ret < 0) {
+			log_msg(__LINE__, "get_segment_from_pmem(%lx, ...) failed\n", maps[i].base);
+			continue;
+		}
+	}
+}
+
 /*
  * This function does the opposite of how the kernel packs files into
  * the notes entry. We do the opposite to extract the info out of the
@@ -349,7 +535,6 @@ void parse_nt_files(struct nt_file_struct **nt_files, void *data, size_t size)
 static void print_nt_files(struct nt_file_struct *file_maps)
 {
 	int i;
-	log_msg(__LINE__, "ecfs NT_FILES print out");
 	for (i = 0; i < file_maps->fcount; i++) {
 		log_msg(__LINE__, "%lx  %lx  %lx\n", file_maps->files[i].addr, 
 					  file_maps->files[i].addr + file_maps->files[i].size, 
@@ -676,7 +861,6 @@ static ElfW(Addr) lookup_data_base(memdesc_t *memdesc, struct nt_file_struct *fm
 
         for (i = 0; i < fmaps->fcount; i++) {
                 p = strrchr(fmaps->files[i].path, '/') + 1;
-		log_msg(__LINE__, "lookup_data_base() comparing %s and %s", memdesc->exe_path, p);
                 if (!strcmp(memdesc->exe_comm, p)) {
 			p = strrchr(fmaps->files[i + 1].path, '/') + 1;
 			if (!strcmp(memdesc->exe_comm, p))
@@ -713,7 +897,9 @@ static void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_fi
 	memset(lm, 0, sizeof(struct lib_mappings));
 
 	for (i = 0; i < fmaps->fcount; i++) {
+#if DEBUG	
 		log_msg(__LINE__, "filepath: %s", fmaps->files[i].path);
+#endif
 		p = strrchr(fmaps->files[i].path, '/') + 1;
 		if (!strstr(p, ".so"))
 			continue;
@@ -727,7 +913,7 @@ static void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_fi
 		strncpy(lm->libs[lm->libcount].path, fmaps->files[i].path, MAX_LIB_PATH);
 		strncpy(lm->libs[lm->libcount].name, tmp, MAX_LIB_NAME);
 #if DEBUG
-		log_msg(__LINE__, "libpath baby: %s", lm->libs[lm->libcount].name);
+		log_msg(__LINE__, "libname: %s", lm->libs[lm->libcount].name);
 #endif
 		lm->libs[lm->libcount].addr = fmaps->files[i].addr;
 		lm->libs[lm->libcount].size = fmaps->files[i].size;
@@ -799,6 +985,9 @@ static int get_maps(pid_t pid, mappings_t *maps, const char *path)
                 else
                 if ((p = strrchr(tmp, '/'))) {
                         if (strstr(p, ".so")) {
+#if DEBUG
+				log_msg(__LINE__, "marked %s as shared library", p);
+#endif
                                 maps[lc].shlib++;
                                 maps[lc].filename = xstrdup(strchr(tmp, '/'));
                         }
@@ -882,7 +1071,9 @@ static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
 			&d, local_addr, &local_port, rem_addr, &rem_port, &state,
 			&txq, &rxq, &timer_run, &time_len, &retr, &uid, &timeout, &_inode, more);
 		if (_inode == inode) {
-			log_msg(__LINE__, "inode match");
+#if DEBUG
+			log_msg(__LINE__, "socket (TCP) inode match");
+#endif
 			sscanf(local_addr, "%X", &(fdinfo->socket.src_addr.s_addr));
 			sscanf(rem_addr, "%X", &(fdinfo->socket.dst_addr.s_addr));
 			fdinfo->socket.src_port = local_port;
@@ -901,9 +1092,10 @@ static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
                 sscanf(buf, "%d: %64[0-9A-Fa-f]:%X %64[0-9A-Fa-f]:%X %X %lX:%lX %X:%lX %lX %d %d %ld %512s\n",
                         &d, local_addr, &local_port, rem_addr, &rem_port, &state,
                         &txq, &rxq, &timer_run, &time_len, &retr, &uid, &timeout, &_inode, more);
-                log_msg(__LINE__, "comparing inodes %u and %u\n", _inode, inode);
                 if (_inode == inode) {
-                        log_msg(__LINE__, "inode match");
+#if DEBUG
+                        log_msg(__LINE__, "socket (UDP) inode match");
+#endif
                         sscanf(local_addr, "%X", &(fdinfo->socket.src_addr.s_addr));
                         sscanf(rem_addr, "%X", &(fdinfo->socket.dst_addr.s_addr));
                         fdinfo->socket.src_port = local_port;
@@ -947,13 +1139,10 @@ static int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
 			}
 			
 			inode = atoi(p);
-			log_msg(__LINE__, "inode from socket: %u\n", inode);
 			fill_sock_info(&fdinfo_tmp, inode);
 			if (fdinfo_tmp.net) {
-				log_msg(__LINE__, "doing socket memcpy");
 				(*fdinfo)[fdcount].net = fdinfo_tmp.net;
 				(*fdinfo)[fdcount].socket = fdinfo_tmp.socket;
-				//memcpy(&(*fdinfo)[fdcount].socket, &(fdinfo_tmp.socket), sizeof(fdinfo_tmp.socket));
 			}
 		}
 		(*fdinfo)[fdcount].fd = atoi(dptr->d_name);
@@ -1068,7 +1257,9 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 			memdesc->text.size = memdesc->maps[i].size;
 		}
         }
-	log_msg(__LINE__, "text base: %lx\n", memdesc->text.base);
+#if DEBUG
+	log_msg(__LINE__, "executable text base: %lx\n", memdesc->text.base);
+#endif
 	ssize_t tlen = get_segment_from_pmem(memdesc->text.base, memdesc, &memdesc->textseg);
         if (tlen < 0) {
 		log_msg(__LINE__, "get_segment_from_pmem() failed: %s\n", strerror(errno));
@@ -1116,7 +1307,9 @@ static int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *
 	}
 	
 	/* Instead we use mmap on the original executable file */
+#if DEBUG
 	log_msg(__LINE__, "exe_path: %s", memdesc->exe_path);
+#endif
 	fd = xopen(memdesc->exe_path, O_RDONLY);
 	xfstat(fd, &st);
 	mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -1205,6 +1398,7 @@ int extract_dyntag_info(handle_t *handle)
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
 		if (phdr[i].p_vaddr == elfdesc->dataVaddr) {
 			log_msg(__LINE__, "dynamic segment is at: %lx compared to %lx", phdr[i].p_vaddr, elfdesc->dataVaddr);
+			log_msg(__LINE__, "dyn = &mem[%lx + (%lx - %lx)]", phdr[i].p_offset, elfdesc->dynVaddr, elfdesc->dataVaddr);
 			elfdesc->dyn = (ElfW(Dyn) *)&elfdesc->mem[phdr[i].p_offset + (elfdesc->dynVaddr - elfdesc->dataVaddr)];
 			break;
 		}
@@ -1221,51 +1415,51 @@ int extract_dyntag_info(handle_t *handle)
                         	smeta.relVaddr = dyn[j].d_un.d_val;
                                 smeta.relOff = elfdesc->textOffset + smeta.relVaddr - elfdesc->textVaddr;
 #if DEBUG
-				printf("relVaddr: %lx relOff: %lx\n", smeta.relVaddr, smeta.relOff);
+				log_msg(__LINE__, "DYNSEGMENT: relVaddr: %lx relOff: %lx", smeta.relVaddr, smeta.relOff);
 #endif
                         	break;
                         case DT_RELA:
                         	smeta.relaVaddr = dyn[j].d_un.d_val;
                                 smeta.relaOff = elfdesc->textOffset + smeta.relaVaddr - elfdesc->textVaddr; 
 #if DEBUG
-				printf("relaVaddr: %lx relaOffset: %lx\n", smeta.relaVaddr, smeta.relaOff);
+				log_msg(__LINE__, "DYNSEGMENT: %lx relaOffset: %lx", smeta.relaVaddr, smeta.relaOff);
 #endif
                         	break;
 			case DT_JMPREL:
 				smeta.plt_relaVaddr = dyn[j].d_un.d_val;
 				smeta.plt_relaOff = elfdesc->textOffset + smeta.plt_relaVaddr - elfdesc->textVaddr;
 #if DEBUG
-				printf("plt_relaVaddr: %lx plt_relaOffset: %lx\n", smeta.plt_relaVaddr, smeta.plt_relaOff);
+				log_msg(__LINE__, "DYNSEGMENT: relaOffset = %lx + %lx - %lx", elfdesc->textOffset, smeta.plt_relaVaddr, elfdesc->textVaddr);
+				log_msg(__LINE__, "DYNSEGMENT: plt_relaVaddr: %lx plt_relaOffset: %lx", smeta.plt_relaVaddr, smeta.plt_relaOff);
 #endif
 				break;
                         case DT_PLTGOT:
                         	smeta.gotVaddr = dyn[j].d_un.d_val;
-				log_msg(__LINE__, "gotvaddr: %lx\n", smeta.gotVaddr);
                                 smeta.gotOff = dyn[j].d_un.d_val - elfdesc->dataVaddr;
                                 smeta.gotOff += (ElfW(Off))dataOffset;
 #if DEBUG
-				printf("gotVaddr: %lx gotOffset: %lx\n", smeta.gotVaddr, smeta.gotOff);
+				log_msg(__LINE__, "DYNSEGMENT: gotVaddr: %lx gotOffset: %lx", smeta.gotVaddr, smeta.gotOff);
 #endif
                                 break;
                         case DT_GNU_HASH:
                                 smeta.hashVaddr = dyn[j].d_un.d_val;
                                 smeta.hashOff = elfdesc->textOffset + smeta.hashVaddr - elfdesc->textVaddr;
 #if DEBUG
-				printf("hashVaddr: %lx hashOff: %lx\n", smeta.hashVaddr, smeta.hashOff);
+				log_msg(__LINE__, "DYNSEGMENT: hashVaddr: %lx hashOff: %lx", smeta.hashVaddr, smeta.hashOff);
 #endif
                                 break;
                         case DT_INIT: 
                                 smeta.initVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
                                 smeta.initOff = elfdesc->textOffset + smeta.initVaddr - elfdesc->textVaddr;
 #if DEBUG
-				printf("initVaddr: %lx initOff: %lx\n", smeta.initVaddr, smeta.initOff);
+				log_msg(__LINE__, "DYNSEGMENT: initVaddr: %lx initOff: %lx", smeta.initVaddr, smeta.initOff);
 #endif
                                 break;
                         case DT_FINI:
                                 smeta.finiVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
                                 smeta.finiOff = elfdesc->textOffset + smeta.finiVaddr - elfdesc->textVaddr;
 #if DEBUG
-				printf("finiVaddr: %lx finiOff: %lx\n", smeta.finiVaddr, smeta.finiOff);
+				log_msg(__LINE__, "DYNSEGMENT: finiVaddr: %lx finiOff: %lx", smeta.finiVaddr, smeta.finiOff);
 #endif
                                 break;
                         case DT_STRSZ:
@@ -1278,14 +1472,14 @@ int extract_dyntag_info(handle_t *handle)
                                 smeta.dsymVaddr = dyn[j].d_un.d_ptr;
                                 smeta.dsymOff = elfdesc->textOffset + smeta.dsymVaddr - elfdesc->textVaddr;
 #if DEBUG
-				printf(".dynsym addr: %lx offset: %lx\n", smeta.dsymVaddr, smeta.dsymOff);
+				log_msg(__LINE__, "DYNSEGMENT: .dynsym addr: %lx offset: %lx", smeta.dsymVaddr, smeta.dsymOff);
 #endif
 				break;
                         case DT_STRTAB:
                                 smeta.dstrVaddr = dyn[j].d_un.d_ptr;
                                 smeta.dstrOff = elfdesc->textOffset + smeta.dstrVaddr - elfdesc->textVaddr;
 #if DEBUG
-				printf(".dynstr addr: %lx  offset: %lx (%lx + (%lx - %lx)\n", smeta.dstrVaddr, smeta.dstrOff,
+				log_msg(__LINE__, "DYNSEGMENT: .dynstr addr: %lx  offset: %lx (%lx + (%lx - %lx)", smeta.dstrVaddr, smeta.dstrOff,
 				elfdesc->textOffset, smeta.dstrVaddr, elfdesc->textVaddr); 
 #endif
                                 break;
@@ -1313,42 +1507,44 @@ static void xref_phdrs_for_offsets(memdesc_t *memdesc, elfdesc_t *elfdesc)
 			elfdesc->noteOffset = phdr[i].p_offset;
 			elfdesc->noteVaddr = phdr[i].p_vaddr;
 #if DEBUG
-			printf("noteOffset: %lx\n", elfdesc->noteOffset);
+			log_msg(__LINE__,"noteOffset: %lx\n", elfdesc->noteOffset);
 #endif
 		}
 		if (elfdesc->interpVaddr >= phdr[i].p_vaddr && elfdesc->interpVaddr < phdr[i].p_vaddr + phdr[i].p_memsz) {
 			elfdesc->interpOffset = phdr[i].p_offset + elfdesc->interpVaddr - phdr[i].p_vaddr;
 #if DEBUG
-			printf("interpOffset: %lx\n", elfdesc->interpOffset);
+			log_msg(__LINE__, "interpOffset: %lx\n", elfdesc->interpOffset);
 #endif
 		}
 		if (elfdesc->dynVaddr >= phdr[i].p_vaddr && elfdesc->dynVaddr < phdr[i].p_vaddr + phdr[i].p_memsz) {
 			elfdesc->dynOffset = phdr[i].p_offset + elfdesc->dynVaddr - phdr[i].p_vaddr;
 #if DEBUG
-			printf("dynOffset: %lx\n", elfdesc->dynOffset);
+			log_msg(__LINE__, "dynOffset: %lx\n", elfdesc->dynOffset);
 #endif
 		}
 		if (elfdesc->ehframe_Vaddr >= phdr[i].p_vaddr && elfdesc->ehframe_Vaddr < phdr[i].p_vaddr + phdr[i].p_memsz) {
 			elfdesc->ehframeOffset = phdr[i].p_offset + elfdesc->ehframe_Vaddr - phdr[i].p_vaddr;
 #if DEBUG
-			printf("ehframeOffset: %lx\n", elfdesc->ehframeOffset);
+			log_msg(__LINE__, "ehframeOffset: %lx\n", elfdesc->ehframeOffset);
 #endif
 		}
 		if (elfdesc->textVaddr == phdr[i].p_vaddr) {
 			elfdesc->textOffset = phdr[i].p_offset;
 			elfdesc->textSize = phdr[i].p_memsz;
 #if DEBUG
-			printf("textOffset: %lx\n", elfdesc->textOffset);
+			log_msg(__LINE__, "textOffset: %lx", elfdesc->textOffset);
 #endif
 		}
 		if (elfdesc->dataVaddr == phdr[i].p_vaddr) {
 			elfdesc->dataOffset = phdr[i].p_offset;
 			if (elfdesc->pie)
 				elfdesc->bssVaddr = elfdesc->dataVaddr + elfdesc->o_datafsize;
-			printf("bssVaddr is: %lx\n", elfdesc->bssVaddr);
+#if DEBUG
+			log_msg(__LINE__, "bssVaddr is: %lx\n", elfdesc->bssVaddr);
+#endif
 			elfdesc->bssOffset = phdr[i].p_offset + elfdesc->bssVaddr - elfdesc->dataVaddr;
 #if DEBUG
-			printf("bssOffset: %lx\n"
+			log_msg(__LINE__, "bssOffset: %lx "
 			       "dataOffset: %lx\n", elfdesc->bssOffset, elfdesc->dataOffset);
 #endif
 		}
@@ -1373,6 +1569,7 @@ ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int typ
 
         switch(type) {
                 case HEAP:
+			log_msg(__LINE__, "get_internal_sh_offset() seeking heap offset");
                         for (i = 0; i < memdesc->mapcount; i++) {
                                 if (maps[i].heap) {
 					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
@@ -1383,6 +1580,7 @@ ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int typ
 			}
                         break;
                 case STACK:
+			log_msg(__LINE__, "get_internal_sh_offset() seeking stack offset");
                          for (i = 0; i < memdesc->mapcount; i++) {
                                 if (maps[i].stack) {
 					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
@@ -1393,6 +1591,7 @@ ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int typ
                         }
                         break;
                 case VDSO:
+			log_msg(__LINE__, "get_internal_sh_offset() seeking vdso offset");
                          for (i = 0; i < memdesc->mapcount; i++) {
                                 if (maps[i].vdso) {
 					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
@@ -1403,6 +1602,7 @@ ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int typ
                        	}
                         break;
                 case VSYSCALL:
+			log_msg(__LINE__, "get_internal_sh_offset() seeking vsyscall offset");
                          for (i = 0; i < memdesc->mapcount; i++) {
                                 if (maps[i].vsyscall) {
 					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
@@ -1458,7 +1658,7 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
 		fncount = 0;             	
 	
 #if DEBUG
-	printf("Found %d local functions from .eh_frame\n", fncount);
+	log_msg(__LINE__, "Found %d local functions from .eh_frame\n", fncount);
 #endif
         
 	ElfW(Sym) *symtab = (ElfW(Sym) *)heapAlloc(fncount * sizeof(ElfW(Sym)));
@@ -1701,6 +1901,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	 * rela.plt
 	 */
 	shdr[scount].sh_type = (__ELF_NATIVE_CLASS == 64) ? SHT_RELA : SHT_REL;
+	log_msg(__LINE__, "assigning rela.plt offset: %lx\n", smeta->plt_relaOff);
         shdr[scount].sh_offset = (__ELF_NATIVE_CLASS == 64) ? smeta->plt_relaOff : smeta->plt_relOff;
         shdr[scount].sh_addr = (__ELF_NATIVE_CLASS == 64) ? smeta->plt_relaVaddr : smeta->plt_relVaddr;
         shdr[scount].sh_flags = SHF_ALLOC;
@@ -2424,6 +2625,12 @@ void build_elf_stats(handle_t *handle)
 		handle->elfstat.personality |= ELF_PIE;
 	}
 
+	if (opts.heuristics) {
+#if DEBUG
+		log_msg(__LINE__, "personality of ELF: heuristics turned on");
+#endif
+		handle->elfstat.personality |= ELF_HEURISTICS;
+	}
 #if DEBUG
 	if (!(handle->elfstat.personality & ELF_STATIC))
 		log_msg(__LINE__, "personality of ELF: dynamically linked");
@@ -2495,8 +2702,9 @@ int main(int argc, char **argv)
 		fprintf(stdout, "[-o]	output ecfs file\n\n");
 		exit(-1);
 	}
-	
-	while ((c = getopt(argc, argv, "c:io:p:e:")) != -1) {
+	memset(&opts, 0, sizeof(opts));
+
+	while ((c = getopt(argc, argv, "thc:io:p:e:")) != -1) {
 		switch(c) {
 			case 'c':	
 				opts.use_stdin = 0;
@@ -2513,6 +2721,12 @@ int main(int argc, char **argv)
 				break;
 			case 'p':
 				pid = atoi(optarg);
+				break;
+			case 'h':
+				opts.heuristics = 1;
+				break;
+			case 't':
+				opts.text_all = 1;
 				break;
 			default:
 				fprintf(stderr, "Unknown option\n");
@@ -2550,7 +2764,15 @@ int main(int argc, char **argv)
 	prctl(PR_SET_DUMPABLE, 0);
 
 	if (opts.use_stdin) {
+		/*
+		 * If we're reading from stdin we are probably waiting for the kernel
+		 * to write the corefile to us. Until we have read the core file completely
+		 * /proc/$pid/? will remain open to us, so we need to gather whatever we need
+		 * from this area now while our process is in a stopped zombie state.
+		 */
+#if DEBUG
 		log_msg(__LINE__, "Using stdin, outfile is:%s", outfile);
+#endif
 		/*
 		 * If we are getting core directly from the kernel then we must
 		 * read /proc/<pid>/ before we read the corefile. The process stays
@@ -2580,6 +2802,8 @@ int main(int argc, char **argv)
 		//pull_unknown_shdr_sizes(pid); // get size of certain shdrs from original exe
 		memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
 		memdesc->o_entry = get_original_ep(pid);
+		if (opts.text_all)
+			create_shlib_text_mappings(memdesc);
 	}
 
 #if DEBUG
@@ -2638,7 +2862,6 @@ int main(int argc, char **argv)
 		memdesc->task.pid = pid;
 		memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
 		fill_global_hacks(pid);
-		//pull_unknown_shdr_sizes(pid);
 		pie = check_for_pie(pid);
 	}
 	fill_in_pstatus(memdesc, notedesc);
@@ -2652,7 +2875,6 @@ int main(int argc, char **argv)
 			goto done;
 		}
 		unsigned long hint = text_base;
-		log_msg(__LINE__, "h0h0 text base: %lx", text_base);
 		get_text_phdr_size_with_hint(elfdesc, hint);
 	}
 	
@@ -2663,22 +2885,46 @@ int main(int argc, char **argv)
  	 * our purposes we want this, so we have to retrieve the text from
 	 * /proc/$pid/mem and merge it into our corefile which is a pain
 	 * and after we do this, we must re-load the corefile again.
+	 * if opts.text_all is enabled we do the same thing for the text images
+	 * of every single shared library which becomes our biggest bottleneck
+	 * in terms of performance.
 	 */
 	if (elfdesc->text_memsz > elfdesc->text_filesz) {
 		corefile = tmp_corefile == NULL ? corefile : tmp_corefile;
 #if DEBUG
 		log_msg(__LINE__, "merging text into core");
 #endif
-		if (merge_texts_into_core((const char *)corefile, memdesc) < 0) {
+		if (merge_exe_text_into_core((const char *)corefile, memdesc) < 0) {
 			log_msg(__LINE__, "Failed to merge text into core file");
 		}
-        	elfdesc = load_core_file((const char *)corefile);
+		
+        	elfdesc = reload_core_file(elfdesc);
         	if (elfdesc == NULL) {
         		log_msg(__LINE__, "Failed to parse text-merged core file");	
                 	exit(-1);
-        	}
+        	} 
 	}
-	
+	if (opts.text_all) {
+#if DEBUG
+		log_msg(__LINE__, "opts.text_all is enabled");
+#endif
+		/*
+		 * opts.text_all is enabled which means that we are going to write
+		 * out the entire text segment of each shared library. Whereas by
+		 * default (As with regular core files) we only write out the first 4096
+		 * bytes of each shared libraries text segment. 
+		 */
+		corefile = tmp_corefile == NULL ? corefile : tmp_corefile;
+		if (merge_shlib_texts_into_core((const char *)corefile, memdesc) < 0) {
+			log_msg(__LINE__, "Failed to merge shlib texts into core");
+		}
+		elfdesc = reload_core_file(elfdesc); // reload after our mods
+		if (elfdesc == NULL) {
+			log_msg(__LINE__, "Failed to parse shlib text merged core file");
+			exit(-1);
+		}
+	}
+
 	/*
 	 * Which mappings are stored in actual phdr segments?
 	 */
@@ -2739,7 +2985,7 @@ int main(int argc, char **argv)
 #if DEBUG
 	log_msg(__LINE__, "build_elf_stats() is being called");
 #endif
-	//build_elf_stats(handle);
+	build_elf_stats(handle);
 
 	/*
 	 * We get a plethora of information about where certain
@@ -2777,7 +3023,8 @@ int main(int argc, char **argv)
 	log_msg(__LINE__, "calling mark_dll_injection()");
 #endif
 	 if (!(handle->elfstat.personality & ELF_STATIC))
-	 	mark_dll_injection(notedesc, memdesc, elfdesc);
+		if (opts.heuristics)
+	 		mark_dll_injection(notedesc, memdesc, elfdesc);
 
 	/*
 	 * Convert the core file into an actual ECFS file and write it

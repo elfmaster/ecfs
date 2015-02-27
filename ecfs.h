@@ -1,3 +1,27 @@
+/*
+ * Copyright (c) 2015, Ryan O'Neill
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ * list of conditions and the following disclaimer. 
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 #ifndef _ECFS_H
 #define _ECFS_H
 
@@ -90,10 +114,13 @@ typedef struct elf_stats {
 #define ELF_STATIC (1 << 1) // if its statically linked (instead of dynamically)
 #define ELF_PIE (1 << 2)    // if its position indepdendent executable
 #define ELF_LOCSYM (1 << 3) // local symtab exists?
+#define ELF_HEURISTICS (1 << 4) // were detection heuristics used by ecfs?
         unsigned int personality; // if (personality & ELF_STATIC)
 } elf_stat_t;
 
 struct opts {
+	int text_all; // write complete text segment (not just 4096 bytes) of each shared library
+	int heuristics; // heuristics for detecting dll injection etc.
 	int use_stdin;
 	char *logfile;
 };
@@ -262,6 +289,7 @@ typedef struct elfdesc {
 
 typedef struct mappings {
 	uint8_t *mem;
+	uint8_t *text_image; // allocated mapping containing text segment (only if shlib)
 	char *filename;
 	unsigned long base;
 	size_t size;
@@ -283,6 +311,7 @@ typedef struct mappings {
 	size_t sh_offset;
 	uint32_t p_flags;
 	int has_pt_load;
+	ssize_t text_len; // only if an shlib is this used
 } mappings_t;
 
 typedef struct memdesc {
@@ -382,8 +411,9 @@ struct dlopen_libs {
 };
 
 struct needed_libs {
-	char *libname;
-	char *libpath;
+	char *libname; // just the name of the library
+	char *libpath; // path to a library 
+	char *master; // the library or executable that depends on libpath/libname
 	int count;
 };
 

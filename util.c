@@ -30,6 +30,7 @@
 struct opts opts;
 
 void ffperror(const char *, int);
+void log_msg(unsigned int lineno, char *fmt, ...);
 
 void deliver_signal(int pid, int signo)
 {
@@ -70,11 +71,9 @@ char * xfmtstrdup(char *fmt, ...)
 
 int xopen(const char *path, int flags)
 {
-	char *str = xfmtstrdup("xopen failed on %s", path);
 	int fd = open(path, flags);
 	if (fd < 0) {
-		fprintf(stderr, "opening path: %s failed\n", path);
-		ffperror(str, 0);
+		log_msg(__LINE__, "xopen() failed opening path: %s: %s", path, strerror(errno));
 		exit(-1);
 	}
 	return fd;

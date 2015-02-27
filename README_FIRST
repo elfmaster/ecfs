@@ -20,6 +20,15 @@ make
 * Then as root run (not sudo) *
 ./setup.sh
 
+XXX NOTE XXX:
+If you see '-t' being passed to ecfs in setup.sh this means that it
+will write the entire text segment of each shared library (vs. just
+the first 4k). ecfs ALWAYS writes the entire text segment of the executable
+but limits the text of each shlib to only 4k unless you specify -t.
+Which means opts.text_all is set in ecfs.c. Having -t set will cause
+ecfs to take much longer as it has to write out sometimes hundreds of 
+megabytes of code segments.
+
 After this, you should observe that when a program crashes it creates
 an ECFS file in /opt/ecfs/cores/<some_file>.pid
 
@@ -53,6 +62,13 @@ echo '|/opt/ecfs/bin/ecfs -i -e %e -p %p -o /opt/ecfs/cores/%e.%p >> /etc/sysctl
 Debug output is logged using syslog() and can be found in either /var/log/syslog or
 on some systems such as arch Linux you will need to look at 'journalctl -b'
 
+- [ECFS HEURISTICS -
+
+ecfs can perform heuristics that do things such as mark shared libraries as being DLL injected.
+Sometimes false positives can arise. If you want to use the heuristics feature use the -h switch.
+For instance:
+
+echo '|/opt/ecfs/bin/ecfs -i -h -e %e -p %p -o /opt/ecfs/cores/%e.%p >> /etc/sysctl.conf'
 
 
 - elfmaster[at]zoho.com

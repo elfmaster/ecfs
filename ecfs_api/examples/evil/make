@@ -1,0 +1,3 @@
+#!/bin/sh
+gcc -fPIC -c libtest.c -nostdlib
+ld -shared -soname libtest.so.1 -o libtest.so.1.0 libtest.o
