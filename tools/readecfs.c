@@ -58,6 +58,12 @@ int main(int argc, char **argv)
 		}
 	}
 	printf("\n");
+	char **shlib_names;
+	ret = get_shlib_mapping_names(desc, &shlib_names);
+	printf("- Printing shared library mappings:\n");
+	for (i = 0; i < ret; i++) 
+		printf("%s\n", shlib_names[i]);
+	printf("\n");
 
 	ret = get_dynamic_symbols(desc, &dsyms);
 	for (i = 0; i < ret; i++)
@@ -120,6 +126,7 @@ int main(int argc, char **argv)
 				break;
 		}
 	}
+
 
 }	
 
