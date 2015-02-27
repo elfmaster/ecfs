@@ -236,6 +236,14 @@ static int get_dt_needed_libs(const char *bin_path, struct needed_libs *needed_l
 	return needed_count;
 }
 
+/*
+ * If you pass libc.so and libdl.so
+ * the strings "libc" and "libdl" will be
+ * compared.
+ * if you pass libc.test.so and libdl.hello.so
+ * the string "libc.test" and "libdl.hello" will
+ * be compared.
+ */
 static int cmp_till_dot(const char *lib1, const char *lib2)
 {
 	char *p;
