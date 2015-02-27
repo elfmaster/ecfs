@@ -2775,11 +2775,20 @@ int main(int argc, char **argv)
 	 */
 	prctl(PR_SET_DUMPABLE, 0);
 	
-	if (create_tmp_ramdisk(1) < 0) {
-		log_msg(__LINE__, "create_tmp_ramdisk failed");
-	} else
-		opts.use_ramdisk = 1;
- 
+	if (opts.text_all) {
+		/*
+		 * text_all requires alot more disk operations and 
+		 * the time it takes becomes infeasable. We use a
+		 * tmpfs ramdisk (of 1 GIG which can be tweaked up to 4GIG)
+		 * to fix this problem. Even the hugest processes only
+		 * take ~3 seconds now.
+		 */
+		if (create_tmp_ramdisk(1) < 0) {
+			log_msg(__LINE__, "create_tmp_ramdisk failed");
+		} else
+			opts.use_ramdisk = 1;
+ 	}
+
 	if (opts.use_stdin) {
 		/*
 		 * If we're reading from stdin we are probably waiting for the kernel
