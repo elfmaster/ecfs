@@ -16,8 +16,12 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
 	if (mem == MAP_FAILED) {
 		perror("mmap");
-		exit(-1);
+		return NULL;
 	}
+	if (mem[0] != 0x7f)
+		if (strcmp((char *)&mem[1], "ELF"))
+			return NULL;
+
 	ehdr = (ElfW(Ehdr) *)mem;
 	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
 	shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);

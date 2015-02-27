@@ -4,7 +4,7 @@
 int main(int argc, char **argv)
 {
 	if (argc < 2) {
-		printf("%s file\n", argv[0]);
+		printf("Usage: %s <ecfs_core>\n", argv[0]);
 		exit(0);
 	}
 	int i, ret;
@@ -17,8 +17,17 @@ int main(int argc, char **argv)
 	Elf64_auxv_t *auxv;
 	
 	desc = load_ecfs_file(argv[1]);
+	if (desc == NULL) {
+		printf("Unable to load ecfs file\n");
+		exit(-1);
+	}
+
 	path = get_exe_path(desc);
-	
+	if (path == NULL) {
+		printf("Unable to retrieve executable path (is this an ecfs file?)\n");
+		exit(-1);
+	}
+
 	printf("- read_ecfs output for file %s\n", argv[1]);
 	printf("- Executable path (.exepath): %s\n", path);
 	
