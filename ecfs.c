@@ -1926,7 +1926,6 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	 * rela.plt
 	 */
 	shdr[scount].sh_type = (__ELF_NATIVE_CLASS == 64) ? SHT_RELA : SHT_REL;
-	log_msg(__LINE__, "assigning rela.plt offset: %lx\n", smeta->plt_relaOff);
         shdr[scount].sh_offset = (__ELF_NATIVE_CLASS == 64) ? smeta->plt_relaOff : smeta->plt_relOff;
         shdr[scount].sh_addr = (__ELF_NATIVE_CLASS == 64) ? smeta->plt_relaVaddr : smeta->plt_relVaddr;
         shdr[scount].sh_flags = SHF_ALLOC;
@@ -2661,8 +2660,14 @@ void pull_unknown_shdr_sizes(int pid)
 {
 	memset(&global_hacks, 0, sizeof(global_hacks));
 	global_hacks.hash_size = get_original_shdr_size(pid, ".gnu.hash");
-	global_hacks.rela_size = get_original_shdr_size(pid, ".rela.dyn");
-	global_hacks.plt_rela_size = get_original_shdr_size(pid, ".rela.plt");
+	if (__ELF_NATIVE_CLASS == 64) {
+		global_hacks.rela_size = get_original_shdr_size(pid, ".rela.dyn");
+		global_hacks.plt_rela_size = get_original_shdr_size(pid, ".rela.plt");
+	} else {
+		global_hacks.rela_size = get_original_shdr_size(pid, ".rel.dyn");
+		global_hacks.plt_rela_size = get_original_shdr_size(pid, ".rel.plt");
+	}
+
 	global_hacks.init_size = get_original_shdr_size(pid, ".init");
 	global_hacks.fini_size = get_original_shdr_size(pid, ".fini");
 	global_hacks.got_size = get_original_shdr_size(pid, ".got.plt");
