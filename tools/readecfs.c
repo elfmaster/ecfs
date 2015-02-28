@@ -135,7 +135,27 @@ int main(int argc, char **argv)
 				break;
 		}
 	}
+	ElfW(Ehdr) *ehdr = desc->ehdr;
+	ElfW(Shdr) *shdr = desc->shdr;
+	char *shstrtab = desc->shstrtab;
 
+	printf("- Displaying ELF header:\n");
+	
+	printf("e_entry: 0x%lx\n"
+		"e_phnum: %d\n"
+		"e_shnum: %d\n"
+		"e_shoff: 0x%lx\n"
+		"e_phoff: 0x%lx\n" 
+		"e_shstrndx: %d\n", ehdr->e_entry, ehdr->e_phnum, ehdr->e_shnum, 
+				    ehdr->e_shoff, ehdr->e_phoff, ehdr->e_shstrndx);
+		
+	printf("\n- Displaying ELF section headers:\n");
+	printf("Address          Offset\t   Size\t   Entsize\t     Name\n");
+	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+		printf("0x%-16lx 0x%-08lx 0x%-08lx 0x%-04lx %s\n", shdr[i].sh_addr, shdr[i].sh_offset, 
+		shdr[i].sh_size, shdr[i].sh_entsize, &shstrtab[shdr[i].sh_name]);
+	}			
 
+	
 }	
 
