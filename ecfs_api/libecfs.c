@@ -18,11 +18,18 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 		perror("mmap");
 		return NULL;
 	}
-	if (mem[0] != 0x7f)
-		if (strcmp((char *)&mem[1], "ELF"))
-			return NULL;
-
+	
+	if (memcmp(mem, "\x7f\x45\x4c\x46", 4) != 0)
+		return NULL;
+	
 	ehdr = (ElfW(Ehdr) *)mem;
+	
+	if (ehdr->e_type != ET_NONE && ehdr->e_type != ET_CORE) 
+		return NULL;
+	
+	if (ehdr->e_shoff == 0 || ehdr->e_shnum == 0 || ehdr->e_shstrndx == SHN_UNDEF) 
+		return NULL;
+	
 	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
 	shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
 	
