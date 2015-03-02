@@ -48,6 +48,12 @@ the following line into one of two files:
 
 /etc/sysctl.conf
 
+NOTE: Although it seems that the init scripts for apport (in ubuntu) will override
+this change. Until I design a proper script to make ecfs instal permanent you
+must overwrite /proc/sys/kernel/core_pattern with a line like:
+	
+
+'|/opt/ecfs/bin/ecfs -i -e %e -p %p -o /opt/ecfs/cores/%e.%p'
 
 The line you want to echo into one of the files above:
 
@@ -55,7 +61,7 @@ kernel.core_pattern=|/opt/ecfs/bin/ecfs -i -e %e -p %p -o /opt/ecfs/cores/%e.%p
 
 (For example):
 
-echo '|/opt/ecfs/bin/ecfs -i -e %e -p %p -o /opt/ecfs/cores/%e.%p >> /etc/sysctl.conf'
+echo 'kernel.core_pattern=|/opt/ecfs/bin/ecfs -i -e %e -p %p -o /opt/ecfs/cores/%e.%p' >> /etc/sysctl.conf
 
 - [ECFS LOGGING/DEBUGGING -
 
@@ -68,7 +74,7 @@ ecfs can perform heuristics that do things such as mark shared libraries as bein
 Sometimes false positives can arise. If you want to use the heuristics feature use the -h switch.
 For instance:
 
-echo '|/opt/ecfs/bin/ecfs -i -h -e %e -p %p -o /opt/ecfs/cores/%e.%p >> /etc/sysctl.conf'
+echo 'kernel.core_pattern=|/opt/ecfs/bin/ecfs -i -h -e %e -p %p -o /opt/ecfs/cores/%e.%p' >> /etc/sysctl.conf
 
 
 - elfmaster[at]zoho.com
