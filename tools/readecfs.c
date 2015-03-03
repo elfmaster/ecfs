@@ -169,6 +169,7 @@ int main(int argc, char **argv)
 	}
 	ElfW(Ehdr) *ehdr = desc->ehdr;
 	ElfW(Shdr) *shdr = desc->shdr;
+	ElfW(Phdr) *phdr = desc->phdr;
 	char *shstrtab = desc->shstrtab;
 
 	printf("\n- Displaying ELF header:\n");
@@ -185,7 +186,15 @@ int main(int argc, char **argv)
 	for (i = 0; i < desc->ehdr->e_shnum; i++) {
 		printf("0x%-16lx 0x%-08lx 0x%-08lx 0x%-04lx %s\n", shdr[i].sh_addr, shdr[i].sh_offset, 
 		shdr[i].sh_size, shdr[i].sh_entsize, &shstrtab[shdr[i].sh_name]);
-	}			
-	printf("\n");
+	}
+	
+	printf("\n- Displaying ELF program headers:\n");
+	printf("Address          Offset\t   FileSZ\t MemSZ\tType\n");
+	for (i = 0; i < desc->ehdr->e_phnum; i++) {
+		printf("0x%-16lx 0x%-08lx 0x%-08lx 0x%-04lx   %s\n", phdr[i].p_vaddr, phdr[i].p_offset,
+		phdr[i].p_filesz, phdr[i].p_memsz, phdr[i].p_type == PT_LOAD ? "LOAD" : "NOTE");
+	}
+	printf("\n");			
+	
 }	
 
