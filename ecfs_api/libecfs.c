@@ -406,7 +406,6 @@ int get_auxiliary_vector64(ecfs_elf_t *desc, Elf64_auxv_t **auxv)
 int get_shlib_mapping_names(ecfs_elf_t *desc, char ***shlvec)
 {
 	int i, count, c;	
-	printf("assigning\n");
 	char *shstrtab = desc->shstrtab;
 	ElfW(Shdr) *shdr = desc->shdr;
 	
