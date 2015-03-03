@@ -20,6 +20,7 @@ tools:
 	make -C tools/
 
 ${BIN_DIR}/ecfs.a: ${OBJS}
+	@mkdir -p $(dir $@)
 	ar rcs $@ $^
 
 ${OBJ_DIR}/%.o: ${SRC_DIR}/%.c
