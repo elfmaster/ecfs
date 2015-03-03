@@ -1,4 +1,13 @@
 
+- [DESCRIPTION
+
+ECFS is an extension to the existing ELF core file format in Linux. It takes a process image
+or an existing corefile and produces a custom ELF file as the output. This output file is
+mostly backwards compatible with a regular core file, but it has a fully reconstructed set
+of section headers, and a fully reconstructed dynamic and local symbol table. This manual
+page will describe how to access the different components, which are primarily stored in
+section headers and are therefore trivial to access.
+
 - [SYNOPSIS - Extended core file snapshot technology-
 
 The $CWD contains the source code for the ./ecfs program
@@ -6,8 +15,8 @@ which is the primary component. This program is invoked by
 the kernel (through /proc/sys/kernel/core_pattern) to transform
 core files into ecfs files. 
 
-The ecfs_api directory contains a library (still in the works)
-that makes parsing ecfs files very easy.
+The ecfs_api directory contains a library (still in the works-
+but used by tools/readecfs.c) that makes parsing ecfs files very easy.
 
 - [INSTALL -
 
@@ -16,9 +25,13 @@ apt-get install libelf-dev libdwarf-dev
 
 To build ecfs type:
 make
+make install (Which essentially does the same thing as the setup.sh script)
 
 * Then as root run (not sudo) *
 ./setup.sh
+
+This should put a custom line into /proc/sys/kernel/core_pattern that tells it
+to invoke /opt/ecfs/bin/ecfs during a coredump.
 
 XXX NOTE XXX:
 If you see '-t' being passed to ecfs in setup.sh this means that it
@@ -48,6 +61,12 @@ the following line into one of two files:
 
 /etc/sysctl.conf
 
+NOTE: Although it seems that the init scripts for apport (in ubuntu) will override
+this change. Until I design a proper script to make ecfs instal permanent you
+must overwrite /proc/sys/kernel/core_pattern with a line like:
+	
+
+'|/opt/ecfs/bin/ecfs -i -e %e -p %p -o /opt/ecfs/cores/%e.%p'
 
 The line you want to echo into one of the files above:
 
@@ -55,7 +74,7 @@ kernel.core_pattern=|/opt/ecfs/bin/ecfs -i -e %e -p %p -o /opt/ecfs/cores/%e.%p
 
 (For example):
 
-echo '|/opt/ecfs/bin/ecfs -i -e %e -p %p -o /opt/ecfs/cores/%e.%p >> /etc/sysctl.conf'
+echo 'kernel.core_pattern=|/opt/ecfs/bin/ecfs -i -e %e -p %p -o /opt/ecfs/cores/%e.%p' >> /etc/sysctl.conf
 
 - [ECFS LOGGING/DEBUGGING -
 
@@ -68,7 +87,7 @@ ecfs can perform heuristics that do things such as mark shared libraries as bein
 Sometimes false positives can arise. If you want to use the heuristics feature use the -h switch.
 For instance:
 
-echo '|/opt/ecfs/bin/ecfs -i -h -e %e -p %p -o /opt/ecfs/cores/%e.%p >> /etc/sysctl.conf'
+echo 'kernel.core_pattern=|/opt/ecfs/bin/ecfs -i -h -e %e -p %p -o /opt/ecfs/cores/%e.%p' >> /etc/sysctl.conf
 
 
 - elfmaster[at]zoho.com

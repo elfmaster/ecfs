@@ -112,6 +112,7 @@ typedef struct pltgotinfo {
 
 void * heapAlloc(size_t);
 
+int get_shlib_mapping_names(ecfs_elf_t *, char ***);
 ecfs_elf_t * load_ecfs_file(const char *);
 char * get_exe_path(ecfs_elf_t *desc);
 int get_fd_info(ecfs_elf_t *desc, struct fdinfo **fdinfo);

@@ -8,6 +8,7 @@ Use cases:
 
 Malware analysis of ecfs files
 Advanced debugging of ecfs files
+Writing a tool like readelf (Maybe called readecfs)
 
 See man libecfs (in ../manual/man.txt)
 

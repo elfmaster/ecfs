@@ -16,9 +16,20 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
 	if (mem == MAP_FAILED) {
 		perror("mmap");
-		exit(-1);
+		return NULL;
 	}
+	
+	if (memcmp(mem, "\x7f\x45\x4c\x46", 4) != 0)
+		return NULL;
+	
 	ehdr = (ElfW(Ehdr) *)mem;
+	
+	if (ehdr->e_type != ET_NONE && ehdr->e_type != ET_CORE) 
+		return NULL;
+	
+	if (ehdr->e_shoff == 0 || ehdr->e_shnum == 0 || ehdr->e_shstrndx == SHN_UNDEF) 
+		return NULL;
+	
 	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
 	shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
 	
@@ -392,6 +403,27 @@ int get_auxiliary_vector64(ecfs_elf_t *desc, Elf64_auxv_t **auxv)
 	return ac;
 }
 	
+int get_shlib_mapping_names(ecfs_elf_t *desc, char ***shlvec)
+{
+	int i, count, c;	
+	printf("assigning\n");
+	char *shstrtab = desc->shstrtab;
+	ElfW(Shdr) *shdr = desc->shdr;
+	
+	for (count = 0, i = 0; i < desc->ehdr->e_shnum; i++) 
+		if (shdr[i].sh_type == SHT_SHLIB || shdr[i].sh_type == SHT_INJECTED)
+			count++;
+	if (count == 0)
+		return 0;
+	
+	*shlvec = calloc(count + 1, sizeof(char *));
+	for (c = 0, i = 0; i < desc->ehdr->e_shnum; i++) {
+		if (shdr[i].sh_type == SHT_SHLIB || shdr[i].sh_type == SHT_INJECTED) 
+			*((*shlvec) + c++) = strdup(&shstrtab[shdr[i].sh_name]);
+	}	
+	return count;
+}
+
 
 /*
  * This function fills in this struct:

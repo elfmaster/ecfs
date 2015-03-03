@@ -29,7 +29,6 @@
 
 struct opts opts;
 
-void ffperror(const char *, int);
 void log_msg(unsigned int lineno, char *fmt, ...);
 
 void deliver_signal(int pid, int signo)
@@ -102,8 +101,14 @@ int xfstat(int fd, struct stat *st)
 
 void xfree(void *p)
 {
+#if DEBUG
+	log_msg(__LINE__, "xfree() called");
+#endif
 	if (p)
 		free(p);
+#if DEBUG
+	log_msg(__LINE__, "xfree() returning");
+#endif
 }
 
 /*
@@ -136,16 +141,21 @@ void log_msg(unsigned int lineno, char *fmt, ...)
 	syslog(LOG_MAKEPRI(LOG_USER, LOG_WARNING), "%s [line: %i]", buf, lineno);
 
 }
-void ffperror(const char *s, int lineno)
+
+int create_tmp_ramdisk(size_t gigs)
 {
-	if( system("touch /tmp/ecfs.debug") == -1) {
-            log_msg(__LINE__, "system %s", strerror(errno));
-            exit(-1);
-        }
-	FILE *fp = fopen("/tmp/ecfs.debug", "w");
-	fprintf(fp, "%s failed on code line [%d]: %s\n", s, lineno, strerror(errno));
-	fclose(fp);
+	int ret;
+
+	if (gigs > MAX_RAMDISK_GIGS) {
+		log_msg(__LINE__, "create_tmp_ramdisk(): should not exceed %d gigs\n", MAX_RAMDISK_GIGS);
+		return -1;
+	}
+	if (access(ECFS_RAMDISK_DIR, F_OK) != 0) 
+		mkdir(ECFS_RAMDISK_DIR, S_IRWXU|S_IRWXG);
+
+	char *cmd = xfmtstrdup("mount -o size=%dG -t tmpfs none %s", gigs, ECFS_RAMDISK_DIR);
+	ret = system(cmd);
+	if (ret == -1)
+		return -1;
+	return 0;
 }
-
-
-

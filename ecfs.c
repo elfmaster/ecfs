@@ -153,11 +153,13 @@ elfdesc_t * load_core_file_stdin(void)
 	int i = 0;
 	int file;
 	
-	char *filepath = xfmtstrdup("%s/tmp_core", ECFS_CORE_DIR);
+	char *tmp_dir = opts.use_ramdisk ? ECFS_RAMDISK_DIR : ECFS_CORE_DIR;
+	
+	char *filepath = xfmtstrdup("%s/.tmp_core", tmp_dir);
         do {
                 if (access(filepath, F_OK) == 0) {
                         free(filepath);
-                        filepath = xfmtstrdup("%s/tmp_core.%d", ECFS_CORE_DIR, ++i);
+                        filepath = xfmtstrdup("%s/.tmp_core.%d", tmp_dir, ++i);
                 } else
                         break;
                         
@@ -167,7 +169,6 @@ elfdesc_t * load_core_file_stdin(void)
 	 * Open tmp file for writing
 	 */
 	file = xopen(filepath, O_CREAT|O_RDWR);
-	fchmod(file, S_IRWXU|S_IRWXG|S_IROTH|S_IWOTH);
 	buf = alloca(RBUF_LEN);
 	while ((nread = read(STDIN_FILENO, buf, RBUF_LEN)) > 0) {
         	bytes += nread;
@@ -216,11 +217,12 @@ int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
 	 * with updated p_filesz, and updated p_offsets for phdr's 
 	 * that follow it.
 	 */
-	char *tmp = xfmtstrdup("%s/.tmp_merged_core", ECFS_CORE_DIR);
+	char *tmp_dir = opts.use_ramdisk ? ECFS_RAMDISK_DIR : ECFS_CORE_DIR;
+	char *tmp = xfmtstrdup("%s/.tmp_merged_core", tmp_dir);
         do {
                 if (access(tmp, F_OK) == 0) {
                         free(tmp);
-                        tmp = xfmtstrdup("%s/.tmp_merged_core.%d", ECFS_CORE_DIR, ++i);
+                        tmp = xfmtstrdup("%s/.tmp_merged_core.%d", tmp_dir, ++i);
                 } else
                         break;
 
@@ -300,7 +302,9 @@ int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
 	fsync(out);
 	close(out);
 	close(in);
-	
+
+	munmap(mem, st.st_size);
+
 #if DEBUG
 	log_msg(__LINE__, "merge_exe_text_into_core(): renaming %s back to %s", tmp, path);
 #endif
@@ -308,7 +312,7 @@ int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
 		log_msg(__LINE__, "rename %s", strerror(errno));
 		return -1;
 	}
-		
+  	chmod(path, S_IRWXU|S_IRWXG|S_IROTH|S_IWOTH|S_IXOTH);
 	return 0;
 }
 
@@ -331,24 +335,26 @@ static int merge_text_image(const char *path, unsigned long text_addr, uint8_t *
 	log_msg(__LINE__, "xopen path: %s", path);
         in = xopen(path, O_RDONLY);
         xfstat(in, &st);
-
+	
         /*
          * tmp will point to the new temporary file that contains
          * our corefile with a merged in program text segment and
          * with updated p_filesz, and updated p_offsets for phdr's 
          * that follow it.
          */
-        char *tmp = xfmtstrdup("%s/tmp_merged_core_t2", ECFS_CORE_DIR);
+	char *tmp_dir = opts.use_ramdisk ? ECFS_RAMDISK_DIR : ECFS_CORE_DIR;
+        char *tmp = xfmtstrdup("%s/.tmp_merging_shlibs", tmp_dir);
         do {
                 if (access(tmp, F_OK) == 0) {
                         free(tmp);
-                        tmp = xfmtstrdup("%s/tmp_merged_core_t2.%d", ECFS_CORE_DIR, ++i);
+                        tmp = xfmtstrdup("%s/.tmp_merging_shlibs.%d", tmp_dir, ++i);
                 } else
                         break;
 
         } while(1);
         out = xopen(tmp, O_RDWR|O_CREAT);
-	
+        //fchmod(out, S_IRWXU|S_IRWXG|S_IROTH|S_IWOTH|S_IXOTH);
+
 	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, in, 0);
         if (mem == MAP_FAILED) {
                 log_msg(__LINE__, "mmap %s", strerror(errno));
@@ -388,18 +394,26 @@ static int merge_text_image(const char *path, unsigned long text_addr, uint8_t *
                 log_msg(__LINE__, "Failed to merge texts into core");
                 return -1;
         }
-	log_msg(__LINE__, "Writing first %lx bytes", textOffset);
         if (write(out, mem, textOffset) < 0) {
                 log_msg(__LINE__, "[FAILURE] write(): %s", strerror(errno));
                 return -1;
         }
-	log_msg(__LINE__, "Writing %lx bytes of text image", tlen);
         if (write(out, text_image, tlen) < 0) {
                 log_msg(__LINE__, "[FAILURE] write(): %s", strerror(errno));
                 return -1;
         }
-	
-	log_msg(__LINE__, "Writing rest of binary (%lx bytes) starting at data Offset %lx\n", st.st_size - textOffset, nextOffset);
+	/*
+	 * Take special care to free text_image 
+	 * we likely have alot of memory mappings taking up	
+ 	 * memory if we are dealing with a large process and
+	 * must free up these mappings as soon as we are done
+	 * with them. otherwise resource hogging will happen.	
+ 	 */
+	if (munmap(text_image, tlen) < 0) {
+		log_msg(__LINE__, "[FAILURE] munmap(): %s", strerror(errno));
+		return -1;
+	}
+
         if (write(out, &mem[nextOffset], st.st_size - textOffset) < 0) {
                 log_msg(__LINE__, "[FAILURE] write(): %s", strerror(errno));
                 return -1;
@@ -408,6 +422,8 @@ static int merge_text_image(const char *path, unsigned long text_addr, uint8_t *
         fsync(out);
         close(out);
         close(in);
+	munmap(mem, st.st_size);
+
 #if DEBUG
 	log_msg(__LINE__, "merge_text_image(): renaming %s back to %s", tmp, path);
 #endif
@@ -415,7 +431,7 @@ static int merge_text_image(const char *path, unsigned long text_addr, uint8_t *
                 log_msg(__LINE__, "rename %s", strerror(errno));
                 return -1;
         }
-
+	chmod(path, S_IRWXU|S_IRWXG|S_IROTH|S_IWOTH|S_IXOTH); 
         return 0;
 
 }
@@ -559,11 +575,11 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 		switch(notes->n_type) {
 			case NT_PRSTATUS:
 #if DEBUG
-				printf("Collecting PRSTATUS struct for thread #%d\n", notedesc->thread_count);
+				log_msg(__LINE__, "Collecting PRSTATUS struct for thread #%d", notedesc->thread_count);
 #endif
 				if (notes->n_descsz != (size_t)sizeof(struct elf_prstatus)) {
 #if DEBUG
-					printf("error: The ELF note entry for NT_PRSTATUS is not the correct size\n");
+					log_msg(__LINE__, "error: The ELF note entry for NT_PRSTATUS is not the correct size");
 #endif
 					break;
 				}
@@ -584,7 +600,7 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 			case NT_PRPSINFO:
 				if (notes->n_descsz != (size_t)sizeof(struct elf_prpsinfo)) {
 #if DEBUG
-					printf("error: The ELF note entry for NT_PRPSINFO is not the correct size\n");	
+					log_msg(__LINE__, "error: The ELF note entry for NT_PRPSINFO is not the correct size");	
 #endif
 					break;
 				}
@@ -594,7 +610,7 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 			case NT_SIGINFO:
 				if (notes->n_descsz != sizeof(siginfo_t)) {
 #if DEBUG
-					printf("error: the ELF note entry for NT_SIGINFO is not the correct size\n");
+					log_msg(__LINE__, "error: the ELF note entry for NT_SIGINFO is not the correct size");
 #endif
 					break;
 				}
@@ -615,7 +631,7 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 			case NT_FPREGSET:
 				if (notes->n_descsz != sizeof(elf_fpregset_t)) {
 #if DEBUG
-					printf("error: The ELF note entry for NT_PRPSINFO is not the correct size\n");
+					log_msg(__LINE__, "error: The ELF note entry for NT_PRPSINFO is not the correct size\n");
 #endif 
 					break;
 				}
@@ -663,6 +679,31 @@ static  int check_for_pie(int pid)
 	return 0;
 }
 	
+static int check_for_stripped_shdr(int pid)
+{
+        uint8_t *mem;
+        struct stat st;
+
+        char *path = xfmtstrdup("/proc/%d/exe", pid);
+        int fd = xopen(path, O_RDONLY);
+        fstat(fd, &st);
+
+        mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        if (mem == MAP_FAILED) {
+                log_msg(__LINE__, "mmap %s", strerror(errno));
+                exit(-1);
+        }
+        free(path);
+        ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
+	
+	if (ehdr->e_shnum == 0 || ehdr->e_shoff == SHN_UNDEF) {
+		munmap(mem, st.st_size);
+		return 1;
+	}
+	munmap(mem, st.st_size);
+	return 0;
+}
+
 static void get_text_phdr_size_with_hint(elfdesc_t *elfdesc, unsigned long hint)
 {
 	ElfW(Phdr) *phdr = elfdesc->phdr;
@@ -1884,7 +1925,6 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	 * rela.plt
 	 */
 	shdr[scount].sh_type = (__ELF_NATIVE_CLASS == 64) ? SHT_RELA : SHT_REL;
-	log_msg(__LINE__, "assigning rela.plt offset: %lx\n", smeta->plt_relaOff);
         shdr[scount].sh_offset = (__ELF_NATIVE_CLASS == 64) ? smeta->plt_relaOff : smeta->plt_relOff;
         shdr[scount].sh_addr = (__ELF_NATIVE_CLASS == 64) ? smeta->plt_relaVaddr : smeta->plt_relVaddr;
         shdr[scount].sh_flags = SHF_ALLOC;
@@ -2614,6 +2654,12 @@ void build_elf_stats(handle_t *handle)
 #endif
 		handle->elfstat.personality |= ELF_HEURISTICS;
 	}
+	if (global_hacks.stripped) {
+#if DEBUG
+		log_msg(__LINE__, "personality of ELF: section header table is stripped");
+#endif
+		handle->elfstat.personality |= ELF_STRIPPED_SHDRS;
+	}
 #if DEBUG
 	if (!(handle->elfstat.personality & ELF_STATIC))
 		log_msg(__LINE__, "personality of ELF: dynamically linked");
@@ -2633,8 +2679,14 @@ void pull_unknown_shdr_sizes(int pid)
 {
 	memset(&global_hacks, 0, sizeof(global_hacks));
 	global_hacks.hash_size = get_original_shdr_size(pid, ".gnu.hash");
-	global_hacks.rela_size = get_original_shdr_size(pid, ".rela.dyn");
-	global_hacks.plt_rela_size = get_original_shdr_size(pid, ".rela.plt");
+	if (__ELF_NATIVE_CLASS == 64) {
+		global_hacks.rela_size = get_original_shdr_size(pid, ".rela.dyn");
+		global_hacks.plt_rela_size = get_original_shdr_size(pid, ".rela.plt");
+	} else {
+		global_hacks.rela_size = get_original_shdr_size(pid, ".rel.dyn");
+		global_hacks.plt_rela_size = get_original_shdr_size(pid, ".rel.plt");
+	}
+
 	global_hacks.init_size = get_original_shdr_size(pid, ".init");
 	global_hacks.fini_size = get_original_shdr_size(pid, ".fini");
 	global_hacks.got_size = get_original_shdr_size(pid, ".got.plt");
@@ -2745,6 +2797,20 @@ int main(int argc, char **argv)
 	 * Prevents ecfs from coring itself
 	 */
 	prctl(PR_SET_DUMPABLE, 0);
+	
+	if (opts.text_all) {
+		/*
+		 * text_all requires alot more disk operations and 
+		 * the time it takes becomes infeasable. We use a
+		 * tmpfs ramdisk (of 1 GIG which can be tweaked up to 4GIG)
+		 * to fix this problem. Even the hugest processes only
+		 * take ~3 seconds now.
+		 */
+		if (create_tmp_ramdisk(1) < 0) {
+			log_msg(__LINE__, "create_tmp_ramdisk failed");
+		} else
+			opts.use_ramdisk = 1;
+ 	}
 
 	if (opts.use_stdin) {
 		/*
@@ -2781,6 +2847,7 @@ int main(int argc, char **argv)
         	}
 		memdesc->task.pid = pid;
 		pie = check_for_pie(pid);
+		global_hacks.stripped = check_for_stripped_shdr(pid);
 		fill_global_hacks(pid);
 		//pull_unknown_shdr_sizes(pid); // get size of certain shdrs from original exe
 		memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
@@ -3026,15 +3093,15 @@ int main(int argc, char **argv)
 		unlink(elfdesc->path);
 	if (tmp_corefile) // incase we had to re-write file and mege in text
 		unlink(tmp_corefile);
+
+	if (!(handle->elfstat.personality & ELF_STATIC)) {
 #if DEBUG
-	log_msg(__LINE__, "calling store_dynamic_symvals()");
+		log_msg(__LINE__, "calling store_dynamic_symvals()");
 #endif
-	/*
-	 * XXX should move into core2ecfs?
-	 */
-	ret = store_dynamic_symvals(list_head, outfile);
-	if (ret < 0) 
-		log_msg(__LINE__, "Unable to store runtime values into dynamic symbol table");
+		ret = store_dynamic_symvals(list_head, outfile);
+		if (ret < 0) 
+			log_msg(__LINE__, "Unable to store runtime values into dynamic symbol table");
+	}
 	
 #if DEBUG
 	log_msg(__LINE__, "finished storing symvals");

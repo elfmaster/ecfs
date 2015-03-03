@@ -1,0 +1,24 @@
+Extended Core File Snapshot - ECFS - INSTALL file
+
+ INSTALL
+-----------
+To install this program, you must have libelf and libdwarf installed.
+On Debian/Ubuntu based distros do `apt-get install libdwarf libelf`
+For other distros either use your distros package manager or compile from source.
+Libdwarf sources are located at http://www.prevanders.net/dwarf.html
+Libelf sources are located at http://www.mr511.de/software/ (site in German, but README's in English)
+ECFS partially working on 32bit Linux. 
+
+Once required libs are installed, you can continue:
+
+ % make
+ % sudo make install
+
+ For testing libecfs functionality, do 
+ % make test 	(also part of the initial `make` process)
+
+(Optionally, you could also do ./setup.sh instead of `make install`)
+
+
+
+

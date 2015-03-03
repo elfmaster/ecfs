@@ -1,8 +1,19 @@
-all:
-	#gcc -fPIC -shared libecfs.c util.c -o libecfs.so
-	gcc -c -o libecfs.o libecfs.c
-	gcc -c -o util.o util.c
-	ar rcs libecfs.a  libecfs.o util.o
-	gcc test.c libecfs.a -o libtest
+CFLAGS	+= -g
+ARFLAGS	= rcs
+LIBS	+= libecfs.a
+AR	= ar
+#gcc -fPIC -shared libecfs.c util.c -o libecfs.so
+
+all: libecfs.a libtest test
+	$(MAKE) -C examples/
+libecfs.o: libecfs.c
+	$(CC) -o $@ -c $^
+util.o: util.c
+	$(CC) -o $@ -c $^
+libecfs.a: libecfs.o util.o
+	$(AR) $(ARFLAGS) $@  $^
+libtest: test.c
+	$(CC) $^ $(LIBS) -o $@
 clean:
-	rm -f libecfs.so libecfs.a
+	rm -f libecfs.so libecfs.a libtest *.o
+	$(MAKE) -C examples/ clean

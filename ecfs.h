@@ -55,6 +55,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#define MAX_RAMDISK_GIGS 4
+#define ECFS_RAMDISK_DIR "/mnt/ecfs_ramdisk"
+
 /*
  * Custom sections
  */
@@ -77,8 +80,7 @@
 #define MAX_LIB_NAME 255
 #define MAX_LIB_PATH 512
 
-#define LOGGING_PATH "/home/ryan/bin/logging.txt"
-#define ECFS_CORE_DIR "/opt/ecfs/cores" // XXX change this?
+#define ECFS_CORE_DIR "/tmp" // XXX change this?
 #define UNKNOWN_SHDR_SIZE 64
 #define PAGE_ALIGN(x) (x & ~(PAGE_SIZE - 1))
 #define PAGE_ALIGN_UP(x) (PAGE_ALIGN(x) + PAGE_SIZE)
@@ -115,6 +117,7 @@ typedef struct elf_stats {
 #define ELF_PIE (1 << 2)    // if its position indepdendent executable
 #define ELF_LOCSYM (1 << 3) // local symtab exists?
 #define ELF_HEURISTICS (1 << 4) // were detection heuristics used by ecfs?
+#define ELF_STRIPPED_SHDRS (1 << 8)
         unsigned int personality; // if (personality & ELF_STATIC)
 } elf_stat_t;
 
@@ -122,6 +125,7 @@ struct opts {
 	int text_all; // write complete text segment (not just 4096 bytes) of each shared library
 	int heuristics; // heuristics for detecting dll injection etc.
 	int use_stdin;
+	int use_ramdisk;
 	char *logfile;
 };
 
@@ -437,6 +441,7 @@ struct {
 	ssize_t plt_size;
 	unsigned long plt_vaddr;
         int eh_frame_offset_workaround;
+	int stripped; // means section headers are stripped
 } global_hacks;
 
 void *heapAlloc(size_t);
