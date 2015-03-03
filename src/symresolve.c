@@ -23,8 +23,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "ecfs.h"
-#include "util.h"
+#include "../include/ecfs.h"
+#include "../include/util.h"
 
 /* 
  * Each library and its symbols are represented by an array

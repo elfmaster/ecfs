@@ -24,11 +24,11 @@
  */
 
 #include <unistd.h> // for syncfs, _GNU_SOURCE is a required build flag
-#include "ecfs.h"
-#include "util.h"
-#include "ptrace.h"
-#include "symresolve.h"
-#include "heuristics.h"
+#include "../include/ecfs.h"
+#include "../include/util.h"
+#include "../include/ptrace.h"
+#include "../include/symresolve.h"
+#include "../include/heuristics.h"
 
 struct opts opts;
 

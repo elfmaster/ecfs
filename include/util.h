@@ -26,7 +26,6 @@
 #ifndef _ECFS_UTIL_H
 #define _ECFS_UTIL_H
 
-#include "ecfs.h"
 #include <syslog.h>
 
 struct opts opts;

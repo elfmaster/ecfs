@@ -31,9 +31,8 @@
  * NOTE: heuristics.c is a work in progress
  *
  */
-
-#include "ecfs.h"
-#include "util.h"
+#include "../include/ecfs.h"
+#include "../include/util.h"
 
 #define OFFSET_2_PUSH 6 // # of bytes int PLT entry where push instruction begins
 #define MAX_NEEDED_LIBS 512

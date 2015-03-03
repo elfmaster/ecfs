@@ -1,29 +1,37 @@
-CFLAGS	+= -g
-COPTS	+= -DDEBUG
+CFLAGS = -DDEBUG -g -D_GNU_SOURCE
+CC = clang
 LDFLAGS	+= -ldwarf -lelf
+OBJ_DIR = build
+SRC_DIR = src
+BIN_DIR = bin
+SRCS = $(shell find ${SRC_DIR} -name '*.c' -printf '%P\n')
+OBJS = $(addprefix ${OBJ_DIR}/,${SRCS:.c=.o})
 TEST	= `test -d /opt/ecfs; echo $$?`
 UID	= `id -u`
 
-all: ecfs
+all: bin/ecfs
+	@echo "USAGE:   make bin/<binname>  # which corresponds to a main source file in main/"
+	@echo "	 make ecfs.a   # builds the shared object."
+
+api:
 	make -C ecfs_api/
+
+tools:
 	make -C tools/
-ecfs: ecfs.o util.o eh_frame.o ptrace.o list.o symresolve.o heuristics.o 
+
+${BIN_DIR}/ecfs.a: ${OBJS}
+	ar rcs $@ $^
+
+${OBJ_DIR}/%.o: ${SRC_DIR}/%.c
+	@mkdir -p $(dir $@)
+	${CC} ${CFLAGS} -o $@ -c $<
+
+${BIN_DIR}/%: main/%.c ${BIN_DIR}/ecfs.a
+	@mkdir -p $(dir $@)
 	$(CC) $(COPTS) $(CFLAGS) $^ -o $@ $(LDFLAGS)
-ecfs.o: ecfs.c
-	$(CC) $(COPTS) $(CFLAGS) -O2 -c $^
-util.o: util.c
-	$(CC) $(CFLAGS) -c $^
-eh_frame.o: eh_frame.c
-	$(CC) $(CFLAGS) -c $^
-ptrace.o: ptrace.c
-	$(CC) $(CFLAGS) -c $^
-list.o: list.c
-	$(CC) $(CFLAGS) -c $^
-symresolve.o: symresolve.c
-	$(CC) $(CFLAGS) -c $^
-heuristics.o: heuristics.c
-	$(CC) $(COPTS) $(CFLAGS) -c $^
+
 clean:
+	rm -rf ${OBJ_DIR} ${BIN_DIR} *.a
 	rm -f *.o ecfs
 	$(MAKE) -C ecfs_api/ clean
 	$(MAKE) -C tools/ clean

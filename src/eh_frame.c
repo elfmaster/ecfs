@@ -24,8 +24,8 @@
  */
 
 
-#include "ecfs.h"
-#include "util.h"
+#include "../include/ecfs.h"
+#include "../include/util.h"
 
 #define UNDEF_VAL 2000
 #define SAME_VAL 2001

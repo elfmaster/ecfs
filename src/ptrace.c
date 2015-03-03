@@ -23,8 +23,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/wait.h> //for waitpid
-#include "util.h"
-#include "ecfs.h"
+#include "../include/ecfs.h"
+#include "../include/util.h"
 
 int waitpid2(pid_t pid, int *status, int options)
 {
