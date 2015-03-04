@@ -6,7 +6,7 @@ fi
 mkdir /opt/ecfs
 mkdir /opt/ecfs/bin
 mkdir /opt/ecfs/cores
-cp ecfs /opt/ecfs/bin
+cp bin/ecfs /opt/ecfs/bin
 echo '|/opt/ecfs/bin/ecfs -i -t -e %e -p %p -o /opt/ecfs/cores/%e.%p' > /proc/sys/kernel/core_pattern
 echo "Installed ecfs into /proc/sys/kernel/core_pattern. Files will be generated in /opt/ecfs/cores"
 
