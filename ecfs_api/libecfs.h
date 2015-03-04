@@ -39,6 +39,8 @@ typedef struct elf_stats {
 #define ELF_STATIC (1 << 1) // if its statically linked (instead of dynamically)
 #define ELF_PIE (1 << 2)    // if its position indepdendent executable
 #define ELF_LOCSYM (1 << 3) // local symtab exists?
+#define ELF_HEURISTICS (1 << 4) // were detection heuristics used by ecfs?
+#define ELF_STRIPPED_SHDRS (1 << 8)
         unsigned int personality; // if (personality & ELF_STATIC)
 } elf_stat_t;
 
