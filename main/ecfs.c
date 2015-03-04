@@ -3134,7 +3134,7 @@ int main(int argc, char **argv)
 	if (!(handle->elfstat.personality & ELF_STATIC)) {
 #if DEBUG
 		log_msg(__LINE__, "calling store_dynamic_symvals()");
-#endif
+#endif	
 		ret = store_dynamic_symvals(list_head, outfile);
 		if (ret < 0) 
 			log_msg(__LINE__, "Unable to store runtime values into dynamic symbol table");

@@ -102,14 +102,8 @@ int xfstat(int fd, struct stat *st)
 
 void xfree(void *p)
 {
-#if DEBUG
-	log_msg(__LINE__, "xfree() called");
-#endif
 	if (p)
 		free(p);
-#if DEBUG
-	log_msg(__LINE__, "xfree() returning");
-#endif
 }
 
 /*
