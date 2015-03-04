@@ -440,6 +440,7 @@ struct {
         ssize_t plt_rela_size;
 	ssize_t plt_size;
 	unsigned long plt_vaddr;
+	unsigned long ehframe_vaddr;
         int eh_frame_offset_workaround;
 	int stripped; // means section headers are stripped
 } global_hacks;
