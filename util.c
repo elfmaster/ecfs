@@ -43,6 +43,7 @@ void * heapAlloc(size_t len)
 		perror("malloc");
 		exit(-1);
 	}
+	memset(p, 0, len);
 	return (void *)(uintptr_t)p;
 }
 
