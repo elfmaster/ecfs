@@ -2519,7 +2519,6 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 */
 	if( write(fd, memdesc->fdinfo, ecfs_file->fdinfo_size) == -1) {
             log_msg(__LINE__, "write %s", strerror(errno));
-            exit(-1);
         }
 
 	/*
@@ -2527,7 +2526,6 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 */
 	if( write(fd, notedesc->siginfo, sizeof(siginfo_t)) == -1) {
             log_msg(__LINE__, "write %s", strerror(errno));
-            exit(-1);
         }
 	
 	/*
@@ -2535,7 +2533,6 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 */
 	if( write(fd, notedesc->auxv, notedesc->auxv_size) == -1) {
             log_msg(__LINE__, "write %s", strerror(errno));
-            exit(-1);
         }
 	
 	/*
@@ -2543,7 +2540,6 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 */
 	if( write(fd, memdesc->exe_path, strlen(memdesc->exe_path) + 1) ) {
             log_msg(__LINE__, "write %s", strerror(errno));
-            exit(-1);
         }
 
 	/*
@@ -2552,7 +2548,6 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	build_elf_stats(handle);
 	if( write(fd, &handle->elfstat, sizeof(elf_stat_t)) == -1) { 
             log_msg(__LINE__, "write %s", strerror(errno));
-            exit(-1);
         }
 	
 	/*
@@ -2560,7 +2555,6 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 */
 	if( write(fd, handle->arglist, ELF_PRARGSZ) == -1) {
             log_msg(__LINE__, "write %s", strerror(errno));
-            exit(-1);
         }
 
 	/*
