@@ -111,7 +111,7 @@ usage:
 
 	desc = load_ecfs_file(argv[2]);
 	if (desc == NULL) {
-		printf("Unable to load ecfs file\n");
+		printf("Unable to load ecfs file: %s (Is it an ecfs file?)\n", argv[2]);
 		exit(-1);
 	}
 	
@@ -131,6 +131,7 @@ usage:
 		printf("\tlocal symtab reconstruction: %s\n", (desc->elfstats->personality & ELF_LOCSYM) ? "yes" : "no");
 		printf("\tmalware heuristics: %s\n", (desc->elfstats->personality & ELF_HEURISTICS) ? "yes" : "no");
 		printf("\toriginal bin had stripped section headers: %s\n", (desc->elfstats->personality & ELF_STRIPPED_SHDRS) ? "yes" : "no");
+		printf("\n");
 	}
 
 	if (opts.ecfs_stuff || opts.all) {
