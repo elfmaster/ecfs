@@ -200,8 +200,9 @@ usage:
 		if (!(desc->elfstats->personality & ELF_STATIC)) {
 			printf("- Printing out GOT/PLT characteristics (pltgot_info_t):\n");
 			ret = get_pltgot_info(desc, &pltgot);
+			printf("gotsite            gotvalue          gotshlib          pltval\n");
 			for (i = 0; i < ret; i++) 
-				printf("gotsite: %lx gotvalue: %lx gotshlib: %lx pltval: %lx\n", pltgot[i].got_site, pltgot[i].got_entry_va, 
+				printf("0x%-16lx 0x%-16lx 0x%-16lx 0x%-16lx\n", pltgot[i].got_site, pltgot[i].got_entry_va, 
 				pltgot[i].shl_entry_va, pltgot[i].plt_entry_va);
 			printf("\n");
 		}
