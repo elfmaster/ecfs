@@ -102,14 +102,8 @@ int xfstat(int fd, struct stat *st)
 
 void xfree(void *p)
 {
-#if DEBUG
-	log_msg(__LINE__, "xfree() called");
-#endif
 	if (p)
 		free(p);
-#if DEBUG
-	log_msg(__LINE__, "xfree() returning");
-#endif
 }
 
 /*
@@ -151,8 +145,12 @@ int create_tmp_ramdisk(size_t gigs)
 		log_msg(__LINE__, "create_tmp_ramdisk(): should not exceed %d gigs\n", MAX_RAMDISK_GIGS);
 		return -1;
 	}
-	if (access(ECFS_RAMDISK_DIR, F_OK) != 0) 
+	if (access(ECFS_RAMDISK_DIR, F_OK) != 0) {
+#if DEBUG
+		log_msg(__LINE__, "%s did not exist, so creating it.");
+#endif
 		mkdir(ECFS_RAMDISK_DIR, S_IRWXU|S_IRWXG);
+	}
 
 	char *cmd = xfmtstrdup("mount -o size=%dG -t tmpfs none %s", gigs, ECFS_RAMDISK_DIR);
 	ret = system(cmd);

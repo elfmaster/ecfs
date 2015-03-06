@@ -32,6 +32,7 @@
 #include "../ecfs_api/libecfs.h"
 
 struct {
+	int raw;
 	int shdrs;
 	int phdrs;
 	int ehdr;
@@ -42,7 +43,7 @@ struct {
 	int auxv;
 	int personality;
 	int all;
-} opts;
+} opts = {0};
 
 int main(int argc, char **argv)
 {
@@ -58,7 +59,7 @@ int main(int argc, char **argv)
 
 usage:
 	if (argc < 3) {
-		printf("Usage: %s [-APSslphega] <ecfscore>\n", argv[0]);
+		printf("Usage: %s [-RAPSslphega] <ecfscore>\n", argv[0]);
 		printf("-a	print all (equiv to -Sslphega)\n");
 		printf("-s	print symbol table info\n");
 		printf("-l	print shared library names\n");
@@ -69,10 +70,19 @@ usage:
 		printf("-A	print Auxiliary vector\n");
 		printf("-P	print personality info\n");
 		printf("-e	print ecfs specific (auiliary vector, process state, sockets, pipes, fd's, etc.)\n"); 
+		printf("\n-[Secondary use to view raw data from a section]\n");
+		printf("-R <ecfscore> <section>\n\n");
+		printf("Examples:\n");
+		printf("%s -e <ecfscore>\n", argv[0]);
+		printf("%s -Ag <ecfscore>\n", argv[0]);
+		printf("%s -R <ecfscore> .stack\n", argv[0]);
+		printf("%s -R <ecfscore> .bss\n", argv[0]);
+		printf("%s -eR <ecfscore> .heap\n", argv[0]);
+		printf("\n");
 		exit(-1);
 	}
 	
-	while ((c = getopt(argc, argv, "APSslphega")) != -1) {
+	while ((c = getopt(argc, argv, "RAPSslphega")) != -1) {
 		switch(c) {
 			case 'S':
 				opts.shdrs++;
@@ -104,6 +114,13 @@ usage:
 			case 'a':
 				opts.all++;
 				break;
+			case 'R':
+				if (argc < 4) {
+					printf("-R requires you specify either heap, stack, vdso, or vsyscall\n");
+					exit(0);
+				}
+				opts.raw++;
+				break;
 			default:
 				goto usage;
 		}
@@ -111,7 +128,7 @@ usage:
 
 	desc = load_ecfs_file(argv[2]);
 	if (desc == NULL) {
-		printf("Unable to load ecfs file\n");
+		printf("Unable to load ecfs file: %s (Is it an ecfs file?)\n", argv[2]);
 		exit(-1);
 	}
 	
@@ -131,6 +148,7 @@ usage:
 		printf("\tlocal symtab reconstruction: %s\n", (desc->elfstats->personality & ELF_LOCSYM) ? "yes" : "no");
 		printf("\tmalware heuristics: %s\n", (desc->elfstats->personality & ELF_HEURISTICS) ? "yes" : "no");
 		printf("\toriginal bin had stripped section headers: %s\n", (desc->elfstats->personality & ELF_STRIPPED_SHDRS) ? "yes" : "no");
+		printf("\n");
 	}
 
 	if (opts.ecfs_stuff || opts.all) {
@@ -199,8 +217,9 @@ usage:
 		if (!(desc->elfstats->personality & ELF_STATIC)) {
 			printf("- Printing out GOT/PLT characteristics (pltgot_info_t):\n");
 			ret = get_pltgot_info(desc, &pltgot);
+			printf("gotsite            gotvalue          gotshlib          pltval\n");
 			for (i = 0; i < ret; i++) 
-				printf("gotsite: %lx gotvalue: %lx gotshlib: %lx pltval: %lx\n", pltgot[i].got_site, pltgot[i].got_entry_va, 
+				printf("0x%-16lx 0x%-16lx 0x%-16lx 0x%-16lx\n", pltgot[i].got_site, pltgot[i].got_entry_va, 
 				pltgot[i].shl_entry_va, pltgot[i].plt_entry_va);
 			printf("\n");
 		}
@@ -287,5 +306,23 @@ usage:
 		printf("\n");			
 	}
 	
-}	
+	if (opts.raw) {
+		uint8_t *ptr;
+		ssize_t section_size;
+		section_size = get_section_pointer(desc, argv[3], &ptr);
+		if (section_size < 0) {
+			printf("Unable to load section named: '%s'\n", argv[3]);
+			goto done;
+		}
+		for (i = 0; i < section_size; i++) {
+			if (i > 0 && (i % 32 == 0))
+				printf("\n");
+			printf("%02x ", ptr[i]);
+		}
+		printf("\n");
+	}
+
+done:
+	unload_ecfs_file(desc);
+}		
 

@@ -6,7 +6,7 @@
  * an ET_NONE.
  */
 
-#include "../ecfs.h"
+#include "../include/ecfs.h"
 
 int main(int argc, char **argv)
 {

@@ -24,7 +24,7 @@
  */
 
 
-#include "../ecfs.h"
+#include "../include/ecfs.h"
 #include <syslog.h>
 
 struct opts opts;

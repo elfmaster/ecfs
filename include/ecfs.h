@@ -56,7 +56,7 @@
 #include <arpa/inet.h>
 
 #define MAX_RAMDISK_GIGS 4
-#define ECFS_RAMDISK_DIR "/mnt/ecfs_ramdisk"
+#define ECFS_RAMDISK_DIR "/tmp/ecfs_ramdisk"
 
 /*
  * Custom sections
