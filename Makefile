@@ -6,8 +6,7 @@ SRC_DIR = src
 BIN_DIR = bin
 SRCS = $(shell find ${SRC_DIR} -name '*.c' -printf '%P\n')
 OBJS = $(addprefix ${OBJ_DIR}/,${SRCS:.c=.o})
-TEST	= `test -d /opt/ecfs; echo $$?`
-UID	= `id -u`
+USERID = $(shell id -u)
 
 all: bin/ecfs
 	@echo "USAGE:   make bin/<binname>  # which corresponds to a main source file in main/"
@@ -31,11 +30,31 @@ ${BIN_DIR}/%: main/%.c ${BIN_DIR}/ecfs.a
 	@mkdir -p $(dir $@)
 	$(CC) $(COPTS) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
+.PHONY: clean
 clean:
 	rm -rf ${OBJ_DIR} ${BIN_DIR} *.a
 	rm -f *.o ecfs
 	$(MAKE) -C ecfs_api/ clean
 	$(MAKE) -C tools/ clean
 
-install:
-	if [ $(UID) -eq 0 ]; then if [ $(TEST) -eq 1 ]; then mkdir /opt/ecfs; mkdir /opt/ecfs/bin; mkdir /opt/ecfs/cores; cp ecfs /opt/ecfs/bin/ecfs; echo '|/opt/ecfs/bin/ecfs -i -t -e %e -p %p -o /opt/ecfs/cores/%e.%p' > /proc/sys/kernel/core_pattern; echo "Installed ECFS successfully"; else echo "Install failed: /opt/ecfs already exists"; fi; else echo "UID must be root to install."; fi;
+.PHONY: install
+install: bin/ecfs
+ifeq ($(USERID),0)
+	@mkdir -p /opt/ecfs/bin/
+	@mkdir -p /opt/ecfs/cores
+	cp $(BIN_DIR)/ecfs /opt/ecfs/bin/ecfs
+	@echo '|/opt/ecfs/bin/ecfs -i -t -e %e -p %p -o /opt/ecfs/cores/%e.%p' > /proc/sys/kernel/core_pattern
+	@echo "Installed ECFS successfully" 
+else
+	$(info You must be root to execute this command)
+endif
+
+.PHONY: uninstall
+uninstall:
+ifeq ($(USERID),0)
+	rm -Rf /opt/ecfs/bin
+	@echo 'core' > /proc/sys/kernel/core_pattern
+	@echo "Uninstalled ECFS successfully"
+else
+	$(info You must be root to execute this command)
+endif
