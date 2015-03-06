@@ -25,14 +25,6 @@
 
 void build_elf_stats(handle_t *);
 
-
-/*
- * This function will not read directly from vaddr unless vaddr marks
- * the beggining of a segment; otherwise this function finds where the
- * segment begins (The segment range that vaddr fits in) and reads from there.
- */
-ssize_t get_segment_from_pmem(unsigned long vaddr, memdesc_t *memdesc, uint8_t **ptr);
-
 /*
  * This function simply mmap's the core file into memory
  * and sets up pointers to the ELF header, and the program
@@ -44,34 +36,7 @@ elfdesc_t * load_core_file(const char *path);
 
 elfdesc_t * reload_core_file(elfdesc_t *old);
 
-/*
- * The complete text segment of executables and shared library
- * is not included in core files. Only 4096 bytes are written
- * to save space; this is generally fine since the text presumably
- * doesn't ever change, and can be remarkably big. For our case
- * though we want the complete text of the main executable and
- * its shared libaries. This function merges the executables complete
- * text segment into the core file. And merge_shlib_texts_into_core
- * will do the ones for each shared library.
- */
-int merge_exe_text_into_core(const char *path, memdesc_t *memdesc);
-
-/*
- * This function is called by merge_shlib_texts_into_core() and merges a text segment
- * from a given shared library into the core file.
- */
-
-void create_shlib_text_mappings(memdesc_t *memdesc);
-
-int merge_shlib_texts_into_core(const char *corefile, memdesc_t *memdesc);
-
-/*
- * Parse the ELF notes to extract info such as struct prpsinfo
- * and struct prstatus. These structs hold information about the
- * process, and task state.
- */
-notedesc_t * parse_notes_area(elfdesc_t *elfdesc);
-
+//personality.c
 int check_for_pie(int pid);
 	
 int check_for_stripped_shdr(int pid);
@@ -84,6 +49,8 @@ void get_text_phdr_size_with_hint(elfdesc_t *elfdesc, unsigned long hint);
  */
 void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_file_struct *fmaps, struct lib_mappings *lm);
 
+
+//-- proc.c
 /*
  * Since the process is paused, all /proc data is still available.
  * get_maps() simply extracts all of the memory mapping information
@@ -111,6 +78,8 @@ char * get_exe_path(int pid);
  */
 ElfW(Addr) lookup_text_base(memdesc_t *memdesc, struct nt_file_struct *fmaps);
 
+
+//-- core_phdrs.c
 /*
  * This function parses the original phdr's which it must get using
  * ptrace. This is the only part where we use ptrace() and we should
@@ -142,6 +111,7 @@ int extract_dyntag_info(handle_t *handle);
  */
 void xref_phdrs_for_offsets(memdesc_t *memdesc, elfdesc_t *elfdesc);
 
+//-- core2ecfs.c
 /*
  * This function treats type as either HEAP/STACK/VDSO/VSYSCALL. But if it
  * is none of these, then it is treated as an index into the 'mappings_t maps[]'
@@ -150,11 +120,6 @@ void xref_phdrs_for_offsets(memdesc_t *memdesc, elfdesc_t *elfdesc);
 ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int type);
 
 int core2ecfs(const char *outfile, handle_t *handle);
-	
-/*
- * Get original entry point
- */
-void fill_in_pstatus(memdesc_t *memdesc, notedesc_t *notedesc);
 
 /*
  * XXX This function calls pull_unknown_shdr_ functions

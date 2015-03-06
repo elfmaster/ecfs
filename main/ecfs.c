@@ -28,6 +28,8 @@
 #include "../include/ptrace.h"
 #include "../include/symresolve.h"
 #include "../include/heuristics.h"
+#include "../include/core_text.h"
+#include "../include/core_notes.h"
 #include "../include/core_accessors.h"
 
 /*
