@@ -4,11 +4,14 @@ LDFLAGS	+= -ldwarf -lelf
 OBJ_DIR = build
 SRC_DIR = src
 BIN_DIR = bin
+MAIN_DIR = main
+MAINS = $(shell find ${MAIN_DIR} -name '*.c' -printf '%P\n')
 SRCS = $(shell find ${SRC_DIR} -name '*.c' -printf '%P\n')
 OBJS = $(addprefix ${OBJ_DIR}/,${SRCS:.c=.o})
+BINS = $(addprefix ${BIN_DIR}/,${MAINS:.c=})
 USERID = $(shell id -u)
 
-all: bin/ecfs
+all: ${BINS}
 	@echo "USAGE:   make bin/<binname>  # which corresponds to a main source file in main/"
 	@echo "	 make ecfs.a   # builds the shared object."
 
