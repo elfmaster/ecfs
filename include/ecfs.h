@@ -379,6 +379,16 @@ typedef struct memdesc {
 	ssize_t fdinfo_size;
 } memdesc_t;
 
+typedef struct handle { 
+	char arglist[ELF_PRARGSZ];
+	elf_stat_t elfstat;
+	elfdesc_t *elfdesc;
+	memdesc_t *memdesc;
+	notedesc_t *notedesc;
+	struct nt_file_struct *nt_files;
+	struct section_meta smeta;
+} handle_t;
+
 typedef struct descriptor {
 	elfdesc_t binary;
 	memdesc_t memory;
@@ -445,25 +455,7 @@ struct {
 	int stripped; // means section headers are stripped
 } global_hacks;
 
-void *heapAlloc(size_t);
-char *xstrdup(const char *);
-char *xfmtstrdup(char *fmt, ...);
-int get_all_functions(const char *filepath, struct fde_func_data **funcs);
-void ecfs_print(char *, ...);
-int xopen(const char *, int);
-
-/* from list.c */
-int insert_item_end(list_t **list, void *data, size_t sz);
-int insert_item_front(list_t **list, void *data, size_t sz);
-
-/* from symresolve.c */
-
-int fill_dynamic_symtab(list_t **list, struct lib_mappings *lm);
-unsigned long lookup_from_symlist(const char *name, list_t *list);
-
-/*
- * from ecfs.c
- */
 ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int type);
+ElfW(Addr) get_original_ep(int);
 
 #endif
