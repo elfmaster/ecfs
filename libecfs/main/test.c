@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "libecfs.h"
+#include "../include/libecfs.h"
 
 int main(int argc, char **argv)
 {

@@ -23,25 +23,67 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _ECFS_PROC_H
-#define _ECFS_PROC_H
 
-/*
- * Since the process is paused, all /proc data is still available.
- * get_maps() simply extracts all of the memory mapping information
- * including details such as stack, heap, .so's, vdso etc.
- * eventually we pair this info up with the program headers (PT_LOAD's)
- * in the core file to determine where to build certain section headers.
- */
-int get_maps(pid_t pid, mappings_t *maps, const char *path);
+#include "../include/libecfs.h"
+#include <stdio.h>
 
-int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo);
 
-int get_map_count(pid_t pid);
+void * heapAlloc(size_t len)
+{
+	void *p = malloc(len);
+	if (p == NULL) {
+		perror("malloc");
+		exit(-1);
+	}
+	return (void *)(uintptr_t)p;
+}
 
-/*
- * Handle the case where say: /bin/someprog is a symbolic link
- */
-char * get_executable_path(int pid);
+char * xstrdup(const char *s)
+{
+        char *p = strdup(s);
+        if (p == NULL) {
+                perror("strdup");
+                exit(-1);
+        }
+        return p;
+}
+        
+char * xfmtstrdup(char *fmt, ...)
+{
+        char *s, buf[512];
+        va_list va;
+        
+        va_start (va, fmt);
+        vsnprintf (buf, sizeof(buf), fmt, va);
+        s = (char *)(uintptr_t)xstrdup(buf);
+        
+        return s;
+}
 
-#endif
+int xopen(const char *path, int flags)
+{
+	int fd = open(path, flags);
+	if (fd < 0) {
+		fprintf(stderr, "opening path: %s failed\n", path);
+		exit(-1);
+	}
+	return fd;
+}
+
+int xfstat(int fd, struct stat *st)
+{
+	int ret = fstat(fd, st);
+	if (ret < 0) {
+		perror("fstat");
+		exit(-1);
+	}
+	return 0;
+}
+
+void xfree(void *p)
+{
+	if (p)
+		free(p);
+}
+
+

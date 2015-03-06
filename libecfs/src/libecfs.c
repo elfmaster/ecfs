@@ -1,4 +1,5 @@
-#include "libecfs.h"
+#include "../include/libecfs.h"
+#include "../include/util.h"
 
 ecfs_elf_t * load_ecfs_file(const char *path)
 {

@@ -11,15 +11,13 @@ OBJS = $(addprefix ${OBJ_DIR}/,${SRCS:.c=.o})
 BINS = $(addprefix ${BIN_DIR}/,${MAINS:.c=})
 USERID = $(shell id -u)
 
-all: ${BINS}
+all: libecfs/bin/libecfs.a ${BINS}
 	@echo "USAGE:   make bin/<binname>  # which corresponds to a main source file in main/"
 	@echo "	 make ecfs.a   # builds the shared object."
 
-api:
-	make -C ecfs_api/
-
-tools:
-	make -C tools/
+.PHONY: libecfs/bin/libecfs.a
+libecfs/bin/libecfs.a:
+	make -C libecfs/
 
 ${BIN_DIR}/ecfs.a: ${OBJS}
 	@mkdir -p $(dir $@)
@@ -29,15 +27,14 @@ ${OBJ_DIR}/%.o: ${SRC_DIR}/%.c
 	@mkdir -p $(dir $@)
 	${CC} ${CFLAGS} -o $@ -c $<
 
-${BIN_DIR}/%: main/%.c ${BIN_DIR}/ecfs.a
+${BIN_DIR}/%: main/%.c ${BIN_DIR}/ecfs.a libecfs/bin/libecfs.a
 	@mkdir -p $(dir $@)
 	$(CC) $(COPTS) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 .PHONY: clean
 clean:
-	rm -rf ${OBJ_DIR} ${BIN_DIR} *.a
-	rm -f *.o ecfs
-	$(MAKE) -C ecfs_api/ clean
+	rm -rf ${OBJ_DIR} ${BIN_DIR}
+	$(MAKE) -C libecfs/ clean
 	$(MAKE) -C tools/ clean
 
 .PHONY: install

@@ -321,7 +321,7 @@ int get_map_count(pid_t pid)
         return lc;
 }
 
-char * get_exe_path(int pid)
+char * get_executable_path(int pid)
 {
 	char *path = xfmtstrdup("/proc/%d/exe", pid);
 	char *ret = (char *)heapAlloc(MAX_PATH);

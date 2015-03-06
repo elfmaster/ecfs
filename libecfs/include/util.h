@@ -22,68 +22,19 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#ifndef _LIBECFS_UTIL_H
+#define _LIBECFS_UTIL_H
 
+void * heapAlloc(size_t len);
 
-#include "libecfs.h"
-#include <stdio.h>
-
-
-void * heapAlloc(size_t len)
-{
-	void *p = malloc(len);
-	if (p == NULL) {
-		perror("malloc");
-		exit(-1);
-	}
-	return (void *)(uintptr_t)p;
-}
-
-char * xstrdup(const char *s)
-{
-        char *p = strdup(s);
-        if (p == NULL) {
-                perror("strdup");
-                exit(-1);
-        }
-        return p;
-}
+char * xstrdup(const char *s);
         
-char * xfmtstrdup(char *fmt, ...)
-{
-        char *s, buf[512];
-        va_list va;
-        
-        va_start (va, fmt);
-        vsnprintf (buf, sizeof(buf), fmt, va);
-        s = (char *)(uintptr_t)xstrdup(buf);
-        
-        return s;
-}
+char * xfmtstrdup(char *fmt, ...);
 
-int xopen(const char *path, int flags)
-{
-	int fd = open(path, flags);
-	if (fd < 0) {
-		fprintf(stderr, "opening path: %s failed\n", path);
-		exit(-1);
-	}
-	return fd;
-}
+int xopen(const char *path, int flags);
 
-int xfstat(int fd, struct stat *st)
-{
-	int ret = fstat(fd, st);
-	if (ret < 0) {
-		perror("fstat");
-		exit(-1);
-	}
-	return 0;
-}
+int xfstat(int fd, struct stat *st);
 
-void xfree(void *p)
-{
-	if (p)
-		free(p);
-}
+void xfree(void *p);
 
-
+#endif

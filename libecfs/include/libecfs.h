@@ -112,10 +112,9 @@ typedef struct pltgotinfo {
 } pltgot_info_t;
 
 
-void * heapAlloc(size_t);
-
 int get_shlib_mapping_names(ecfs_elf_t *, char ***);
 ecfs_elf_t * load_ecfs_file(const char *);
+int unload_ecfs_file(ecfs_elf_t *desc);
 char * get_exe_path(ecfs_elf_t *desc);
 int get_fd_info(ecfs_elf_t *desc, struct fdinfo **fdinfo);
 int get_thread_count(ecfs_elf_t *desc);
@@ -126,5 +125,7 @@ ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr);
 ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr);
 int get_local_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms);
 ssize_t get_ptr_for_va(ecfs_elf_t *desc, unsigned long vaddr, uint8_t **ptr);
+ssize_t get_section_pointer(ecfs_elf_t *desc, const char *name, uint8_t **ptr);
 int get_auxiliary_vector(ecfs_elf_t *, Elf64_auxv_t **);
 ssize_t get_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo);
+int get_auxiliary_vector64(ecfs_elf_t *desc, Elf64_auxv_t **auxv);
