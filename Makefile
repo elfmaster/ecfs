@@ -1,6 +1,6 @@
 CFLAGS = -DDEBUG -g -D_GNU_SOURCE
 CC = clang
-LDFLAGS	+= -ldwarf -lelf
+LDFLAGS	+= -ldwarf -lelf -ldl
 OBJ_DIR = build
 SRC_DIR = src
 BIN_DIR = bin
