@@ -7,6 +7,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dlfcn.h>
+#include <sys/mman.h>
+#include <string.h>
 
 #define ECFS_ENTRY_POINT "ecfs_transform_begin"
 #define ECFS_WORKER_32 "/opt/ecfs/bin/ecfs32.so"

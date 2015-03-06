@@ -21,10 +21,10 @@ static int check_binary_arch(const char *path)
 		return -1;
 	ehdr = (Elf32_Ehdr *)mem;
 	switch(ehdr->e_machine) {
-		case E_386:
+		case EM_386:
 			ret = 32;
 			break;
-		case E_X86_64:
+		case EM_X86_64:
 			ret = 64;
 			break;
 		default:
@@ -37,6 +37,7 @@ static int check_binary_arch(const char *path)
 
 int main(int argc, char **argv)
 {
+	int c;
 	int pid = 0;
 	int heuristics = 0;
 	int text_all = 0;
@@ -49,7 +50,7 @@ int main(int argc, char **argv)
 	option_struct_t options;
 	
 	void *handle;
-	void (*ecfs_transform)(options_struct_t *);
+	void (*ecfs_transform)(option_struct_t *);
 	char *ecfs_worker;
 
   	if (argc < 2) {
@@ -66,10 +67,10 @@ int main(int argc, char **argv)
         while ((c = getopt(argc, argv, "th:o:p:e:")) != -1) {
                 switch(c) {
                         case 'o':
-                                outfile = xstrdup(optarg);
+                                outfile = strdup(optarg);
                                 break;
                         case 'e':
-                                exename = xstrdup(optarg);
+                                exename = strdup(optarg);
                                 break;
                         case 'p':
                                 pid = atoi(optarg);
@@ -87,22 +88,24 @@ int main(int argc, char **argv)
         }
 	
 	if (pid == 0 || exename == NULL || outfile == NULL) {
-		log_msg(__LINE__, "invalid command line args being used - pid: %d exename: %p outfile: %p", pid, exename, outfile);
+		fprintf(stderr, "invalid command line args being used - pid: %d exename: %p outfile: %p", pid, exename, outfile);
 		exit(-1);
 	}
 	
-	exepath = xfmtstrdup("/proc/%d/exe", pid);
-	arch = check_binary_arch(exepath);
+	exepath = alloca(512);
+	snprintf(exepath, 512, "/proc/%d/exe", pid);
+
+	int arch = check_binary_arch(exepath);
 	if (arch == -1) {
-		log_msg(__LINE__, "FATAL: Could not detect if process was using 32bit or 64bit ELF, bailing out...");
+		fprintf(stderr, "FATAL: Could not detect if process was using 32bit or 64bit ELF, bailing out...");
 		exit(-1);
 	}
 	switch(arch) {
 		case 32:
-			ecfs_worker = xstrdup(ECFS_WORKER_32);
+			ecfs_worker = strdup(ECFS_WORKER_32);
 			break;
 		case 64:
-			ecfs_worker = xstrdup(ECFS_WORKER_64);
+			ecfs_worker = strdup(ECFS_WORKER_64);
 			break;
 	}
 	/*
@@ -126,13 +129,22 @@ int main(int argc, char **argv)
 	 */
 	handle = dlopen(ecfs_worker, RTLD_NOW);
 	if (handle == NULL) {
-		log_msg(__LINE__, "FATAL: dlopen failed to load ecfs worker '%s': %s", ecfs_worker, strerror(errno));
+		fprintf(stderr, "FATAL: dlopen failed to load ecfs worker '%s': %s", ecfs_worker, strerror(errno));
 		exit(-1);
 	}
 	ecfs_transform = dlsym(handle, ECFS_ENTRY_POINT);
 	
+	
+	/*
+	 * Call into the actual ecfs transformation code that
+	 * does all the real heavy lifting.
+	 */
+	ecfs_transform(&options);
 
+	exit(0);
 }
+
+
 
 
 
