@@ -1,22 +1,32 @@
 
 - [DESCRIPTION
 
-ECFS is an extension to the existing ELF core file format in Linux. It takes a process image
-or an existing corefile and produces a custom ELF file as the output. This output file is
-mostly backwards compatible with a regular core file, but it has a fully reconstructed set
-of section headers, and a fully reconstructed dynamic and local symbol table. This manual
-page will describe how to access the different components, which are primarily stored in
-section headers and are therefore trivial to access.
+ECFS is an extension to the existing ELF core file format in Linux. 
+Its job is to intercept the Linux core-dump handler, catch the core-dump
+before it is written to disk, and carefully reconstruct it into an
+ecfs-core file. An ecfs-core file is backwards compatible with regular
+core files but has been extended in such a way that they boast prolific
+amounts of data useful for process forensics analysis. An ecfs-file
+is not limited to just ELF program headers, but also contains many section
+headers as well as fully reconstructed relocation and symbol tables that
+reflect the state of code and data in runtime. ecfs-core files are
+also extremely straight forward to parse, moreso when using the
+complementary libecfs C library (Python bindings are a work in progress).
+See the manual page which describes how to access the different ecfs-core
+components in-depth.
+
 
 - [SYNOPSIS - Extended core file snapshot technology-
 
 The $CWD contains the source code for the ./ecfs program
 which is the primary component. This program is invoked by
 the kernel (through /proc/sys/kernel/core_pattern) to transform
-core files into ecfs files. 
+core files into ecfs-core files.
 
 The ecfs_api directory contains a library (still in the works-
 but used by tools/readecfs.c) that makes parsing ecfs files very easy.
+The 'readecfs' tool is equivalent to readelf, but for ecfs files.
+
 
 - [INSTALL -
 

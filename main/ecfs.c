@@ -252,7 +252,6 @@ int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
             log_msg(__LINE__, "(From merge_texts_into_core function) Could not find text address");
             return -1;
         }
-        log_msg(__LINE__, "textvaddr: %lx\n", textVaddr);
 
         mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, in, 0);
         if (mem == MAP_FAILED) {
@@ -373,7 +372,6 @@ static int merge_text_image(const char *path, unsigned long text_addr, uint8_t *
 	 */
 	for (i = 0; i < ehdr->e_phnum; i++) {
 		if (text_addr == phdr[i].p_vaddr) {
-			log_msg(__LINE__, "found text segment in core: addr %lx offset: %lx\n", phdr[i].p_vaddr, phdr[i].p_offset);
 		 	textOffset = phdr[i].p_offset;
                         nextOffset = phdr[i + 1].p_offset;   // data segment usually always i + 1 after text
                         textSize = phdr[i].p_memsz;         // get memsz of text
@@ -711,7 +709,6 @@ static void get_text_phdr_size_with_hint(elfdesc_t *elfdesc, unsigned long hint)
 	
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
 		if (hint >= phdr[i].p_vaddr && hint < phdr[i].p_vaddr + phdr[i].p_memsz) {
-			log_msg(__LINE__, "setting filesz %lx memsz %lx\n", phdr[i].p_filesz, phdr[i].p_memsz);
 			elfdesc->text_filesz = phdr[i].p_filesz;
 			elfdesc->text_memsz = phdr[i].p_memsz;
 			break;
@@ -1421,8 +1418,6 @@ int extract_dyntag_info(handle_t *handle)
 	
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
 		if (phdr[i].p_vaddr == elfdesc->dataVaddr) {
-			log_msg(__LINE__, "dynamic segment is at: %lx compared to %lx", phdr[i].p_vaddr, elfdesc->dataVaddr);
-			log_msg(__LINE__, "dyn = &mem[%lx + (%lx - %lx)]", phdr[i].p_offset, elfdesc->dynVaddr, elfdesc->dataVaddr);
 			elfdesc->dyn = (ElfW(Dyn) *)&elfdesc->mem[phdr[i].p_offset + (elfdesc->dynVaddr - elfdesc->dataVaddr)];
 			break;
 		}
@@ -1623,7 +1618,15 @@ ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int typ
                          for (i = 0; i < memdesc->mapcount; i++) {
                                 if (maps[i].stack) {
 					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
-                                                if (phdr[j].p_vaddr == maps[i].base)
+					        /*
+                                                 * For some reason the kernel seems to dump the
+                                                 * stack segment 1 page lower than one shows up
+                                                 * in the maps file. So we have to check for
+                                                 * the range instead of just compare p_vaddr 
+                                                 * directly to maps[i].base
+                                                 */
+
+                                                if (maps[i].base >= phdr[j].p_vaddr && maps[i].base < (phdr[j].p_vaddr + phdr[j].p_memsz))
                                                         return phdr[j].p_offset;
                                         }
                                 }
@@ -1634,7 +1637,7 @@ ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int typ
                          for (i = 0; i < memdesc->mapcount; i++) {
                                 if (maps[i].vdso) {
 					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
-                                                if (phdr[j].p_vaddr == maps[i].base)
+						if (phdr[j].p_vaddr == maps[i].base)
                                                         return phdr[j].p_offset;
                                         }
                                 }
@@ -3134,7 +3137,7 @@ int main(int argc, char **argv)
 	if (!(handle->elfstat.personality & ELF_STATIC)) {
 #if DEBUG
 		log_msg(__LINE__, "calling store_dynamic_symvals()");
-#endif
+#endif	
 		ret = store_dynamic_symvals(list_head, outfile);
 		if (ret < 0) 
 			log_msg(__LINE__, "Unable to store runtime values into dynamic symbol table");
