@@ -323,34 +323,6 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 	
-	/*
-	 * In real scenarios we will be receiving the core dump right as
-	 * the kernel creates it and therefore the pid that we get from
-	 * prstatus->pr_pid will still be an active pid until we are done
-	 * processing the core and grabbing things from /proc. Although in
-	 * test scenarios we may want to be able to specify which pid to
-	 * use.
-	 */
-#if DEBUG
-	log_msg(__LINE__, "building proc metadata");
-#endif
-	/*
-	exename = notedesc->psinfo->pr_fname;
-	memcpy(handle->arglist, notedesc->psinfo->pr_psargs, ELF_PRARGSZ); 
-	pid = pid ? pid : notedesc->prstatus->pr_pid;
-	memdesc = build_proc_metadata(pid, notedesc);
-       	memdesc->o_entry = get_original_ep(pid); // get original entry point
-	if (memdesc == NULL) {
-               	log_msg(__LINE__, "Failed to retrieve process metadata");
-               	exit(-1);
-       	}
-	log_msg(__LINE__, "built proc metadata");
-	memdesc->task.pid = pid;
-	memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
-	fill_global_hacks(pid);
-	pie = check_for_pie(pid);
-	fill_in_pstatus(memdesc, notedesc);
-	*/
 #if DEBUG
 	log_msg(__LINE__, "check_for_pie returned %d", pie);
 #endif
