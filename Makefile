@@ -46,7 +46,7 @@ ifeq ($(USERID),0)
 	@mkdir -p /opt/ecfs/bin/
 	@mkdir -p /opt/ecfs/cores
 	cp $(BIN_DIR)/ecfs /opt/ecfs/bin/ecfs
-	@echo '|/opt/ecfs/bin/ecfs -i -t -e %e -p %p -o /opt/ecfs/cores/%e.%p' > /proc/sys/kernel/core_pattern
+	@echo '|/opt/ecfs/bin/ecfs -t -e %e -p %p -o /opt/ecfs/cores/%e.%p' > /proc/sys/kernel/core_pattern
 	@echo "Installed ECFS successfully" 
 else
 	$(info You must be root to execute this command)

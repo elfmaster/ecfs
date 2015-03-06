@@ -309,7 +309,8 @@ int get_map_count(pid_t pid)
   	      
         snprintf(cmd, sizeof(cmd), "/usr/bin/wc -l /proc/%d/maps", pid);
 	if ((pd = popen(cmd, "r")) == NULL) {
-            return -1;
+            	log_msg(__LINE__, "popen %s", strerror(errno));
+		return -1;
         }
         if( fgets(buf, sizeof(buf), pd) == NULL ) {
             log_msg(__LINE__, "fgets %s", strerror(errno));

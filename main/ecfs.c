@@ -43,7 +43,6 @@
  * to merge the entire text segment into the corefile
  * prior to processing it into an ECFS file.
  */
-static char *tmp_corefile = NULL;
 
 /*
  * This function will read the corefile from stdin
@@ -51,7 +50,7 @@ static char *tmp_corefile = NULL;
  * by the load_core_file() function above.
  */
 #define RBUF_LEN 4096 * 8
-elfdesc_t * load_core_file_stdin(void)
+elfdesc_t * load_core_file_stdin(char **corefile)
 {
         uint8_t *buf = NULL;
         ssize_t nread;
@@ -86,7 +85,7 @@ elfdesc_t * load_core_file_stdin(void)
 	}
 	syncfs(file);
 	close(file);
-	tmp_corefile = xstrdup(filepath);
+	*corefile = xstrdup(filepath);
 	return load_core_file(filepath);
 
 }		
@@ -194,11 +193,9 @@ int main(int argc, char **argv)
 	 * ./ecfs -i -p %p -e %e
 	 */
 	if (argc < 2) {
-		fprintf(stdout, "Usage: %s [-i] [-cpoe]\n", argv[0]);
+		fprintf(stdout, "Usage: %s [-peo]\n", argv[0]);
 		fprintf(stdout, "- Automated mode to be used with /proc/sys/kernel/core_pattern\n");
-		fprintf(stdout, "[-i]	read core file from stdin; output file will be procname.pid\n");
 		fprintf(stdout, "\n- Manual mode which allows for specifying existing core files (Debugging mode)\n");
-		fprintf(stdout, "[-c]	corefile to be processed\n");
 		fprintf(stdout, "[-p]	pid of process (Must respawn a process after it crashes)\n");
 		fprintf(stdout, "[-e]	executable path (Supplied by %%e format arg in core_pattern)\n");
 		fprintf(stdout, "[-o]	output ecfs file\n\n");
@@ -206,15 +203,8 @@ int main(int argc, char **argv)
 	}
 	memset(&opts, 0, sizeof(opts));
 
-	while ((c = getopt(argc, argv, "thc:io:p:e:")) != -1) {
+	while ((c = getopt(argc, argv, "th:o:p:e:")) != -1) {
 		switch(c) {
-			case 'c':	
-				opts.use_stdin = 0;
-				corefile = xstrdup(optarg);
-				break;
-			case 'i':
-				opts.use_stdin = 1;
-				break;
 			case 'o':
 				outfile = xstrdup(optarg);
 				break;
@@ -236,21 +226,6 @@ int main(int argc, char **argv)
 		}
 	}
 	
-	if (opts.use_stdin == 0) {
-		if (corefile == NULL) {
-			log_msg(__LINE__, "Must specify a corefile with -c");
-			exit(0);
-		}
-		if (pid == 0) {
-			log_msg(__LINE__, "Must specify a pid with -p");
-			exit(0);
-		}
-		if (outfile == NULL) {
-			log_msg(__LINE__, "Did not specify an output file, defaulting to use 'ecfs.out'");
-			outfile = xfmtstrdup("%s/ecfs.out", ECFS_CORE_DIR);		
-		}
-	}
-	
 	/*
 	 * Don't allow itself to core in the event of a bug.
 	 */
@@ -265,6 +240,10 @@ int main(int argc, char **argv)
 	 */
 	prctl(PR_SET_DUMPABLE, 0);
 	
+#if DEBUG
+	log_msg(__LINE__, "options: text_all: %d heuristics: %d outfile: %s exename: %s pid: %d", 
+			opts.text_all, opts.heuristics, outfile, exename, pid);
+#endif
 	if (opts.text_all) {
 		/*
 		 * text_all requires alot more disk operations and 
@@ -279,79 +258,65 @@ int main(int argc, char **argv)
 			opts.use_ramdisk = 1;
  	}
 
-	if (opts.use_stdin) {
-		/*
-		 * If we're reading from stdin we are probably waiting for the kernel
-		 * to write the corefile to us. Until we have read the core file completely
-		 * /proc/$pid/? will remain open to us, so we need to gather whatever we need
-		 * from this area now while our process is in a stopped zombie state.
-		 */
+	/*
+	 * If we're reading from stdin we are probably waiting for the kernel
+	 * to write the corefile to us. Until we have read the core file completely
+	 * /proc/$pid/? will remain open to us, so we need to gather whatever we need
+	 * from this area now while our process is in a stopped zombie state.
+	 */
 #if DEBUG
-		log_msg(__LINE__, "Using stdin, outfile is:%s", outfile);
+	log_msg(__LINE__, "Using stdin, outfile is: %s", outfile);
 #endif
-		/*
-		 * If we are getting core directly from the kernel then we must
-		 * read /proc/<pid>/ before we read the corefile. The process stays
-		 * open as long as the corefile hasn't been read yet.
-	  	 */
-        	if (exename == NULL) {
-			log_msg(__LINE__, "Must specify exename of process when using stdin mode; supplied by %%e of core_pattern");
-			exit(-1);
-		}
-		if (pid == 0) {
-                        log_msg(__LINE__, "Must specify a pid with -p");
-                        exit(0);
-                }
-                if (outfile == NULL) {
-                        log_msg(__LINE__, "Did not specify an output file, defaulting to use 'ecfs.out'");
-                        outfile = xfmtstrdup("%s/ecfs.out", ECFS_CORE_DIR);
-                }
+	/*
+	 * If we are getting core directly from the kernel then we must
+	 * read /proc/<pid>/ before we read the corefile. The process stays
+	 * open as long as the corefile hasn't been read yet.
+  	 */
+       	if (exename == NULL) {
+		log_msg(__LINE__, "Must specify exename of process when using stdin mode; supplied by %%e of core_pattern");
+		exit(-1);
+	}
+	if (pid == 0) {
+        	log_msg(__LINE__, "Must specify a pid with -p");
+            	exit(0);
+        }
+        if (outfile == NULL) {
+        	log_msg(__LINE__, "Did not specify an output file, defaulting to use 'ecfs.out'");
+              	outfile = xfmtstrdup("%s/ecfs.out", ECFS_CORE_DIR);
+       	}
 		
-		memdesc = build_proc_metadata(pid, notedesc);
-        	if (memdesc == NULL) {
-                	log_msg(__LINE__, "Failed to retrieve process metadata");
-                	exit(-1);
-        	}
-		memdesc->task.pid = pid;
-		pie = check_for_pie(pid);
-		global_hacks.stripped = check_for_stripped_shdr(pid);
-		fill_global_hacks(pid);
-		//pull_unknown_shdr_sizes(pid); // get size of certain shdrs from original exe
-		memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
-		memdesc->o_entry = get_original_ep(pid);
-		if (opts.text_all)
-			create_shlib_text_mappings(memdesc);
-	}
+	memdesc = build_proc_metadata(pid, notedesc);
+       	if (memdesc == NULL) {
+               	log_msg(__LINE__, "Failed to retrieve process metadata");
+               	exit(-1);
+       	}
+	memdesc->task.pid = pid;
+	pie = check_for_pie(pid);
+	global_hacks.stripped = check_for_stripped_shdr(pid);
+	fill_global_hacks(pid);
+	pie = check_for_pie(pid);
+	memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
+	memdesc->o_entry = get_original_ep(pid);
+	if (opts.text_all)
+		create_shlib_text_mappings(memdesc);
 
-#if DEBUG
-	if (corefile)
-		log_msg(__LINE__, "Loading core file: %s", corefile);
-#endif
-	switch(opts.use_stdin) {
-		case 0:
-			/*
-			 * load the core file from a file
-			 */
-			elfdesc = load_core_file((const char *)corefile);
-			if (elfdesc == NULL) {
-				log_msg(__LINE__, "Failed to parse core file");
-				exit(-1);
-			}
-			break;
-		case 1:
-			/*
-			 * load the core file from stdin
-			 */
-			elfdesc = load_core_file_stdin();
-			break;
-	}
+	/*
+	 * load the core file from stdin (Passed by the kernel via core_pattern)
+	 */
+	elfdesc = load_core_file_stdin(&corefile);
 	
+#if DEBUG
+	log_msg(__LINE__, "Successfully read core from stdin and created temporary corefile path: %s", corefile);
+#endif
 	/*
 	 * Retrieve 'struct elf_prstatus' and other structures
 	 * that contain vital information (Such as registers).
 	 * These are all stored in the ELF notes area of the
 	 * core file.
 	 */
+#if DEBUG
+	log_msg(__LINE__, "Parsing notes area");
+#endif
 	notedesc = (notedesc_t *)parse_notes_area(elfdesc);
 	if (notedesc == NULL) {
 		log_msg(__LINE__, "Failed to parse ELF notes segment\n");
@@ -366,25 +331,31 @@ int main(int argc, char **argv)
 	 * test scenarios we may want to be able to specify which pid to
 	 * use.
 	 */
-	if (opts.use_stdin == 0) {
-		exename = notedesc->psinfo->pr_fname;
-		memcpy(handle->arglist, notedesc->psinfo->pr_psargs, ELF_PRARGSZ); 
-		pid = pid ? pid : notedesc->prstatus->pr_pid;
-		memdesc = build_proc_metadata(pid, notedesc);
-        	memdesc->o_entry = get_original_ep(pid); // get original entry point
-		if (memdesc == NULL) {
-                	log_msg(__LINE__, "Failed to retrieve process metadata");
-                	exit(-1);
-        	}
-		memdesc->task.pid = pid;
-		memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
-		fill_global_hacks(pid);
-		pie = check_for_pie(pid);
-	}
+#if DEBUG
+	log_msg(__LINE__, "building proc metadata");
+#endif
+	/*
+	exename = notedesc->psinfo->pr_fname;
+	memcpy(handle->arglist, notedesc->psinfo->pr_psargs, ELF_PRARGSZ); 
+	pid = pid ? pid : notedesc->prstatus->pr_pid;
+	memdesc = build_proc_metadata(pid, notedesc);
+       	memdesc->o_entry = get_original_ep(pid); // get original entry point
+	if (memdesc == NULL) {
+               	log_msg(__LINE__, "Failed to retrieve process metadata");
+               	exit(-1);
+       	}
+	log_msg(__LINE__, "built proc metadata");
+	memdesc->task.pid = pid;
+	memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
+	fill_global_hacks(pid);
+	pie = check_for_pie(pid);
 	fill_in_pstatus(memdesc, notedesc);
+	*/
 #if DEBUG
 	log_msg(__LINE__, "check_for_pie returned %d", pie);
 #endif
+	fill_in_pstatus(memdesc, notedesc);
+
 	if (pie > 0) {
 		unsigned long text_base = lookup_text_base(memdesc, notedesc->nt_files);
 		if (text_base == 0) {
@@ -407,7 +378,6 @@ int main(int argc, char **argv)
 	 * in terms of performance.
 	 */
 	if (elfdesc->text_memsz > elfdesc->text_filesz) {
-		corefile = tmp_corefile == NULL ? corefile : tmp_corefile;
 #if DEBUG
 		log_msg(__LINE__, "merging text into core");
 #endif
@@ -431,7 +401,6 @@ int main(int argc, char **argv)
 		 * default (As with regular core files) we only write out the first 4096
 		 * bytes of each shared libraries text segment. 
 		 */
-		corefile = tmp_corefile == NULL ? corefile : tmp_corefile;
 		if (merge_shlib_texts_into_core((const char *)corefile, memdesc) < 0) {
 			log_msg(__LINE__, "Failed to merge shlib texts into core");
 		}
@@ -565,10 +534,9 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 	
-	if (opts.use_stdin)
-		unlink(elfdesc->path);
-	if (tmp_corefile) // incase we had to re-write file and mege in text
-		unlink(tmp_corefile);
+	unlink(elfdesc->path); //unlink a tmp file
+	if (corefile) // incase we had to re-write file and merge in text
+		unlink(corefile);
 
 	if (!(handle->elfstat.personality & ELF_STATIC)) {
 #if DEBUG
@@ -583,10 +551,11 @@ int main(int argc, char **argv)
 	log_msg(__LINE__, "finished storing symvals");
 #endif
 done: 
- 	if (opts.use_stdin)
-         	unlink(elfdesc->path);
-        if (tmp_corefile) // incase we had to re-write file and mege in text
-                unlink(tmp_corefile);
+        
+	unlink(elfdesc->path); // unlink tmp file
+	log_msg(__LINE__, "Going to remove: %s", corefile);
+        if (corefile) // incase we had to re-write file and mege in text
+        	unlink(corefile);
 
         return 0;
 }

@@ -314,6 +314,7 @@ usage:
 			printf("Unable to load section named: '%s'\n", argv[3]);
 			goto done;
 		}
+		printf("\n- Printing raw bytes from section: %s\n\n", argv[3]);
 		for (i = 0; i < section_size; i++) {
 			if (i > 0 && (i % 32 == 0))
 				printf("\n");
