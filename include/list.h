@@ -37,8 +37,8 @@
  * Generic doubly linked list for adding any type of data
  * we will use it for storing a list of symbol information.
  */
-int insert_item_front(list_t **list, void *data, size_t sz)
+int insert_item_front(list_t **list, void *data, size_t sz);
 
-int insert_item_end(list_t **list, void *data, size_t sz)
+int insert_item_end(list_t **list, void *data, size_t sz);
 
 #endif

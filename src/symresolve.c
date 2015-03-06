@@ -25,6 +25,7 @@
 
 #include "../include/ecfs.h"
 #include "../include/util.h"
+#include "../include/list.h"
 
 /* 
  * Each library and its symbols are represented by an array

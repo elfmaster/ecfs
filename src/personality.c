@@ -23,25 +23,60 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* 
- * ECFS performs certain heuristics to help aid in forensics analysis.
- * one of these heuristics is showing shared libraries that have been
- * injected vs. loaded by the linker/dlopen/preloaded
- */
-#ifndef _ECFS_HEURISTICS_H
-#define _ECFS_HEURISTICS_H
+#include "../include/ecfs.h"
+#include "../include/util.h"
 
-int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size);
+int check_for_pie(int pid)
+{
+	int i;
+	uint8_t *mem;
+	struct stat st;
+	
+	char *path = xfmtstrdup("/proc/%d/exe", pid);
+	int fd = xopen(path, O_RDONLY);
+	fstat(fd, &st);
+	
+	mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (mem == MAP_FAILED) {
+		log_msg(__LINE__, "mmap %s", strerror(errno));
+		exit(-1);
+	}
+	free(path);
+	ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
+	ElfW(Phdr) *phdr = (ElfW(Phdr) *)&mem[ehdr->e_phoff];
+	for (i = 0; i < ehdr->e_phnum; i++) {
+		if (phdr[i].p_type == PT_LOAD) {
+			if (phdr[i].p_flags & PF_X) {
+				if (phdr[i].p_vaddr == 0)
+					return 1;
+			}
+		}
+	}
+	return 0;
+}
+	
+int check_for_stripped_shdr(int pid)
+{
+        uint8_t *mem;
+        struct stat st;
 
-/* 
- * From DT_NEEDED (We pass the executable and each shared library to this function)
- */
-int get_dt_needed_libs(const char *bin_path, struct needed_libs **needed_libs);
-/*
- * Get dlopen libs
- */
-int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs);
+        char *path = xfmtstrdup("/proc/%d/exe", pid);
+        int fd = xopen(path, O_RDONLY);
+        fstat(fd, &st);
 
-void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elfdesc);
+        mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        if (mem == MAP_FAILED) {
+                log_msg(__LINE__, "mmap %s", strerror(errno));
+                exit(-1);
+        }
+        free(path);
+        ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
+	
+	if (ehdr->e_shnum == 0 || ehdr->e_shoff == SHN_UNDEF) {
+		munmap(mem, st.st_size);
+		return 1;
+	}
+	munmap(mem, st.st_size);
+	return 0;
+}
 
-#endif

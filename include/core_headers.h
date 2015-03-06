@@ -23,25 +23,38 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* 
- * ECFS performs certain heuristics to help aid in forensics analysis.
- * one of these heuristics is showing shared libraries that have been
- * injected vs. loaded by the linker/dlopen/preloaded
- */
-#ifndef _ECFS_HEURISTICS_H
-#define _ECFS_HEURISTICS_H
+#ifndef _ECFS_CORE_HEADERS_H
+#define _ECFS_CORE_HEADERS_H
 
-int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size);
-
-/* 
- * From DT_NEEDED (We pass the executable and each shared library to this function)
- */
-int get_dt_needed_libs(const char *bin_path, struct needed_libs **needed_libs);
 /*
- * Get dlopen libs
+ * This function parses the original phdr's which it must get using
+ * ptrace. This is the only part where we use ptrace() and we should
+ * possibly change this to using /proc/self/mem instead. In any case
+ * we get the original phdr locations so that we can then find them
+ * in relation to the corefile that was dumped.
+ *
+ * NOTE:
+ * The dataVaddr is taken from the core file which gives the page aligned
+ * segment address, which is not the same as the original data segment address.
+ * In our case we use the page aligned dataVaddr which we retrieve with our
+ * lookup_data_base() function.
  */
-int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs);
+int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *notedesc);
 
-void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elfdesc);
+/*
+ * Parse the dynamic segment to get 
+ * a whole lot of needed information
+ */
+
+int extract_dyntag_info(handle_t *handle);
+
+/*
+ * The offsets from when a file is an executable to a corefile
+ * change durastically because the phdr table is so much bigger
+ * pushing everything else forward. We must find the offsets of
+ * certain old phdr's like PT_DYNAMIC and figure out what the offset
+ * is in the core file for it. That way we can build appropriate shdrs.
+ */
+void xref_phdrs_for_offsets(memdesc_t *memdesc, elfdesc_t *elfdesc);
 
 #endif

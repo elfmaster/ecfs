@@ -23,25 +23,25 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* 
- * ECFS performs certain heuristics to help aid in forensics analysis.
- * one of these heuristics is showing shared libraries that have been
- * injected vs. loaded by the linker/dlopen/preloaded
- */
-#ifndef _ECFS_HEURISTICS_H
-#define _ECFS_HEURISTICS_H
+#ifndef _ECFS_PROC_H
+#define _ECFS_PROC_H
 
-int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size);
-
-/* 
- * From DT_NEEDED (We pass the executable and each shared library to this function)
- */
-int get_dt_needed_libs(const char *bin_path, struct needed_libs **needed_libs);
 /*
- * Get dlopen libs
+ * Since the process is paused, all /proc data is still available.
+ * get_maps() simply extracts all of the memory mapping information
+ * including details such as stack, heap, .so's, vdso etc.
+ * eventually we pair this info up with the program headers (PT_LOAD's)
+ * in the core file to determine where to build certain section headers.
  */
-int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs);
+int get_maps(pid_t pid, mappings_t *maps, const char *path);
 
-void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elfdesc);
+int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo);
+
+int get_map_count(pid_t pid);
+
+/*
+ * Handle the case where say: /bin/someprog is a symbolic link
+ */
+char * get_exe_path(int pid);
 
 #endif

@@ -63,6 +63,10 @@
  */
 #define SHT_INJECTED 0x200000 
 
+#define HEAP 0
+#define STACK 1
+#define VDSO 2
+#define VSYSCALL 3
 
 /*
  * used in cases where we want to prevent an shdr for being written

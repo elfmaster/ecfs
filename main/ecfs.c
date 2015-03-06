@@ -30,6 +30,10 @@
 #include "../include/heuristics.h"
 #include "../include/core_text.h"
 #include "../include/core_notes.h"
+#include "../include/proc.h"
+#include "../include/core_headers.h"
+#include "../include/personality.h"
+#include "../include/core2ecfs.h"
 #include "../include/core_accessors.h"
 
 /*

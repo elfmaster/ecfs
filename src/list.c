@@ -30,6 +30,7 @@
  */
 
 #include "../include/ecfs.h"
+#include "../include/util.h"
 
 /*
  * Generic doubly linked list for adding any type of data
@@ -87,11 +88,3 @@ int insert_item_end(list_t **list, void *data, size_t sz)
 
 	return 0;
 }
-
-
-
-
-		
-		
-	
-
