@@ -41,7 +41,7 @@ USERID = $(shell id -u)
 all: ${${V}_TGT}
 	@echo "USAGE:   make bin/<binname>  # which corresponds to a main source file in main/"
 	@echo "	 make bin/ecfs.a   # builds the shared object."
-	@echo "NOTE: use V=<variant>, with dev, asan, perf, prod or shared."
+	@echo "NOTE: use V=<variant>, with dev, asan, perf, prod or shared, and B=<32|64>."
 
 libecfs/bin/${V}/${B}/libecfs.a:
 	make -e -C libecfs/

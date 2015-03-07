@@ -39,7 +39,7 @@ BINS = $(addprefix ${BIN_DIR}/${V}/${B}/,${MAINS:.c=})
 
 .PHONY: all
 all: ${${V}_TGT}
-	@echo "NOTE: use V=<variant>, with dev, asan, perf, prod or shared."
+	@echo "NOTE: use V=<variant>, with dev, asan, perf, prod or shared, and B=<32|64>."
 
 ${BIN_DIR}/${V}/${B}/libecfs${B}.so.1: ${OBJS}
 	@mkdir -p $(dir $@)
