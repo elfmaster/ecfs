@@ -3,10 +3,12 @@ CC = clang
 LDFLAGS	+= -ldwarf -lelf
 OBJ_DIR = build
 SRC_DIR = src
+INCLUDE_DIR = include
 BIN_DIR = bin
 MAIN_DIR = main
 MAINS = $(shell find ${MAIN_DIR} -name '*.c' -printf '%P\n')
 SRCS = $(shell find ${SRC_DIR} -name '*.c' -printf '%P\n')
+HEADERS = $(addprefix ${INCLUDE_DIR}/, $(shell find ${INCLUDE_DIR} -name '*.h' -printf '%P\n'))
 OBJS = $(addprefix ${OBJ_DIR}/,${SRCS:.c=.o})
 BINS = $(addprefix ${BIN_DIR}/,${MAINS:.c=})
 
@@ -16,7 +18,7 @@ ${BIN_DIR}/libecfs.a: ${OBJS}
 	@mkdir -p $(dir $@)
 	ar rcs $@ $^
 
-${OBJ_DIR}/%.o: ${SRC_DIR}/%.c
+${OBJ_DIR}/%.o: ${SRC_DIR}/%.c ${HEADERS}
 	@mkdir -p $(dir $@)
 	${CC} ${CFLAGS} -o $@ -c $<
 
