@@ -38,14 +38,6 @@
 #include "../include/core_accessors.h"
 
 /*
- * XXX stay out of habit of using global variables
- * this was put in  because I had to perform a hack
- * after the code had already been designed in order
- * to merge the entire text segment into the corefile
- * prior to processing it into an ECFS file.
- */
-
-/*
  * This function will read the corefile from stdin
  * then write it to a temporary file which is then read
  * by the load_core_file() function above.
