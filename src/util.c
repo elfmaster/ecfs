@@ -162,10 +162,6 @@ int create_tmp_ramdisk(size_t gigs)
 {
 	int ret;
 
-	if (gigs > MAX_RAMDISK_GIGS) {
-		log_msg(__LINE__, "create_tmp_ramdisk(): should not exceed %d gigs\n", MAX_RAMDISK_GIGS);
-		return -1;
-	}
 	if (access(ECFS_RAMDISK_DIR, F_OK) != 0) {
 #if DEBUG
 		log_msg(__LINE__, "%s did not exist, so creating it.");

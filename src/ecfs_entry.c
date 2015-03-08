@@ -218,7 +218,11 @@ void ecfs_transform_begin (option_struct_t *options)
 		 * to fix this problem. Even the hugest processes only
 		 * take ~3 seconds now.
 		 */
-		if (create_tmp_ramdisk(1) < 0) {
+		int ramdisk_size = inquire_meminfo();
+		if (ramdisk_size <= 0) 
+			ramdisk_size = 1;
+					
+		if (create_tmp_ramdisk(ramdisk_size) < 0) {
 			log_msg(__LINE__, "create_tmp_ramdisk failed");
 		} else
 			opts.use_ramdisk = 1;
