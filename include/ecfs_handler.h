@@ -1,3 +1,7 @@
+#ifndef _ECFS_HANDLER_H
+#define _ECFS_HANDLER_H
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -23,3 +27,4 @@ typedef struct option_struct {
 	char exename[128];
 } option_struct_t;
 	
+#endif

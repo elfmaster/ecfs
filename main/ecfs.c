@@ -182,7 +182,6 @@ int main(int argc, char **argv)
 	int i, j, ret, c, pie = 0;
 	char *corefile = NULL;
 	char *outfile = NULL;
-	fd_info_t *fdinfo = NULL;
 	list_t *list_head;
 	/*
 	 * When testing use:

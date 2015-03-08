@@ -119,7 +119,7 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 	 * the link points to.
 	 */
 	memdesc->comm = memdesc->path = exename; // supplied by core_pattern %e
-	memdesc->exe_path = get_exe_path(pid); 
+	memdesc->exe_path = get_executable_path(pid); 
 	memdesc->exe_comm = strrchr(memdesc->exe_path, '/') + 1;
 	if (get_maps(pid, memdesc->maps, memdesc->exe_comm) < 0) {
                 log_msg(__LINE__, "failed to get data from /proc/%d/maps", pid);
@@ -496,7 +496,7 @@ void ecfs_transform_begin (option_struct_t *options)
 #endif
 	ret = core2ecfs(outfile, handle);
 	if (ret < 0) {
-		log_msg(__LINE__, "Failed to transform core file '%s' into ecfs", argv[2]);
+		log_msg(__LINE__, "Failed to transform core file '%s' into ecfs", corefile);
 		exit(-1);
 	}
 	
@@ -523,6 +523,5 @@ done:
         if (corefile) // incase we had to re-write file and mege in text
         	unlink(corefile);
 
-        return 0;
 }
 

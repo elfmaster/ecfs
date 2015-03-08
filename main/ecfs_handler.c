@@ -43,8 +43,6 @@ int main(int argc, char **argv)
 	int text_all = 0;
 	char *outfile;
 	char *exename;
-
-	Elf32_Ehdr *ehdr; // doesn't matter if its 32bit or 64bit.
 	char *exepath;
 
 	option_struct_t options;
