@@ -137,6 +137,27 @@ void log_msg(unsigned int lineno, char *fmt, ...)
 
 }
 
+int inquire_meminfo(void)
+{
+        FILE *fp;
+        char *s1 = alloca(64);
+        char *s2 = alloca(64);
+        size_t kbytes;
+        size_t gbytes;
+
+        fp = fopen("/proc/meminfo", "r");
+        if (fp == NULL) {       
+                perror("fopen");
+                return -1;
+        }
+        fscanf(fp, "%s %u %s", s1, &kbytes, s2);
+        fclose(fp);
+        if (kbytes < 1048576)
+                return 0;
+        gbytes = kbytes / 1024 / 1024;
+        return gbytes;
+}
+
 int create_tmp_ramdisk(size_t gigs)
 {
 	int ret;
