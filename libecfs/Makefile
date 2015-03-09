@@ -22,8 +22,8 @@ prod_TGT = ${BINS}
 prod_CC = gcc
 
 shared_CFLAGS = -fPIC -m${B}
-shared_LDFLAGS = -shared -Wl,-soname,libecfs${B}.so.1 -lc -m${B}
-shared_TGT = ${BIN_DIR}/${V}/${B}/libecfs${B}.so.1
+shared_LDFLAGS = -shared -Wl,-soname,libecfsreader${B}.so.1 -lc -m${B}
+shared_TGT = ${BIN_DIR}/${V}/${B}/libecfsreader${B}.so.1
 shared_CC = gcc
 
 OBJ_DIR = build
@@ -41,11 +41,11 @@ BINS = $(addprefix ${BIN_DIR}/${V}/${B}/,${MAINS:.c=})
 all: ${${V}_TGT}
 	@echo "NOTE: use V=<variant>, with dev, asan, perf, prod or shared, and B=<32|64>."
 
-${BIN_DIR}/${V}/${B}/libecfs${B}.so.1: ${OBJS}
+${BIN_DIR}/${V}/${B}/libecfsreader${B}.so.1: ${OBJS}
 	@mkdir -p $(dir $@)
 	 ${${V}_CC} -o $@ ${${V}_LDFLAGS} $^
 
-${BIN_DIR}/${V}/${B}/libecfs${B}.a: ${OBJS}
+${BIN_DIR}/${V}/${B}/libecfsreader${B}.a: ${OBJS}
 	@mkdir -p $(dir $@)
 	ar rcs $@ $^
 
@@ -53,7 +53,7 @@ ${OBJ_DIR}/${V}/${B}/%.o: ${SRC_DIR}/%.c ${HEADERS}
 	@mkdir -p $(dir $@)
 	${${V}_CC} ${${V}_CFLAGS} -o $@ -c $<
 
-${BIN_DIR}/${V}/${B}/%: main/%.c ${BIN_DIR}/${V}/${B}/libecfs${B}.a
+${BIN_DIR}/${V}/${B}/%: main/%.c ${BIN_DIR}/${V}/${B}/libecfsreader${B}.a
 	@mkdir -p $(dir $@)
 	$(${V}_CC) $(COPTS) $(${V}_CFLAGS) $^ -o $@ $(${V}_LDFLAGS)
 

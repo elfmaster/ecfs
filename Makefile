@@ -71,9 +71,9 @@ install: ${BIN_DIR}/prod/64/ecfs_handler ${BIN_DIR}/shared/${B}/libecfs${B}.so.1
 ifeq ($(USERID),0)
 	@mkdir -p /opt/ecfs/bin/
 	@mkdir -p /opt/ecfs/cores
-	cp $(BIN_DIR)/shared/32/libecfs32.so.1 /usr/lib/
-	cp $(BIN_DIR)/shared/64/libecfs64.so.1 /usr/lib/
-	cp $(BIN_DIR)/prod/64/ecfs_handler /opt/ecfs/bin/ecfs_handler
+	cp $(BIN_DIR)/shared/32/libecfs32.so.1 /opt/ecfs/bin/
+	cp $(BIN_DIR)/shared/64/libecfs64.so.1 /opt/ecfs/bin/
+	cp $(BIN_DIR)/prod/64/ecfs_handler /opt/ecfs/bin/
 	@echo '|/opt/ecfs/bin/ecfs_handler -t -e %e -p %p -o /opt/ecfs/cores/%e.%p' > /proc/sys/kernel/core_pattern
 	@echo "Installed ECFS successfully" 
 else
@@ -84,8 +84,6 @@ endif
 uninstall:
 ifeq ($(USERID),0)
 	rm -Rf /opt/ecfs/bin/
-	rm -Rf /usr/lib/libecfs32.so.1
-	rm -Rf /usr/lib/libecfs64.so.1
 	@echo 'core' > /proc/sys/kernel/core_pattern
 	@echo "Uninstalled ECFS successfully"
 else
