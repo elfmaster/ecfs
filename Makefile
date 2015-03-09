@@ -22,7 +22,7 @@ prod_TGT = ${BINS}
 prod_CC = gcc
 
 shared_CFLAGS = -fPIC -m${B}
-shared_LDFLAGS = -shared -Wl,-soname,libecfs32.so.1 -m${B}
+shared_LDFLAGS = -shared -Wl,-soname,libecfs${B}.so.1 -m${B}
 shared_TGT = ${BIN_DIR}/${V}/${B}/libecfs${B}.so.1
 shared_CC = gcc
 
@@ -39,11 +39,9 @@ BINS = $(addprefix ${BIN_DIR}/${V}/${B}/,${MAINS:.c=})
 USERID = $(shell id -u)
 
 all: ${${V}_TGT}
-	@echo "USAGE:   make bin/<binname>  # which corresponds to a main source file in main/"
-	@echo "	 make bin/ecfs.a   # builds the shared object."
-	@echo "NOTE: use V=<variant>, with dev, asan, perf, prod or shared, and B=<32|64>."
+	@echo "USAGE: use V=<variant>, with dev, asan, perf, prod or shared, and B=<32|64>."
 
-libecfs/bin/${V}/${B}/libecfs.a:
+libecfs/bin/${V}/${B}/libecfs${B}.a:
 	make -e -C libecfs/
 
 ${BIN_DIR}/${V}/${B}/ecfs.a: ${OBJS}
@@ -58,7 +56,7 @@ ${OBJ_DIR}/${V}/${B}/%.o: ${SRC_DIR}/%.c ${HEADERS}
 	@mkdir -p $(dir $@)
 	${${V}_CC} ${${V}_CFLAGS} -o $@ -c $<
 
-${BIN_DIR}/${V}/${B}/%: main/%.c ${BIN_DIR}/${V}/${B}/ecfs.a libecfs/bin/${V}/${B}/libecfs.a
+${BIN_DIR}/${V}/${B}/%: main/%.c ${BIN_DIR}/${V}/${B}/ecfs.a libecfs/bin/${V}/${B}/libecfs${B}.a
 	@mkdir -p $(dir $@)
 	$(${V}_CC) $(COPTS) $(${V}_CFLAGS) $^ -o $@ $(${V}_LDFLAGS)
 
@@ -69,11 +67,13 @@ clean:
 	$(MAKE) -C tools/ clean
 
 .PHONY: install
-install: bin/ecfs
+install: ${BIN_DIR}/prod/64/ecfs_handler ${BIN_DIR}/shared/${B}/libecfs${B}.so.1
 ifeq ($(USERID),0)
 	@mkdir -p /opt/ecfs/bin/
 	@mkdir -p /opt/ecfs/cores
-	cp $(BIN_DIR)/ecfs /opt/ecfs/bin/ecfs
+	cp $(BIN_DIR)/shared/32/libecfs32.so.1 /usr/lib/
+	cp $(BIN_DIR)/shared/64/libecfs64.so.1 /usr/lib/
+	cp $(BIN_DIR)/prod/64/ecfs_handler /opt/ecfs/bin/ecfs_handler
 	@echo '|/opt/ecfs/bin/ecfs -t -e %e -p %p -o /opt/ecfs/cores/%e.%p' > /proc/sys/kernel/core_pattern
 	@echo "Installed ECFS successfully" 
 else
@@ -83,7 +83,9 @@ endif
 .PHONY: uninstall
 uninstall:
 ifeq ($(USERID),0)
-	rm -Rf /opt/ecfs/bin
+	rm -Rf /opt/ecfs/bin/
+	rm -Rf /usr/lib/libecfs32.so.1
+	rm -Rf /usr/lib/libecfs64.so.1
 	@echo 'core' > /proc/sys/kernel/core_pattern
 	@echo "Uninstalled ECFS successfully"
 else

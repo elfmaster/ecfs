@@ -16,8 +16,8 @@
 #include <string.h>
 
 #define ECFS_ENTRY_POINT "ecfs_transform_begin"
-#define ECFS_WORKER_32 "/opt/ecfs/bin/ecfs32.so"
-#define ECFS_WORKER_64 "/opt/ecfs/bin/ecfs64.so"
+#define ECFS_WORKER_32 "/opt/ecfs/bin/libecfs32.so.1"
+#define ECFS_WORKER_64 "/opt/ecfs/bin/libecfs64.so.1"
 
 typedef struct option_struct {
 	int text_all;

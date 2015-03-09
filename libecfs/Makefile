@@ -45,7 +45,7 @@ ${BIN_DIR}/${V}/${B}/libecfs${B}.so.1: ${OBJS}
 	@mkdir -p $(dir $@)
 	 ${${V}_CC} -o $@ ${${V}_LDFLAGS} $^
 
-${BIN_DIR}/${V}/${B}/libecfs.a: ${OBJS}
+${BIN_DIR}/${V}/${B}/libecfs${B}.a: ${OBJS}
 	@mkdir -p $(dir $@)
 	ar rcs $@ $^
 
@@ -53,7 +53,7 @@ ${OBJ_DIR}/${V}/${B}/%.o: ${SRC_DIR}/%.c ${HEADERS}
 	@mkdir -p $(dir $@)
 	${${V}_CC} ${${V}_CFLAGS} -o $@ -c $<
 
-${BIN_DIR}/${V}/${B}/%: main/%.c ${BIN_DIR}/${V}/${B}/libecfs.a
+${BIN_DIR}/${V}/${B}/%: main/%.c ${BIN_DIR}/${V}/${B}/libecfs${B}.a
 	@mkdir -p $(dir $@)
 	$(${V}_CC) $(COPTS) $(${V}_CFLAGS) $^ -o $@ $(${V}_LDFLAGS)
 
