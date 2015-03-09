@@ -74,7 +74,7 @@ ifeq ($(USERID),0)
 	cp $(BIN_DIR)/shared/32/libecfs32.so.1 /usr/lib/
 	cp $(BIN_DIR)/shared/64/libecfs64.so.1 /usr/lib/
 	cp $(BIN_DIR)/prod/64/ecfs_handler /opt/ecfs/bin/ecfs_handler
-	@echo '|/opt/ecfs/bin/ecfs -t -e %e -p %p -o /opt/ecfs/cores/%e.%p' > /proc/sys/kernel/core_pattern
+	@echo '|/opt/ecfs/bin/ecfs_handler -t -e %e -p %p -o /opt/ecfs/cores/%e.%p' > /proc/sys/kernel/core_pattern
 	@echo "Installed ECFS successfully" 
 else
 	$(info You must be root to execute this command)
