@@ -2,12 +2,6 @@
 #include <syslog.h>
 #include <stdarg.h>
 
-int load_ecfs_module(int argc, char **argv, int arch)
-{
-	
-
-}
-
 static void log_msg(unsigned int lineno, char *fmt, ...)
 {
         char buf[512];
@@ -17,6 +11,24 @@ static void log_msg(unsigned int lineno, char *fmt, ...)
         va_end(va);
         syslog(LOG_MAKEPRI(LOG_USER, LOG_WARNING), "%s [line: %i]", buf, lineno);
 
+}
+
+static void load_ecfs_worker(char **argv, char **envp, const char *ecfs_worker_path)
+{
+	int status, pid;
+
+	argv[0] = ecfs_worker_path;
+	pid = fork();
+	if (pid < 0) {
+		log_msg(__LINE__, "FATAL: fork() failed: %s", strerror(errno));
+		exit(-1);
+	}
+	if (pid == 0) {
+		execve(ecfs_worker_path, argv, envp);
+		exit(0);
+	}
+	wait(&status); 
+	return 0;
 }
 
 /*
@@ -55,7 +67,7 @@ static int check_binary_arch(const char *path)
 }
 
 
-int main(int argc, char **argv)
+int main(int argc, char **argv, char **envp)
 {
 	int c;
 	int pid = 0;
@@ -64,11 +76,6 @@ int main(int argc, char **argv)
 	char *outfile;
 	char *exename;
 	char *exepath;
-
-	option_struct_t options;
-	
-	void *handle;
-	void (*ecfs_transform)(option_struct_t *);
 	char *ecfs_worker;
 
   	if (argc < 2) {
@@ -126,40 +133,8 @@ int main(int argc, char **argv)
 			ecfs_worker = strdup(ECFS_WORKER_64);
 			break;
 	}
-	/*
-	 * Store command line options in option_struct_t
-	 * structure so that we can pass it to the entry
-	 * point of ecfs_transform() function which exists
-	 * in the ecfs-base shared library
-	 */
-	options.text_all = text_all;
-	options.heuristics = heuristics;
-	options.pid = pid;
-	strncpy(options.outfile, outfile, sizeof(options.outfile));
-	options.outfile[sizeof(options.outfile) - 1] = '\0';
-	strncpy(options.exename, exename, sizeof(options.exename));
-	options.exename[sizeof(options.exename) - 1] = '\0';
 	
-	/*
-	 * Load the appropriate ecfs worker for our process
-	 * either 32bit or 64bit, and transfer control over
-	 * to it.
-	 */
-	handle = dlopen(ecfs_worker, RTLD_LAZY);
-	if (handle == NULL) {
-		log_msg(__LINE__, "FATAL: dlopen failed to load ecfs worker '%s': %s", ecfs_worker, dlerror());
-		exit(-1);
-	}
-	log_msg(__LINE__, "Succeeded in dlopen, now doing dlsym");
-	ecfs_transform = dlsym(handle, ECFS_ENTRY_POINT);
-	
-	log_msg(__LINE__, "dlsym succeeded ecfs_transform: %p", ecfs_transform);
-	
-	/*
-	 * Call into the actual ecfs transformation code that
-	 * does all the real heavy lifting.
-	 */
-	ecfs_transform(&options);
+	load_ecfs_worker(argv, envp, ecfs_worker);
 
 	exit(0);
 }
