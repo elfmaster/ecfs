@@ -26,11 +26,29 @@
 #include "../include/ecfs.h"
 #include "../include/util.h"
 
+/*
+ * This function will probably never be used
+ */
+static ssize_t ptrace_read_mem(pid_t pid, uint8_t *ptr, unsigned long vaddr, size_t len)
+{
+#if DEBUG
+	log_msg(__LINE__, "pid_read(%d, %p, %lx, %d)", pid, ptr, vaddr, len);
+#endif
+	int ret = pid_read(pid, (void *)ptr, (void *)vaddr, len);
+	if (ret < 0)
+		return -1;
+	return len;
+}
+
 static ssize_t read_pmem(pid_t pid, uint8_t *ptr, unsigned long vaddr, size_t len)
 {	
 	char *path = xfmtstrdup("/proc/%d/mem", pid);
 	int fd = xopen(path, O_RDONLY);
+#if DEBUG
+	log_msg(__LINE__, "reading from %lx bytes from %lx", len, vaddr);
+#endif
 	ssize_t bytes = pread(fd, ptr, len, vaddr);
+	close(fd);
 	if (bytes != len) {
 		log_msg(__LINE__, "pread failed [read %d bytes]: %s", (int)bytes, strerror(errno));
 		return -1;
@@ -56,9 +74,17 @@ ssize_t get_segment_from_pmem(unsigned long vaddr, memdesc_t *memdesc, uint8_t *
 		if (vaddr >= memdesc->maps[i].base && vaddr < memdesc->maps[i].base + memdesc->maps[i].size) {
 			len = memdesc->maps[i].size;
 			*ptr = HUGE_ALLOC(len);
-			deliver_signal(memdesc->task.pid, SIGSTOP);
 			ret = read_pmem(memdesc->task.pid, *ptr, memdesc->maps[i].base, len);
-			deliver_signal(memdesc->task.pid, SIGCONT);
+			if (ret < 0) {
+#if DEBUG
+				log_msg(__LINE__, "read_pmem() failed, probably due to security protection, attempting again with ptrace");
+#endif
+				/* It is possible that there was a protection set (Such as with
+				 * skype) that prevents reads from /proc/$pid/mem. So we cannot 
+				 * get the complete text segment of every single shared lib.
+				 */
+				return ECFS_EXCEPTION;
+			}
 			return ret;
 		}
 	}
@@ -316,7 +342,9 @@ void create_shlib_text_mappings(memdesc_t *memdesc)
 		if (tlen < 0) {
 			log_msg(__LINE__, "get_segment_from_pmem(%lx, ...) failed", maps[i].base);
 			continue;
-		}
+		} 
+		if (tlen == ECFS_EXCEPTION)
+			return;
 		maps[i].text_len = tlen;
 	}
 }
@@ -341,7 +369,7 @@ int merge_shlib_texts_into_core(const char *corefile, memdesc_t *memdesc)
 #endif
 		ret = merge_text_image(corefile, maps[i].base, maps[i].text_image, maps[i].text_len); 
 		if (ret < 0) {
-			log_msg(__LINE__, "get_segment_from_pmem(%lx, ...) failed\n", maps[i].base);
+			log_msg(__LINE__, "merge_text_image(%lx, ...) failed\n", maps[i].base);
 			continue;
 		}
 	}

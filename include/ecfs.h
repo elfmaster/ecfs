@@ -55,7 +55,12 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define MAX_RAMDISK_GIGS 4
+#define ECFS_EXCEPTION 0x13 // to be returned in case of strange exceptions
+
+/*
+ * Used for creating file i/o ramdisk
+ */
+#define MAX_RAMDISK_GIGS 32
 #define ECFS_RAMDISK_DIR "/tmp/ecfs_ramdisk"
 
 /*

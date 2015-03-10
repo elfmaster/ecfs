@@ -165,8 +165,11 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 	ssize_t tlen = get_segment_from_pmem(memdesc->text.base, memdesc, &memdesc->textseg);
         if (tlen < 0) {
 		log_msg(__LINE__, "get_segment_from_pmem() failed: %s\n", strerror(errno));
-                return NULL;
-        }
+        	/* NOTE: Do not return NULL here. If we fail to get this, then the
+		 * result should NOT be to fail, but rather produce an ecfs-core file
+		 * that has truncated text segments (like a regular core file.
+		 */
+	}
 	return memdesc;
 	
 }
@@ -489,13 +492,13 @@ int main(int argc, char **argv)
 	 * were maliciously injected, so that section headers can be created of type
 	 * SHT_INJECTED instead of SHT_SHLIB for those ones.
 	 */
-#if DEBUG
-	log_msg(__LINE__, "calling mark_dll_injection()");
-#endif
 	 if (!(handle->elfstat.personality & ELF_STATIC))
-		if (opts.heuristics)
+		if (opts.heuristics) {
+#if DEBUG
+			log_msg(__LINE__, "calling mark_dll_injection()");
+#endif
 	 		mark_dll_injection(notedesc, memdesc, elfdesc);
-
+		}
 	/*
 	 * Convert the core file into an actual ECFS file and write it
 	 * to disk.

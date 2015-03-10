@@ -836,7 +836,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         
         ssize_t b = write(fd, (char *)StringTable, stoffset);
 	if (b < 0) {
-		log_msg(__LINE__, "write %s", strerror(errno));
+		log_msg(__LINE__, "FATAL: write %s", strerror(errno));
 		exit(-1);
 	}
         fsync(fd);
@@ -845,13 +845,13 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	fd = xopen(filepath, O_RDWR);
         
         if (fstat(fd, &st) < 0) {
-                log_msg(__LINE__, "fstat %s", strerror(errno));
+                log_msg(__LINE__, "FATAL: fstat %s", strerror(errno));
                 exit(-1);
         }
 
-        uint8_t *mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+        uint8_t *mem = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (mem == MAP_FAILED) {
-                log_msg(__LINE__, "mmap %s", strerror(errno));
+                log_msg(__LINE__, "FATAL: mmap %s (%lx bytes)", strerror(errno), st.st_size);
                 exit(-1);
         }
 
@@ -863,8 +863,8 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         ehdr->e_shnum = scount;
         ehdr->e_type = ET_NONE;
 	
-	msync(mem, st.st_size, MS_SYNC);
-        munmap(mem, st.st_size);
+	msync(mem, 4096, MS_SYNC);
+        munmap(mem, 4096);
 
         close(fd);
 	free(shdr);
@@ -952,7 +952,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	/*
 	 * write exepath string
 	 */
-	if( write(fd, memdesc->exe_path, strlen(memdesc->exe_path) + 1) ) {
+	if( write(fd, memdesc->exe_path, strlen(memdesc->exe_path) + 1) == -1) {
             log_msg(__LINE__, "write %s", strerror(errno));
         }
 
@@ -983,7 +983,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 */
 	fd = xopen(outfile, O_RDWR);
 	stat(outfile, &st);
-	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	mem = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	if (mem == MAP_FAILED) {
 		log_msg(__LINE__, "mmap %s", strerror(errno));
 		return -1;
@@ -992,7 +992,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	ehdr = (ElfW(Ehdr) *)mem;
 	ehdr->e_shoff = ecfs_file->stb_offset;
 	ehdr->e_shnum = shnum;
-	munmap(mem, st.st_size);
+	munmap(mem, 4096);
 	close(fd);
 
 	/*
