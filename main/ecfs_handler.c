@@ -2,6 +2,12 @@
 #include <syslog.h>
 #include <stdarg.h>
 
+int load_ecfs_module(int argc, char **argv, int arch)
+{
+	
+
+}
+
 static void log_msg(unsigned int lineno, char *fmt, ...)
 {
         char buf[512];
