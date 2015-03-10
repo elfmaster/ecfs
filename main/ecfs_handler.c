@@ -119,7 +119,6 @@ int main(int argc, char **argv, char **envp)
 		fprintf(stdout, "[-h]	Turn on heuristics for detecting .so injection attacks\n");
                 exit(0);
         }
-	log_msg(__LINE__, "parsing options");
         while ((c = getopt(argc, argv, "th:o:p:e:")) != -1) {
                 switch(c) {
                         case 'o':
@@ -151,7 +150,6 @@ int main(int argc, char **argv, char **envp)
 	exepath = alloca(512);
 	snprintf(exepath, 512, "/proc/%d/exe", pid);
 	
-	log_msg(__LINE__, "pid: %d", pid);
 	int arch = check_binary_arch(exepath);
 	if (arch == -1) {
 		log_msg(__LINE__, "FATAL: Could not detect if process was using 32bit or 64bit ELF, bailing out...");
@@ -159,11 +157,15 @@ int main(int argc, char **argv, char **envp)
 	}
 	switch(arch) {
 		case 32:
+#if DEBUG
 			log_msg(__LINE__, "launching %s", ECFS_WORKER_32);
+#endif
 			ecfs_worker = strdup(ECFS_WORKER_32);
 			break;
 		case 64:
+#if DEBUG
 			log_msg(__LINE__, "launching %s", ECFS_WORKER_64);
+#endif
 			ecfs_worker = strdup(ECFS_WORKER_64);
 			break;
 	}
