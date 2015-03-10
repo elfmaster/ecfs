@@ -15,16 +15,8 @@
 #include <sys/mman.h>
 #include <string.h>
 
-#define ECFS_ENTRY_POINT "ecfs_transform_begin"
-#define ECFS_WORKER_32 "/opt/ecfs/bin/libecfs32.so.1"
-#define ECFS_WORKER_64 "/opt/ecfs/bin/libecfs64.so.1"
+#define ECFS_WORKER_32 "/opt/ecfs/bin/ecfs32"
+#define ECFS_WORKER_64 "/opt/ecfs/bin/ecfs64"
 
-typedef struct option_struct {
-	int text_all;
-	int heuristics;
-	int pid;
-	char outfile[512];
-	char exename[128];
-} option_struct_t;
 	
 #endif

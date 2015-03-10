@@ -527,7 +527,6 @@ int main(int argc, char **argv)
 done: 
         
 	unlink(elfdesc->path); // unlink tmp file
-	log_msg(__LINE__, "Going to remove: %s", corefile);
         if (corefile) // incase we had to re-write file and mege in text
         	unlink(corefile);
 	
