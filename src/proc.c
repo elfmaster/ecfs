@@ -337,3 +337,22 @@ char * get_executable_path(int pid)
 	int rval = readlink(ret, ret2, MAX_PATH);
 	return rval < 0 ? ret : ret2;
 }
+
+/*
+ * Get original entry point
+ */
+ElfW(Addr) get_original_ep(int pid)
+{
+        struct stat st;
+        char *path = xfmtstrdup("/proc/%d/exe", pid);
+        int fd = xopen(path, O_RDONLY);
+        xfree(path);
+        xfstat(fd, &st);
+        uint8_t *mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        if (mem == MAP_FAILED) {
+                log_msg(__LINE__, "mmap");
+                return -1;
+        }
+        ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
+        return ehdr->e_entry;
+}
