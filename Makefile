@@ -41,7 +41,7 @@ USERID = $(shell id -u)
 all: ${${V}_TGT}
 	@echo "USAGE: use V=<variant>, with dev, asan, perf, prod or shared, and B=<32|64>."
 
-libecfs/bin/${V}/${B}/libecfs${B}.a:
+libecfs/bin/${V}/${B}/libecfsreader${B}.a:
 	make -e -C libecfs/
 
 ${BIN_DIR}/${V}/${B}/ecfs.a: ${OBJS}
@@ -56,7 +56,7 @@ ${OBJ_DIR}/${V}/${B}/%.o: ${SRC_DIR}/%.c ${HEADERS}
 	@mkdir -p $(dir $@)
 	${${V}_CC} ${${V}_CFLAGS} -o $@ -c $<
 
-${BIN_DIR}/${V}/${B}/%: main/%.c ${BIN_DIR}/${V}/${B}/ecfs.a libecfs/bin/${V}/${B}/libecfs${B}.a
+${BIN_DIR}/${V}/${B}/%: main/%.c ${BIN_DIR}/${V}/${B}/ecfs.a libecfs/bin/${V}/${B}/libecfsreader${B}.a
 	@mkdir -p $(dir $@)
 	$(${V}_CC) $(COPTS) $(${V}_CFLAGS) $^ -o $@ $(${V}_LDFLAGS)
 
@@ -64,7 +64,6 @@ ${BIN_DIR}/${V}/${B}/%: main/%.c ${BIN_DIR}/${V}/${B}/ecfs.a libecfs/bin/${V}/${
 clean:
 	rm -rf ${OBJ_DIR} ${BIN_DIR}
 	$(MAKE) -C libecfs/ clean
-	$(MAKE) -C tools/ clean
 
 .PHONY: install
 install: ${BIN_DIR}/prod/64/ecfs_handler ${BIN_DIR}/shared/${B}/libecfs${B}.so.1
