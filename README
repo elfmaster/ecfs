@@ -18,27 +18,51 @@ components in-depth.
 
 - [SYNOPSIS - Extended core file snapshot technology-
 
-The $CWD contains the source code for the ./ecfs program
-which is the primary component. This program is invoked by
-the kernel (through /proc/sys/kernel/core_pattern) to transform
-core files into ecfs-core files.
+This source code contains the ecfs suite of software which has several
+components. The primary component plugs ecfs-core dump functionality 
+into the Linux core dump routine. The secondary component being libecfs
+which is a library specifically designed to parse ecfs-core files with
+ease.
 
-The ecfs_api directory contains a library (still in the works-
-but used by tools/readecfs.c) that makes parsing ecfs files very easy.
-The 'readecfs' tool is equivalent to readelf, but for ecfs files.
+On 64bit Linux systems this software is also cross compiled for 32bit
+so that a 32bit-handler can be dispatched in order to handle 32bit processes.
+This requires that both 32bit and 64bit versions of libdwarf and libelf
+be installed on your system simultaneously. On ubuntu systems libelf-dev package
+allows for this but libdwarf package does not. To get around this you may
+link against the deps/libdwarf32.a and deps/libdwarf64.a files contained
+within. 
 
+Once compiled and installed you will notice that /opt/ecfs/bin contains
+3 files: 
+/opt/ecfs/bin/ecfs_handler
+/opt/ecfs/bin/ecfs32
+/opt/ecfs/bin/ecfs64
+
+The ecfs_handler is more or less a stub program that detects whether a process
+is 32bit or 64bit, and then invokes the appropriate ecfs worker (ecfs32 or ecfs64).
+
+ecfs-core files will be dumped in /opt/ecfs/cores and typically take up more
+space (especially if -t option is being used) than regular core files. 
+
+The main/readecfs.c utility is the equiavalent of what readelf is for regular
+ELF files. readecfs parses and prints the details of an ecfs-core file to 
+stdout. This utility uses libecfs as an example of how to use its API.
 
 - [INSTALL -
 
 Dependecies:
-apt-get install libelf-dev libdwarf-dev
+(Note: deps/libdwarf32.a and deps/libdwarf64.a can be used)
+apt-get install libelf-dev libelf-dev:i386 libdwarf-dev
 
 To build ecfs type:
-make
-make install (Which essentially does the same thing as the setup.sh script)
+sudo ./setup.sh 
 
-* Then as root run (not sudo) *
-./setup.sh
+Or
+
+make V=prod B=32
+make V=prod B=64
+sudo make install
+
 
 This should put a custom line into /proc/sys/kernel/core_pattern that tells it
 to invoke /opt/ecfs/bin/ecfs during a coredump.
@@ -76,15 +100,15 @@ this change. Until I design a proper script to make ecfs instal permanent you
 must overwrite /proc/sys/kernel/core_pattern with a line like:
 	
 
-'|/opt/ecfs/bin/ecfs -i -e %e -p %p -o /opt/ecfs/cores/%e.%p'
+'|/opt/ecfs/bin/ecfs_handler -t -e %e -p %p -o /opt/ecfs/cores/%e.%p'
 
 The line you want to echo into one of the files above:
 
-kernel.core_pattern=|/opt/ecfs/bin/ecfs -i -e %e -p %p -o /opt/ecfs/cores/%e.%p
+kernel.core_pattern=|/opt/ecfs/bin/ecfs_handler -i -e %e -p %p -o /opt/ecfs/cores/%e.%p
 
 (For example):
 
-echo 'kernel.core_pattern=|/opt/ecfs/bin/ecfs -i -e %e -p %p -o /opt/ecfs/cores/%e.%p' >> /etc/sysctl.conf
+echo 'kernel.core_pattern=|/opt/ecfs/bin/ecfs_handler -i -e %e -p %p -o /opt/ecfs/cores/%e.%p' >> /etc/sysctl.conf
 
 - [ECFS LOGGING/DEBUGGING -
 
@@ -97,7 +121,7 @@ ecfs can perform heuristics that do things such as mark shared libraries as bein
 Sometimes false positives can arise. If you want to use the heuristics feature use the -h switch.
 For instance:
 
-echo 'kernel.core_pattern=|/opt/ecfs/bin/ecfs -i -h -e %e -p %p -o /opt/ecfs/cores/%e.%p' >> /etc/sysctl.conf
+echo 'kernel.core_pattern=|/opt/ecfs/bin/ecfs_handler -i -h -e %e -p %p -o /opt/ecfs/cores/%e.%p' >> /etc/sysctl.conf
 
 
 - elfmaster[at]zoho.com
