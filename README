@@ -104,11 +104,11 @@ must overwrite /proc/sys/kernel/core_pattern with a line like:
 
 The line you want to echo into one of the files above:
 
-kernel.core_pattern=|/opt/ecfs/bin/ecfs_handler -i -e %e -p %p -o /opt/ecfs/cores/%e.%p
+kernel.core_pattern=|/opt/ecfs/bin/ecfs_handler -t -e %e -p %p -o /opt/ecfs/cores/%e.%p
 
 (For example):
 
-echo 'kernel.core_pattern=|/opt/ecfs/bin/ecfs_handler -i -e %e -p %p -o /opt/ecfs/cores/%e.%p' >> /etc/sysctl.conf
+echo 'kernel.core_pattern=|/opt/ecfs/bin/ecfs_handler -t -e %e -p %p -o /opt/ecfs/cores/%e.%p' >> /etc/sysctl.conf
 
 - [ECFS LOGGING/DEBUGGING -
 
@@ -121,7 +121,7 @@ ecfs can perform heuristics that do things such as mark shared libraries as bein
 Sometimes false positives can arise. If you want to use the heuristics feature use the -h switch.
 For instance:
 
-echo 'kernel.core_pattern=|/opt/ecfs/bin/ecfs_handler -i -h -e %e -p %p -o /opt/ecfs/cores/%e.%p' >> /etc/sysctl.conf
+echo 'kernel.core_pattern=|/opt/ecfs/bin/ecfs_handler -h -e %e -p %p -o /opt/ecfs/cores/%e.%p' >> /etc/sysctl.conf
 
 
 - elfmaster[at]zoho.com
