@@ -1,3 +1,28 @@
+/*
+ * Copyright (c) 2015, Ryan O'Neill
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ * list of conditions and the following disclaimer. 
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include "../include/ecfs_handler.h"
 #include <syslog.h>
 #include <stdarg.h>
@@ -16,19 +41,25 @@ static void log_msg(unsigned int lineno, char *fmt, ...)
 static void load_ecfs_worker(char **argv, char **envp, const char *ecfs_worker_path)
 {
 	int status, pid;
+	int ret;
 
 	argv[0] = ecfs_worker_path;
 	pid = fork();
+	
 	if (pid < 0) {
 		log_msg(__LINE__, "FATAL: fork() failed: %s", strerror(errno));
 		exit(-1);
 	}
 	if (pid == 0) {
-		execve(ecfs_worker_path, argv, envp);
+		ret = execve(ecfs_worker_path, argv, envp);
+		if (ret < 0) {
+			log_msg(__LINE__, "execve() failed: %s", strerror(errno));
+			exit(-1);
+		}
 		exit(0);
 	}
 	wait(&status); 
-	return 0;
+
 }
 
 /*
@@ -88,7 +119,7 @@ int main(int argc, char **argv, char **envp)
 		fprintf(stdout, "[-h]	Turn on heuristics for detecting .so injection attacks\n");
                 exit(0);
         }
-
+	log_msg(__LINE__, "parsing options");
         while ((c = getopt(argc, argv, "th:o:p:e:")) != -1) {
                 switch(c) {
                         case 'o':
@@ -119,7 +150,8 @@ int main(int argc, char **argv, char **envp)
 	
 	exepath = alloca(512);
 	snprintf(exepath, 512, "/proc/%d/exe", pid);
-
+	
+	log_msg(__LINE__, "pid: %d", pid);
 	int arch = check_binary_arch(exepath);
 	if (arch == -1) {
 		log_msg(__LINE__, "FATAL: Could not detect if process was using 32bit or 64bit ELF, bailing out...");
@@ -127,9 +159,11 @@ int main(int argc, char **argv, char **envp)
 	}
 	switch(arch) {
 		case 32:
+			log_msg(__LINE__, "launching %s", ECFS_WORKER_32);
 			ecfs_worker = strdup(ECFS_WORKER_32);
 			break;
 		case 64:
+			log_msg(__LINE__, "launching %s", ECFS_WORKER_64);
 			ecfs_worker = strdup(ECFS_WORKER_64);
 			break;
 	}

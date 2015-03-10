@@ -50,6 +50,7 @@ static void print_registers(elf_gregset_t *reg)
         struct user_regs_struct pt_reg;
         memcpy(&pt_reg, reg, sizeof(struct user_regs_struct));
         
+#ifdef __x86_64__
 	printf("r15:\t%llx\n"
         	"r14:\t%llx\n"
         	"r13:\t%llx\n" 
@@ -77,7 +78,8 @@ static void print_registers(elf_gregset_t *reg)
 	pt_reg.r15, pt_reg.r14, pt_reg.r13, pt_reg.r12, pt_reg.rbp, pt_reg.rbx, pt_reg.r11,
         pt_reg.r10, pt_reg.r9, pt_reg.r8, pt_reg.rax, pt_reg.rcx, pt_reg.rdx, pt_reg.rsi, pt_reg.rdi,
         pt_reg.rip, pt_reg.rsp, pt_reg.cs, pt_reg.ss, pt_reg.ds, pt_reg.es, pt_reg.fs, pt_reg.gs, pt_reg.eflags);
-
+#endif
+/* must add 32bit support */
 }
 
 int main(int argc, char **argv)

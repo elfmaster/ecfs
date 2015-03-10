@@ -223,7 +223,8 @@ struct fdinfo's on the heap.
 				printf("UDP_SOCKET SRC: %s:%d\n", inet_ntoa(fdinfo[i].socket.src_addr), fdinfo[i].socket.src_port);
                                 printf("UDP_SOCKET DST: %s:%d\n", inet_ntoa(fdinfo[i].socket.dst_addr), fdinfo[i].socket.dst_port);
                                 break;
-			default: 
+			default:  
+				/* if fdinfo[i].net == 0, then this isn't a socket */
 				break;
 		}
      	} 

@@ -36,6 +36,7 @@
 #include "../include/core2ecfs.h"
 #include "../include/core_accessors.h"
 
+
 /*
  * XXX stay out of habit of using global variables
  * this was put in  because I had to perform a hack
@@ -73,7 +74,7 @@ elfdesc_t * load_core_file_stdin(char **corefile)
 	/*
 	 * Open tmp file for writing
 	 */
-	file = xopen(filepath, O_CREAT|O_RDWR);
+	file = open(filepath, O_CREAT|O_RDWR, S_IRWXU);
 	buf = alloca(RBUF_LEN);
 	while ((nread = read(STDIN_FILENO, buf, RBUF_LEN)) > 0) {
         	bytes += nread;

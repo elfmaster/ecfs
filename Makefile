@@ -2,22 +2,22 @@ V = dev
 B = 64
 
 dev_CFLAGS = -DDEBUG -g -D_GNU_SOURCE -Wall -m${B}
-dev_LDFLAGS = -ldwarf -lelf -ldl
+dev_LDFLAGS = -ldwarf -lelf 
 dev_TGT = ${BINS}
 dev_CC = clang
 
 asan_CFLAGS = -ggdb -fsanitize=address -O0 -fno-omit-frame-pointer -m${B}
-asan_LDFLAGS = -ldwarf -lelf -ldl
+asan_LDFLAGS = -ldwarf -lelf 
 asan_TGT = ${BINS}
 asan_CC = clang
 
-perf_CFLAGS = -g -O3 -fPIC -Wall -m${B}
-perf_LDFLAGS = -ldwarf -lelf -ldl
+perf_CFLAGS = -g -O3 -Wall -m${B}
+perf_LDFLAGS = -ldwarf -lelf 
 perf_TGT = ${BINS}
 perf_CC = gcc
 
-prod_CFLAGS = -O3 -Wall -DNDEBUG -D_FORTIFY_SOURCE=2 -fPIC -m${B}
-prod_LDFLAGS = -ldwarf -lelf -ldl -pie
+prod_CFLAGS = -DDEBUG -D_GNU_SOURCE -m${B}
+prod_LDFLAGS = -ldwarf -lelf 
 prod_TGT = ${BINS}
 prod_CC = gcc
 
@@ -66,12 +66,12 @@ clean:
 	$(MAKE) -C libecfs/ clean
 
 .PHONY: install
-install: ${BIN_DIR}/prod/64/ecfs_handler ${BIN_DIR}/shared/${B}/libecfs${B}.so.1
+install: ${BIN_DIR}/prod/64/ecfs_handler 
 ifeq ($(USERID),0)
 	@mkdir -p /opt/ecfs/bin/
 	@mkdir -p /opt/ecfs/cores
-	cp $(BIN_DIR)/shared/32/libecfs32.so.1 /opt/ecfs/bin/
-	cp $(BIN_DIR)/shared/64/libecfs64.so.1 /opt/ecfs/bin/
+	cp $(BIN_DIR)/prod/32/ecfs /opt/ecfs/bin/ecfs32
+	cp $(BIN_DIR)/prod/64/ecfs /opt/ecfs/bin/ecfs64
 	cp $(BIN_DIR)/prod/64/ecfs_handler /opt/ecfs/bin/
 	@echo '|/opt/ecfs/bin/ecfs_handler -t -e %e -p %p -o /opt/ecfs/cores/%e.%p' > /proc/sys/kernel/core_pattern
 	@echo "Installed ECFS successfully" 
