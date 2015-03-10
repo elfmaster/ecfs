@@ -1,10 +1,24 @@
 #include "../include/ecfs_handler.h"
+#include <syslog.h>
+#include <stdarg.h>
+
+static void log_msg(unsigned int lineno, char *fmt, ...)
+{
+        char buf[512];
+        va_list va;
+        va_start (va, fmt);
+        vsnprintf(buf, sizeof(buf), fmt, va);
+        va_end(va);
+        syslog(LOG_MAKEPRI(LOG_USER, LOG_WARNING), "%s [line: %i]", buf, lineno);
+
+}
 
 /*
  * If we cannot get architecture this way its probably
  * because the executable no longer exists? In this case
  * we will try another approach.
  */
+
 static int check_binary_arch(const char *path)
 {
 	int ret;
@@ -86,7 +100,7 @@ int main(int argc, char **argv)
         }
 	
 	if (pid == 0 || exename == NULL || outfile == NULL) {
-		fprintf(stderr, "invalid command line args being used - pid: %d exename: %p outfile: %p", pid, exename, outfile);
+		log_msg(__LINE__, "invalid command line args being used - pid: %d exename: %p outfile: %p", pid, exename, outfile);
 		exit(-1);
 	}
 	
@@ -95,7 +109,7 @@ int main(int argc, char **argv)
 
 	int arch = check_binary_arch(exepath);
 	if (arch == -1) {
-		fprintf(stderr, "FATAL: Could not detect if process was using 32bit or 64bit ELF, bailing out...");
+		log_msg(__LINE__, "FATAL: Could not detect if process was using 32bit or 64bit ELF, bailing out...");
 		exit(-1);
 	}
 	switch(arch) {
@@ -125,13 +139,15 @@ int main(int argc, char **argv)
 	 * either 32bit or 64bit, and transfer control over
 	 * to it.
 	 */
-	handle = dlopen(ecfs_worker, RTLD_NOW);
+	handle = dlopen(ecfs_worker, RTLD_LAZY);
 	if (handle == NULL) {
-		fprintf(stderr, "FATAL: dlopen failed to load ecfs worker '%s': %s", ecfs_worker, strerror(errno));
+		log_msg(__LINE__, "FATAL: dlopen failed to load ecfs worker '%s': %s", ecfs_worker, dlerror());
 		exit(-1);
 	}
+	log_msg(__LINE__, "Succeeded in dlopen, now doing dlsym");
 	ecfs_transform = dlsym(handle, ECFS_ENTRY_POINT);
 	
+	log_msg(__LINE__, "dlsym succeeded ecfs_transform: %p", ecfs_transform);
 	
 	/*
 	 * Call into the actual ecfs transformation code that
