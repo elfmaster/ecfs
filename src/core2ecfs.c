@@ -123,7 +123,7 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
 
         mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (mem == MAP_FAILED) {
-                log_msg(__LINE__, "mmap %s", strerror(errno));
+                log_msg(__LINE__, "mmap %s : this will result in failure of reconstructing .symtab", strerror(errno));
                 exit(-1);
         }
         ehdr = (ElfW(Ehdr) *)mem;
