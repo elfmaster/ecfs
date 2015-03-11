@@ -137,13 +137,17 @@ void log_msg(unsigned int lineno, char *fmt, ...)
 
 }
 
+void exit_failure(int code)
+{
+	umount(ECFS_RAMDISK_DIR);
+	exit(code);
+}
+
 int inquire_meminfo(void)
 {
         FILE *fp;
-        char *s1 = alloca(64);
-        char *s2 = alloca(64);
-        size_t kbytes;
-        size_t gbytes;
+        ssize_t kbytes, gbytes;
+	char s1[32], s2[32];
 
         fp = fopen("/proc/meminfo", "r");
         if (fp == NULL) {       
@@ -154,8 +158,8 @@ int inquire_meminfo(void)
         fclose(fp);
         if (kbytes < 1048576)
                 return 0;
-        gbytes = kbytes / 1024 / 1024;
-        return gbytes;
+	gbytes = kbytes / 1024 / 1024;
+	return (int)gbytes;
 }
 
 int create_tmp_ramdisk(size_t gigs)
@@ -168,7 +172,10 @@ int create_tmp_ramdisk(size_t gigs)
 #endif
 		mkdir(ECFS_RAMDISK_DIR, S_IRWXU|S_IRWXG);
 	}
-
+	
+#if DEBUG
+	log_msg(__LINE__, "mount -o size=%dG -t tmpfs none %s", gigs, ECFS_RAMDISK_DIR);
+#endif
 	char *cmd = xfmtstrdup("mount -o size=%dG -t tmpfs none %s", gigs, ECFS_RAMDISK_DIR);
 	ret = system(cmd);
 	if (ret == -1)

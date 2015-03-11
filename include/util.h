@@ -52,6 +52,7 @@ int create_tmp_ramdisk(size_t gigs);
 
 int inquire_meminfo(void);
 
+void exit_failure(int);
 /*
  * Used for debugging
  */

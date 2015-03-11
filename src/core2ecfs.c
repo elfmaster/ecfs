@@ -113,32 +113,32 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
          */
         if ((fd = open(outfile, O_RDWR)) < 0) {
                 log_msg(__LINE__, "open %s", strerror(errno));
-                exit(-1);
+                exit_failure(-1);
         }
 
         if (fstat(fd, &st) < 0) {
                 log_msg(__LINE__, "fstat %s", strerror(errno));
-                exit(-1);
+                exit_failure(-1);
         }
 
         mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (mem == MAP_FAILED) {
                 log_msg(__LINE__, "mmap %s : this will result in failure of reconstructing .symtab", strerror(errno));
-                exit(-1);
+                exit_failure(-1);
         }
         ehdr = (ElfW(Ehdr) *)mem;
         shdr = (ElfW(Shdr) *)&mem[ehdr->e_shoff];
 
         if (lseek(fd, 0, SEEK_END) < 0) {
                 log_msg(__LINE__, "lseek %s", strerror(errno));
-                exit(-1);
+                exit_failure(-1);
         }
 	
         uint64_t symtab_offset = lseek(fd, 0, SEEK_CUR);
         for (i = 0; i < symcount; i++) {
                 if( write(fd, (char *)&symtab[i], sizeof(ElfW(Sym))) == -1 ) {
                     log_msg(__LINE__, "write %s", strerror(errno));
-                    exit(-1);
+                    exit_failure(-1);
                 }
         }
       	StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
@@ -146,7 +146,7 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
         uint64_t stloff = lseek(fd, 0, SEEK_CUR);
         if( write(fd, strtab, symstroff) == -1) {
             log_msg(__LINE__, "write %s", strerror(errno));
-            exit(-1);
+            exit_failure(-1);
         }
         shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
 	
@@ -837,7 +837,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         ssize_t b = write(fd, (char *)StringTable, stoffset);
 	if (b < 0) {
 		log_msg(__LINE__, "FATAL: write %s", strerror(errno));
-		exit(-1);
+		exit_failure(-1);
 	}
         fsync(fd);
         close(fd);
@@ -846,13 +846,13 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         
         if (fstat(fd, &st) < 0) {
                 log_msg(__LINE__, "FATAL: fstat %s", strerror(errno));
-                exit(-1);
+                exit_failure(-1);
         }
 
         uint8_t *mem = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (mem == MAP_FAILED) {
                 log_msg(__LINE__, "FATAL: mmap %s (%lx bytes)", strerror(errno), st.st_size);
-                exit(-1);
+                exit_failure(-1);
         }
 
         ElfW(Ehdr *)ehdr = (ElfW(Ehdr) *)mem;
@@ -909,22 +909,49 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	/*
 	 * write original body of core file
 	 */	
+	/*
+	 * It is possible that a single write could be huge
+	 * i.e. larger than 2GB and will cause write to fail.
+	 * therefore lets do this in incremental writes.
+	 */	
+	const int CHUNK_SIZE = 0x100000;
+	size_t foffset = 0;
+	ssize_t len = st.st_size;
+	
+	/*
+	 * The old way:
 	if (write(fd, elfdesc->mem, st.st_size) != st.st_size) {
-		log_msg(__LINE__, "write %s", strerror(errno));
+		log_msg(__LINE__, "write failed: %s", strerror(errno));
 		exit(-1);
 	}
+	*/
+	do {
+		if (len < CHUNK_SIZE) {
+			if (write(fd, &elfdesc->mem[foffset], len) != len) {
+				log_msg(__LINE__, "write failed: %s", strerror(errno));
+				exit_failure(-1);
+			}
+			break;
+		}
+		if (write(fd, &elfdesc->mem[foffset], CHUNK_SIZE) < 0) {
+			log_msg(__LINE__, "write failed: %s", strerror(errno));
+			exit_failure(-1);
+		}
+		foffset += CHUNK_SIZE;
+		len -= CHUNK_SIZE;
+	} while(len > 0);
 
 	/*
 	 * write prstatus structs
 	 */
 	if( write(fd, notedesc->prstatus, sizeof(struct elf_prstatus)) == -1 ) {
             log_msg(__LINE__, "write %s", strerror(errno));
-            exit(-1);
+            exit_failure(-1);
         }
 	for (i = 1; i < notedesc->thread_count; i++) {
 		if( write(fd, notedesc->thread_core_info[i].prstatus, sizeof(struct elf_prstatus)) == -1) {
                     log_msg(__LINE__, "write %s", strerror(errno));
-                    exit(-1);
+                    exit_failure(-1);
                 }
         }
 	

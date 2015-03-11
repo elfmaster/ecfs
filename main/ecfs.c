@@ -258,6 +258,7 @@ int main(int argc, char **argv)
 		int ramdisk_size = inquire_meminfo();
 		if (ramdisk_size <= 0)
 			ramdisk_size = 1;
+		log_msg(__LINE__, "using ramdisk size: %d", ramdisk_size);
 		if (create_tmp_ramdisk(ramdisk_size) < 0) {
 			log_msg(__LINE__, "create_tmp_ramdisk failed");
 		} else
@@ -534,6 +535,7 @@ done:
         if (corefile) // incase we had to re-write file and mege in text
         	unlink(corefile);
 	
+	umount(ECFS_RAMDISK_DIR);
 	/*
 	 * XXX add line to umount ramdisk
 	 */
