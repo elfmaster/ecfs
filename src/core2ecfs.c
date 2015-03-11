@@ -918,13 +918,6 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	size_t foffset = 0;
 	ssize_t len = st.st_size;
 	
-	/*
-	 * The old way:
-	if (write(fd, elfdesc->mem, st.st_size) != st.st_size) {
-		log_msg(__LINE__, "write failed: %s", strerror(errno));
-		exit(-1);
-	}
-	*/
 	do {
 		if (len < CHUNK_SIZE) {
 			if (write(fd, &elfdesc->mem[foffset], len) != len) {

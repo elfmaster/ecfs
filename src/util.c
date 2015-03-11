@@ -146,7 +146,7 @@ void exit_failure(int code)
 int inquire_meminfo(void)
 {
         FILE *fp;
-        ssize_t kbytes, gbytes;
+        int kbytes, gbytes;
 	char s1[32], s2[32];
 
         fp = fopen("/proc/meminfo", "r");
@@ -159,7 +159,7 @@ int inquire_meminfo(void)
         if (kbytes < 1048576)
                 return 0;
 	gbytes = kbytes / 1024 / 1024;
-	return (int)gbytes;
+	return gbytes;
 }
 
 int create_tmp_ramdisk(size_t gigs)

@@ -171,7 +171,7 @@ int main(int argc, char **argv, char **envp)
 	}
 	
 	load_ecfs_worker(argv, envp, ecfs_worker);
-
+	umount(ECFS_RAMDISK_DIR);
 	exit(0);
 }
 

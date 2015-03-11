@@ -15,6 +15,8 @@
 #include <sys/mman.h>
 #include <string.h>
 
+#define ECFS_RAMDISK_DIR "/tmp/ecfs_ramdisk"
+
 #define ECFS_WORKER_32 "/opt/ecfs/bin/ecfs32"
 #define ECFS_WORKER_64 "/opt/ecfs/bin/ecfs64"
 

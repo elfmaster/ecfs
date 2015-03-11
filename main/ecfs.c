@@ -535,6 +535,9 @@ done:
         if (corefile) // incase we had to re-write file and mege in text
         	unlink(corefile);
 	
+#if DEBUG
+	log_msg(__LINE__, "umount %s", ECFS_RAMDISK_DIR);
+#endif
 	umount(ECFS_RAMDISK_DIR);
 	/*
 	 * XXX add line to umount ramdisk
