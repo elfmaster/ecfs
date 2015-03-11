@@ -27,10 +27,10 @@ ease.
 On 64bit Linux systems this software is also cross compiled for 32bit
 so that a 32bit-handler can be dispatched in order to handle 32bit processes.
 This requires that both 32bit and 64bit versions of libdwarf and libelf
-be installed on your system simultaneously. On ubuntu systems libelf-dev package
-allows for this but libdwarf package does not. To get around this you may
-link against the deps/libdwarf32.a and deps/libdwarf64.a files contained
-within. 
+be installed on your system simultaneously. On ubuntu systems libelf-dev 
+package allows for this but libdwarf package does not. To get around
+this you may link against the deps/libdwarf32.a and deps/libdwarf64.a 
+files contained within. 
 
 Once compiled and installed you will notice that /opt/ecfs/bin contains
 these 3 files:
@@ -39,31 +39,40 @@ these 3 files:
 /opt/ecfs/bin/ecfs64
 
 The ecfs_handler is more or less a stub program that detects whether a process
-is 32bit or 64bit, and then invokes the appropriate ecfs worker (ecfs32 or ecfs64).
-
-ecfs-core files will be dumped in /opt/ecfs/cores and typically take up more
+is 32bit or 64bit, and then invokes the appropriate ecfs worker (ecfs32 or ecfs
+64). ecfs-core files will be dumped in /opt/ecfs/cores and typically take up more
 space (especially if -t option is being used) than regular core files. 
-
 The main/readecfs.c utility is the equiavalent of what readelf is for regular
 ELF files. readecfs parses and prints the details of an ecfs-core file to 
-stdout. This utility uses libecfs as an example of how to use its API.
+stdout. This utility uses libecfs as an example of how to use its
+functions.
 
 - [INSTALL -
 
-The following are instructions on building and installing the ecfs-core dump software suite.
-Which includes not only the ecfs-core functionality itself, but also libecfs (For developers
-to parse ecfs-core files) and the readecfs utility (Similar to readelf). 
+The following are instructions on building and installing the ecfs-core dump 
+software suite. Which includes not only the ecfs-core functionality itself, 
+but also libecfs (For developers to parse ecfs-core files) and the readecfs 
+utility (Similar to readelf). 
 
 (For Linux x86_64)
+
 Dependecies:
-(Note: deps/libdwarf32.a and deps/libdwarf64.a can be used)
-apt-get install libelf-dev libelf-dev:i386 libdwarf-dev
+libdwarf which requires libelf
+
+deps/libdwarf32.a and deps/libdwarf64.a can be used if you put them into
+the proper directories for linking (Which is what I do in ubuntu because
+the libdwarf-dev package is not cross-platform so only one architecture
+can be installed at a given time). 
+
+If you are on a distro that allows you to have both 32bit and 64bit
+dwarf-dev library packages installed at the same time you may install
+them and follow these simple instructions (Otherwise see a bit below)
 
 To build and install ecfs type:
 sudo ./setup.sh 
 sudo make install
 
-OR 
+Which is the equivalent to:
 
 make V=prod B=32
 make V=prod B=64
@@ -72,6 +81,17 @@ sudo make install
 
 The 'make install' will put custom line into /proc/sys/kernel/core_pattern 
 that tells it to invoke /opt/ecfs/bin/ecfs_handler during a coredump.
+
+!!! FOR UBUNTU USERS (AND POSSIBLY OTHER DISTROS) !!!
+For Ubuntu the libdwarf package will not allow you to install it for
+both 32bit and 64bit at the same time. To get around that simply follow
+these instructions for building and installation.
+
+sudo cp deps/libdwarf32.a /usr/lib
+make V=prod B=32
+sudo cp deps/libdwarf64.a /usr/lib
+make V=prod B=64
+sudo make install
 
 (For Linux x86_32)
 
@@ -123,7 +143,8 @@ enabled.
 
 - To modify your sysctl.conf (For systems not using systemd)
 
-echo 'kernel.core_pattern=|/opt/ecfs/bin/ecfs_handler -t -e %e -p %p -o /opt/ecfs/cores/%e.%p' >> /etc/sysctl.conf
+echo 'kernel.core_pattern=|/opt/ecfs/bin/ecfs_handler -t -e %e -p %p -o /opt/ec
+fs/cores/%e.%p' >> /etc/sysctl.conf
 
 
 - For systemd based systems such as ARCH Linux
@@ -140,16 +161,18 @@ The files are named according to the executable that crashed and the pid
 like firefox.7737 if firefox pid 7737 were to crash, which makes them easy
 to identify.
 
-To read these files you may use any tools that you would use to analyze a regular
-ELF file with a few Caveats. They are backwards compatible with regular core files
-but in order to analyze them with GDB you must flip the e_type bit in the ELF file
-header from ET_NONE to ET_CORE. The utility bin/et_flip will flip the bit to ET_CORE, 
-and if you run it a second time on the file it will flip it back to ET_NONE.
-The reason ecfs-core files are of type ET_NONE is because it allows the objdump utility
-to utilize the section headers. If objdump sees that a file is of type ET_CORE it will
-assume it has no section headers and use the program headers which aren't nearly as
-useful. Example:
+To read these files you may use any tools that you would use to analyze a 
+regular ELF file with a few Caveats. They are backwards compatible with
+regular core files but in order to analyze them with GDB you must flip
+the e_type bit in the ELF file header from ET_NONE to ET_CORE. The
+utility bin/et_flip will flip the bit to ET_CORE, and if you run it a 
+second time on the file it will flip it back to ET_NONE. The reason
+ecfs-core files are of type ET_NONE is because it allows the objdump
+utility to utilize the section headers. If objdump sees that a file is 
+of type ET_CORE it will assume it has no section headers and use the
+program headers which aren't nearly as useful. 
 
+Example:
 
 # et_flip sshd.26099 
 # gdb -q /usr/sbin/sshd sshd.26099
@@ -159,7 +182,8 @@ Reading symbols from /usr/sbin/sshd...(no debugging symbols found)...done.
 Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
 Core was generated by `/usr/sbin/sshd -D'.
 Program terminated with signal SIGSEGV, Segmentation fault.
-#0  0x00007fcf37bbad83 in __select_nocancel () at ../sysdeps/unix/syscall-template.S:81
+#0  0x00007fcf37bbad83 in __select_nocancel () at ../sysdeps/unix/syscall-templ
+ate.S:81
 81	../sysdeps/unix/syscall-template.S: No such file or directory.
 (gdb) 
 
@@ -173,24 +197,25 @@ Disassembly of section .init:
 
 00007fcf39c86c10 <.init>:
     7fcf39c86c10:       48 83 ec 08             sub    $0x8,%rsp
-    7fcf39c86c14:       48 8b 05 65 e3 2a 00    mov    0x2ae365(%rip),%rax        # 7fcf39f34f80 <sub_7fcf39c88850-0x7fcf399ce8d0>
+    7fcf39c86c14:       48 8b 05 65 e3 2a 00    mov    0x2ae365(%rip),%rax     
     7fcf39c86c1b:       48 85 c0                test   %rax,%rax
-    7fcf39c86c1e:       74 05                   je     7fcf39c86c25 <sub_7fcf39c88850-0x7fcf39c7cc2b>
-    7fcf39c86c20:       e8 bb 03 00 00          callq  7fcf39c86fe0 <sub_7fcf39c88850-0x7fcf39c7c870>
+    7fcf39c86c1e:       74 05                   je     7fcf39c86c25
+    7fcf39c86c20:       e8 bb 03 00 00          callq  7fcf39c86fe0 
     7fcf39c86c25:       48 83 c4 08             add    $0x8,%rsp
     7fcf39c86c29:       c3                      retq   
 
 
 ...
 
-The 'readecfs' utility is very handy very reading ecfs files and was specifically designed
-for this purpose. It is written using the libecfs API that also comes with this software-suite.
-For reading 64bit ecfs files use bin/prod/64/readecfs and for 32bit ecfs files use bin/prod/32/readecfs
-you may name one readecfs32 and the other readecfs64 if you like and copy them into /usr/bin.
+The 'readecfs' utility is very handy very reading ecfs files and was 
+specifically designed for this purpose. It is written using the libecfs 
+API that also comes with this software-suite. For reading 64bit ecfs 
+files use bin/prod/64/readecfs and use bin/prod/32/readecfs for 32bit.
 
 ... Example of readecfs ...
 
-The readecfs has many command line options, but -e will show most of the ecfs specific stuff.
+The readecfs has many command line options, but -e will show most of the ecfs s
+pecific stuff.
 
 # readecfs -e host.25527
 
@@ -289,8 +314,9 @@ AT_GID:	 0x0
 
 - [ECFS LOGGING/DEBUGGING -
 
-Debug output is logged using syslog() and can be found in either /var/log/syslog or
-on some systems such as arch Linux you will need to look at 'journalctl -b'
+Debug output is logged using syslog() and can be found in either 
+/var/log/syslog or on some systems such as arch Linux you will
+need to look at 'journalctl -b'
 
 elfmaster[at]zoho.com
 
