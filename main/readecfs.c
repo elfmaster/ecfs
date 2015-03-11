@@ -187,6 +187,11 @@ usage:
 		printf("\toriginal bin had stripped section headers: %s\n", (desc->elfstats->personality & ELF_STRIPPED_SHDRS) ? "yes" : "no");
 		printf("\n");
 	}
+		
+	if (opts.ecfs_stuff || opts.all) {
+		unsigned long fault = get_fault_location(desc);
+		printf("- Fault location: 0x%lx\n", fault);
+	}
 
 	if (opts.ecfs_stuff || opts.all) {
 		ret = get_thread_count(desc);

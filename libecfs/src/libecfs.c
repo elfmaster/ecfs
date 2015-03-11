@@ -465,3 +465,14 @@ ssize_t get_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo)
 	return i;
 }
 
+unsigned long get_fault_location(ecfs_elf_t *desc)
+{
+	siginfo_t siginfo;
+	
+	if (get_siginfo(desc, &siginfo) < 0)
+		return 0;
+
+	return (unsigned long)siginfo.si_addr;
+}
+
+	

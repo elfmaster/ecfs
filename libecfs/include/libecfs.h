@@ -129,3 +129,4 @@ ssize_t get_section_pointer(ecfs_elf_t *desc, const char *name, uint8_t **ptr);
 int get_auxiliary_vector(ecfs_elf_t *, Elf64_auxv_t **);
 ssize_t get_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo);
 int get_auxiliary_vector64(ecfs_elf_t *desc, Elf64_auxv_t **auxv);
+unsigned long get_fault_location(ecfs_elf_t *desc);
