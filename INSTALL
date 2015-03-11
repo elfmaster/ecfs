@@ -10,11 +10,45 @@ On Debian/Ubuntu based distros do `apt-get install libelf-dev libelf-dev:i386`
 For other distros either use your distros package manager or compile from source.
 Libdwarf sources are located at http://www.prevanders.net/dwarf.html
 Libelf sources are located at http://www.mr511.de/software/ (site in German, but README's in English)
-ECFS partially working on 32bit Linux. 
 
-Once required libs are installed, you can continue:
-As root:
- % ./setup.sh 
+- [INSTALL -
+
+The following are instructions on building and installing the ecfs-core dump software suite.
+Which includes not only the ecfs-core functionality itself, but also libecfs (For developers
+to parse ecfs-core files) and the readecfs utility (Similar to readelf). 
+
+(For Linux x86_64)
+Dependecies:
+(Note: deps/libdwarf32.a and deps/libdwarf64.a can be used)
+apt-get install libelf-dev libelf-dev:i386 libdwarf-dev
+
+To build and install ecfs type:
+sudo ./setup.sh 
+sudo make install
+
+OR 
+
+make V=prod B=32
+make V=prod B=64
+sudo make install
+
+
+The 'make install' will put custom line into /proc/sys/kernel/core_pattern 
+that tells it to invoke /opt/ecfs/bin/ecfs_handler during a coredump.
+
+(For Linux x86_32)
+
+For the 32bit systems we don't need ecfs_handler (Which invokes either a 32bit
+or 64bit ./ecfs worker process). Only 32bit processes will be handled so
+we can use the ./ecfs binary directly (Without ecfs_handler). Follow these
+instructions:
+
+Dependencies:
+apt-get install libelf-dev libdwarf-dev
+
+To build and install ecfs type:
+sudo ./setup32.sh
+
 
 
 
