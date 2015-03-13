@@ -356,6 +356,26 @@ ssize_t get_section_pointer(ecfs_elf_t *desc, const char *name, uint8_t **ptr)
 	return -1;
 }
 
+/*
+ * i.e len = get_section_size(desc, ".bss");
+ */
+ssize_t get_section_size(ecfs_elf_t *desc, const char *name)
+{
+        char *StringTable = desc->shstrtab;
+        ElfW(Shdr) *shdr = desc->shdr;
+        ssize_t len;
+        int i;
+
+        for (i = 0; i < desc->ehdr->e_shnum; i++) {
+                if (!strcmp(&StringTable[shdr[i].sh_name], name)) {
+                        len = shdr[i].sh_size;
+                        return len;
+                }
+        }
+        return -1;
+}
+
+
 
 unsigned long get_text_va(ecfs_elf_t *desc)
 {
