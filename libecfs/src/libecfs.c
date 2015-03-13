@@ -375,6 +375,22 @@ ssize_t get_section_size(ecfs_elf_t *desc, const char *name)
         return -1;
 }
 
+unsigned long get_section_va(ecfs_elf_t *desc, const char *name)
+{
+        char *StringTable = desc->shstrtab;
+        ElfW(Shdr) *shdr = desc->shdr;
+        int i;
+	unsigned long addr;
+
+        for (i = 0; i < desc->ehdr->e_shnum; i++) {
+                if (!strcmp(&StringTable[shdr[i].sh_name], name)) {
+                        addr = shdr[i].sh_addr;
+                        return addr;
+                }
+        }
+        return 0;
+}
+
 
 
 unsigned long get_text_va(ecfs_elf_t *desc)
