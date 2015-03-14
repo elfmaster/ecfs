@@ -22,7 +22,9 @@ This source code contains the ecfs suite of software which has several
 components. The primary component plugs ecfs-core dump functionality 
 into the Linux core dump routine. The secondary component being libecfs
 which is a library specifically designed to parse ecfs-core files with
-ease.
+ease. ecfs-core snapshots can also be executed using ecfs-exec, so users
+may start a process where it left off, this functionality is currently
+being maintained in a separate repo that will come public soon.
 
 On 64bit Linux systems this software is also cross compiled for 32bit
 so that a 32bit-handler can be dispatched in order to handle 32bit processes.

@@ -260,15 +260,17 @@ static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
 
 int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
 {
+	FILE *fp;
 	DIR *dp;
 	struct dirent *dptr = NULL;
 	char tmp[256];
 	char *dpath = xfmtstrdup("/proc/%d/fd", memdesc->task.pid);
+	char *fdinfo_path = xfmtstrdup("/proc/%d/fdinfo", memdesc->task.pid);
 	*fdinfo = (fd_info_t *)heapAlloc(sizeof(fd_info_t) * 256);
 	fd_info_t fdinfo_tmp;
 	unsigned int inode;
-	char *p;
-	int fdcount;
+	char *p, tmp_path[512], none[16];
+	int fdcount, pos;
  	
         for (fdcount = 0, dp = opendir(dpath); dp != NULL;) {
                 dptr = readdir(dp);
@@ -296,8 +298,16 @@ int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
 			}
 		}
 		(*fdinfo)[fdcount].fd = atoi(dptr->d_name);
+		snprintf(tmp_path, sizeof(tmp_path), "%s/%d", fdinfo_path, (*fdinfo)[fdcount].fd);
+		fp = fopen(tmp_path, "r");
+		fscanf(fp, "%s	%d", none, &pos);
+		log_msg(__LINE__, "set position: %d\n", pos);
+		(*fdinfo)[fdcount].pos = (loff_t)pos;
+		fclose(fp);
 		fdcount++;
 	}
+	xfree(dpath);
+	xfree(fdinfo_path);
 	return fdcount;
 }
 

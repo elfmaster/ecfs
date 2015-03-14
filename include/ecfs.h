@@ -157,6 +157,7 @@ struct fde_func_data {		/* For eh_frame.c */
 typedef struct fdinfo {
 	int fd;
 	char path[MAX_PATH];
+	loff_t pos;
 	struct {
 		struct in_addr src_addr;
 		struct in_addr dst_addr;

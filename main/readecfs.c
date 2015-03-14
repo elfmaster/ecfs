@@ -213,7 +213,7 @@ usage:
 		ret = get_fd_info(desc, &fdinfo);
 		printf("- files/pipes/sockets (.fdinfo):\n");
 		for (i = 0; i < ret; i++) {
-			printf("\t[fd: %d] path: %s\n", fdinfo[i].fd, fdinfo[i].path);
+			printf("\t[fd: %d:%d] path: %s\n", fdinfo[i].fd, fdinfo[i].pos, fdinfo[i].path);
 			if (fdinfo[i].net) {
 				switch(fdinfo[i].net) {
 				case NET_TCP:

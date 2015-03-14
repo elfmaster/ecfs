@@ -189,7 +189,8 @@ an array of structures named 'struct fdinfo'
 typedef struct fdinfo {
         int fd;		     /* actual file descriptor */
         char path[MAX_PATH]; /* file path or other info in the case of pipe or socket */
-        struct {
+        loff_t pos;	     /* position into file stream */
+	struct {
                 struct in_addr src_addr; /* source address of socket is binding */
                 struct in_addr dst_addr; /* destination address of socket is connected */
                 uint16_t src_port;	 /* source port socket is bound to 	*/
@@ -307,7 +308,6 @@ heap inside of the desc struct on success, null on failure.
 
 
 ssize_t get_ptr_for_va(ecfs_elf_t *desc, unsigned long vaddr, uint8_t **ptr)
-
 
 
 
