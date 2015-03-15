@@ -271,6 +271,7 @@ int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
 	unsigned int inode;
 	char *p, tmp_path[512], none[16];
 	int fdcount, pos;
+	unsigned int perms;
  	
         for (fdcount = 0, dp = opendir(dpath); dp != NULL;) {
                 dptr = readdir(dp);
@@ -301,8 +302,10 @@ int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
 		snprintf(tmp_path, sizeof(tmp_path), "%s/%d", fdinfo_path, (*fdinfo)[fdcount].fd);
 		fp = fopen(tmp_path, "r");
 		fscanf(fp, "%s	%d", none, &pos);
-		log_msg(__LINE__, "set position: %d\n", pos);
 		(*fdinfo)[fdcount].pos = (loff_t)pos;
+		fscanf(fp, "%s	%d", none, &perms);
+		log_msg(__LINE__, "perms: %d\n", perms);
+		(*fdinfo)[fdcount].perms = (unsigned int)octal2decimal(perms);
 		fclose(fp);
 		fdcount++;
 	}

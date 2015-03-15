@@ -11,9 +11,10 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dlfcn.h>
-
+#include <sys/mount.h>
 #include <sys/mman.h>
 #include <string.h>
+#include <sys/wait.h>
 
 #define ECFS_RAMDISK_DIR "/tmp/ecfs_ramdisk"
 

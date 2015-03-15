@@ -27,6 +27,7 @@
 #define _ECFS_UTIL_H
 
 #include <syslog.h>
+#include <math.h>
 
 struct opts opts;
 
@@ -58,6 +59,8 @@ void exit_failure(int);
  */
 void ecfs_print(char *fmt, ...);
 
+int octal2binary(int);
+int octal2decimal(int);
 void log_msg(unsigned int lineno, char *fmt, ...);
 void ffperror(const char *s, int lineno);
 

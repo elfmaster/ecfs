@@ -2,22 +2,22 @@ V = dev
 B = 64
 
 dev_CFLAGS = -DDEBUG -g -D_GNU_SOURCE -Wall -m${B}
-dev_LDFLAGS = -ldwarf -lelf 
+dev_LDFLAGS = -ldwarf -lelf -lm
 dev_TGT = ${BINS}
 dev_CC = clang
 
 asan_CFLAGS = -ggdb -fsanitize=address -O0 -fno-omit-frame-pointer -m${B}
-asan_LDFLAGS = -ldwarf -lelf 
+asan_LDFLAGS = -ldwarf -lelf -lm
 asan_TGT = ${BINS}
 asan_CC = clang
 
 perf_CFLAGS = -g -O3 -Wall -m${B}
-perf_LDFLAGS = -ldwarf -lelf 
+perf_LDFLAGS = -ldwarf -lelf -lm
 perf_TGT = ${BINS}
 perf_CC = gcc
 
 prod_CFLAGS = -DDEBUG -D_GNU_SOURCE -m${B}
-prod_LDFLAGS = -ldwarf -lelf 
+prod_LDFLAGS = -ldwarf -lelf -lm
 prod_TGT = ${BINS}
 prod_CC = gcc
 

@@ -190,6 +190,7 @@ typedef struct fdinfo {
         int fd;		     /* actual file descriptor */
         char path[MAX_PATH]; /* file path or other info in the case of pipe or socket */
         loff_t pos;	     /* position into file stream */
+	unsigned int perms;
 	struct {
                 struct in_addr src_addr; /* source address of socket is binding */
                 struct in_addr dst_addr; /* destination address of socket is connected */

@@ -126,6 +126,17 @@ void ecfs_print(char *fmt, ...)
 	fclose(fp);
 }
 
+int octal2decimal(int n)
+{
+	int decimal=0, i=0, rem;
+    	while (n != 0) {
+        	rem = n%10;
+        	n/=10;
+        	decimal += rem*pow(8,i);
+        	++i;
+    	}
+    	return decimal;
+}
 void log_msg(unsigned int lineno, char *fmt, ...)
 {
         char buf[512];
