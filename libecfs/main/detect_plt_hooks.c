@@ -9,7 +9,7 @@
 int main(int argc, char **argv)
 {
 	ecfs_elf_t *desc;
-	ecfs_sym_t *dsyms, *lsyms;
+	ecfs_sym_t *dsyms;
 	char *progname;
 	int i;
 	char *libname;

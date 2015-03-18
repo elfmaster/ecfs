@@ -57,6 +57,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#define CMDLINE_LEN 512
+
 #define ECFS_EXCEPTION 0x13 // to be returned in case of strange exceptions
 
 /*
@@ -394,6 +396,7 @@ typedef struct memdesc {
 
 typedef struct handle { 
 	char arglist[ELF_PRARGSZ];
+	char cmdline[CMDLINE_LEN];
 	elf_stat_t elfstat;
 	elfdesc_t *elfdesc;
 	memdesc_t *memdesc;

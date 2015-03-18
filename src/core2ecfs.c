@@ -941,13 +941,13 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 * write prstatus structs
 	 */
 	if( write(fd, notedesc->prstatus, sizeof(struct elf_prstatus)) == -1 ) {
-            log_msg(__LINE__, "write %s", strerror(errno));
-            exit_failure(-1);
+        	log_msg(__LINE__, "write %s", strerror(errno));
+           	exit_failure(-1);
         }
 	for (i = 1; i < notedesc->thread_count; i++) {
 		if( write(fd, notedesc->thread_core_info[i].prstatus, sizeof(struct elf_prstatus)) == -1) {
-                    log_msg(__LINE__, "write %s", strerror(errno));
-                    exit_failure(-1);
+                	log_msg(__LINE__, "write %s", strerror(errno));
+                    	exit_failure(-1);
                 }
         }
 	
@@ -955,28 +955,28 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 * write fdinfo structs
 	 */
 	if( write(fd, memdesc->fdinfo, ecfs_file->fdinfo_size) == -1) {
-            log_msg(__LINE__, "write %s", strerror(errno));
+        	log_msg(__LINE__, "write %s", strerror(errno));
         }
 
 	/*
 	 * write siginfo_t struct
 	 */
 	if( write(fd, notedesc->siginfo, sizeof(siginfo_t)) == -1) {
-            log_msg(__LINE__, "write %s", strerror(errno));
+            	log_msg(__LINE__, "write %s", strerror(errno));
         }
 	
 	/*
  	 * write auxv data
 	 */
 	if( write(fd, notedesc->auxv, notedesc->auxv_size) == -1) {
-            log_msg(__LINE__, "write %s", strerror(errno));
+            	log_msg(__LINE__, "write %s", strerror(errno));
         }
 	
 	/*
 	 * write exepath string
 	 */
 	if( write(fd, memdesc->exe_path, strlen(memdesc->exe_path) + 1) == -1) {
-            log_msg(__LINE__, "write %s", strerror(errno));
+            	log_msg(__LINE__, "write %s", strerror(errno));
         }
 
 	/*
@@ -984,14 +984,14 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 */
 	build_elf_stats(handle);
 	if( write(fd, &handle->elfstat, sizeof(elf_stat_t)) == -1) { 
-            log_msg(__LINE__, "write %s", strerror(errno));
+            	log_msg(__LINE__, "write %s", strerror(errno));
         }
 	
 	/*
 	 * write .arglist section data
 	 */
 	if( write(fd, handle->arglist, ELF_PRARGSZ) == -1) {
-            log_msg(__LINE__, "write %s", strerror(errno));
+            	log_msg(__LINE__, "write %s", strerror(errno));
         }
 
 	/*

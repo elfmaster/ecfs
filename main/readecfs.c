@@ -177,7 +177,14 @@ usage:
 
 	printf("\n- readecfs output for file %s\n", argv[2]);
 	printf("- Executable path (.exepath): %s\n", path);
-	
+	printf("- Command line: ");
+	printf("%s ");
+	char **argvec;
+	int argcount = get_arg_list(desc, &argvec);
+	for (i = 0; i < argcount; i++) 
+		printf("%s ", argvec[i]);
+	printf("\n");
+
 	if (opts.personality || opts.all || opts.ecfs_stuff) {
 		printf("- Personality\n");
 		printf("\tdynamically linked: %s\n", (desc->elfstats->personality & ELF_STATIC) ? "no" : "yes");

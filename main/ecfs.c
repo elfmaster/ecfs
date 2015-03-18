@@ -500,6 +500,8 @@ int main(int argc, char **argv)
 #endif
 	 		mark_dll_injection(notedesc, memdesc, elfdesc);
 		}
+	memset(handle->arglist, 0xff, ELF_PRARGSZ);
+	memcpy(handle->arglist, (char *)notedesc->psinfo->pr_psargs, ELF_PRARGSZ);
 	/*
 	 * Convert the core file into an actual ECFS file and write it
 	 * to disk.

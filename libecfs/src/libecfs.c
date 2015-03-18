@@ -8,7 +8,7 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 	ElfW(Ehdr) *ehdr;
 	ElfW(Phdr) *phdr;
 	ElfW(Shdr) *shdr;
-	int fd, i, j;
+	int fd, i;
 	struct stat st;
 
 	fd = xopen(path, O_RDONLY);
@@ -194,7 +194,7 @@ char * get_exe_path(ecfs_elf_t *desc)
 {
         char *StringTable = desc->shstrtab;
         ElfW(Shdr) *shdr = desc->shdr;
-	int i, c;
+	int i;
 	char *ret;
 
         for (i = 0; i < desc->ehdr->e_shnum; i++) {
@@ -511,4 +511,33 @@ unsigned long get_fault_location(ecfs_elf_t *desc)
 	return (unsigned long)siginfo.si_addr;
 }
 
+/*
+ * Returns argc and allocated and fills argv
+ */
+int get_arg_list(ecfs_elf_t *desc, char ***argv)
+{
+	int i, argc, c;
+	ElfW(Ehdr) *ehdr = desc->ehdr;
+	ElfW(Shdr) *shdr = desc->shdr;
+	uint8_t *mem = desc->mem;
+	char *shstrtab = desc->shstrtab;
+	char *p = NULL;
+	char *q = NULL;
+
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (!strcmp(&shstrtab[shdr[i].sh_name], ".arglist")) {
+			*argv = heapAlloc(sizeof(char *) * MAX_ARGS);		
+			p = (char *)&mem[shdr[i].sh_offset];
+			for (argc = 0, c = 0; c < shdr[i].sh_size; ) {
+				*((*argv) + argc++) = xstrdup(p);
+				 q = strchr(p, '\0') + 1;
+				 c += (q - p);
+				 p = q;
+			}
+			return argc;
+		}
+	}
+	**argv = NULL;
+	return -1;
+}
 	
