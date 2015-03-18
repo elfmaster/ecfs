@@ -519,7 +519,7 @@ int main(int argc, char **argv)
 
 	if (!(handle->elfstat.personality & ELF_STATIC)) {
 #if DEBUG
-		log_msg(__LINE__, "calling store_dynamic_symvals()");
+		log_msg(__LINE__, "calling store_dynamic_symvals() on outfile: %s", outfile);
 #endif
 		ret = store_dynamic_symvals(list_head, outfile);
 		if (ret < 0) 
@@ -532,9 +532,12 @@ int main(int argc, char **argv)
 done: 
         
 	unlink(elfdesc->path); // unlink tmp file
-        if (corefile) // incase we had to re-write file and mege in text
+        if (corefile) {// incase we had to re-write file and mege in text
+#if DEBUG
+		log_msg(__LINE__, "unlink(%s)", corefile);	
+#endif
         	unlink(corefile);
-	
+	}
 #if DEBUG
 	log_msg(__LINE__, "umount %s", ECFS_RAMDISK_DIR);
 #endif

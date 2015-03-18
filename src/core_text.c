@@ -160,20 +160,19 @@ int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
         int found_text;
 
         for (found_text = 0, i = 0; i < ehdr->e_phnum; i++) {
-            if (phdr[i].p_vaddr <= textVaddr && phdr[i].p_vaddr + phdr[i].p_memsz > textVaddr) {
-                textOffset = phdr[i].p_offset;
-                dataOffset = phdr[i + 1].p_offset;	// data segment is always i + 1 after text
+        	if (phdr[i].p_vaddr <= textVaddr && phdr[i].p_vaddr + phdr[i].p_memsz > textVaddr) {
+      
+#if DEBUG
+			log_msg(__LINE__, "readjusting executable text segment: %lx\n", phdr[i].p_vaddr);
+#endif
+			textOffset = phdr[i].p_offset;
+                	dataOffset = phdr[i + 1].p_offset;	// data segment is always i + 1 after text
 			textVaddr = phdr[i].p_vaddr;
-			//textSize = phdr[i].p_memsz;	    // get memsz of text
 			phdr[i].p_filesz = phdr[i].p_memsz; // make filesz same as memsz
 			found_text++;
-			data_index = i + 1;
-			phdr[data_index].p_offset += (tlen - 4096);
+			continue;
 		}
-		else
 		if (found_text) {
-			if (i == data_index) 	
-				continue;
 			phdr[i].p_offset += (tlen - 4096); // we must push the other segments forward to make room for whole text image
 		}
 	}
@@ -268,11 +267,12 @@ static int merge_text_image(const char *path, unsigned long text_addr, uint8_t *
 		 	textOffset = phdr[i].p_offset;
                         nextOffset = phdr[i + 1].p_offset;   // data segment usually always i + 1 after text
                         textSize = phdr[i].p_memsz;         // get memsz of text
-                        phdr[i].p_filesz = phdr[i].p_memsz; // make filesz same as memsz
-                        found_text++;
+			phdr[i].p_filesz = phdr[i].p_memsz; // make filesz same as memsz
+                        log_msg(__LINE__, "found %lx setting filesz to %lx\n", phdr[i].p_vaddr, phdr[i].p_filesz);
+			found_text++;
+			continue;
 
                 }
-                else
                 if (found_text && phdr[i].p_type == PT_LOAD) {
 #if DEBUG
 			log_msg(__LINE__, "re-adjusting offset for phdr(0x%lx) from %lx to %lx\n", 
@@ -305,7 +305,7 @@ static int merge_text_image(const char *path, unsigned long text_addr, uint8_t *
 		return -1;
 	}
 
-        if (write(out, &mem[nextOffset], st.st_size - textOffset) < 0) {
+        if (write(out, &mem[nextOffset], st.st_size - nextOffset) < 0) {
                 log_msg(__LINE__, "[FAILURE] write(): %s", strerror(errno));
                 return -1;
         }

@@ -886,6 +886,9 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	ecfs_file_t *ecfs_file = heapAlloc(sizeof(ecfs_file_t));
 	int fd, ret;
 
+#if DEBUG
+	log_msg(__LINE__, "core2ecfs() processing outfile: %s", outfile);
+#endif
 	fd = xopen(outfile, O_CREAT|O_TRUNC|O_RDWR);
 	chmod(outfile, S_IRWXU|S_IRWXG);
 	stat(elfdesc->path, &st); // stat the corefile
