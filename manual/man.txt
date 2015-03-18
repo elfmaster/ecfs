@@ -1,11 +1,11 @@
 
 NAME
-	ECFS (Extended core file snapshot) format.
+	ECFS (Extended core file snapshot) format. 
 
 SYNOPSIS
 	#include <ecfs.h>
 
-DESCRIPTION
+DESCRIPTION - (XXX: Man page is only 30% complete)
 
 ECFS is an extension to the existing ELF core file format in Linux. It takes a process image
 or an existing corefile and produces a custom ELF file as the output. This output file is
