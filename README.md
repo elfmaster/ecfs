@@ -16,7 +16,7 @@ See the manual page which describes how to access the different ecfs-core
 components in-depth.
 
 
-# USE CASES
+## USE CASES
 
 ECFS creates high resolution snapshots of a running process. These 
 snapshots are ideal for forensics analysis, and malware analysis. 
