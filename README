@@ -15,6 +15,32 @@ complementary libecfs C library (Python bindings are a work in progress).
 See the manual page which describes how to access the different ecfs-core
 components in-depth.
 
+# USE CASES
+
+ECFS creates high resolution snapshots of a running process. These 
+snapshots are ideal for forensics analysis, and malware analysis. 
+The libecfsreader API can be used to rapidly design advanced malware
+analysis solutions for automated detection of threats within a process.
+A brief example of this capability is demonstrates in POC||GTFO 0x7
+https://www.alchemistowl.org/pocorgtfo/pocorgtfo07.pdf
+
+IDA users will be happy to know that it is now possible to snapshot
+an entire process and view the entire thing in IDA. It is important
+to note that IDA does not understand that the shared library
+functions are included in the actual ECFS file so it doesn't make
+the connection reference between the calls to shared library functions
+and their actual location within the file. It would be worth writing
+a parser script for IDA to make this happen so you can click on a PLT
+call and have it follow the GOT pointer right to the shared library
+function. 
+
+In addition to the malware analysis implications of ECFS, there is
+an entirely different use case as well; ecfs-core snapshots can be
+re-executed... that's right, you can snapshot a process and re-run
+it later in time. Currently only a simple prototype exists for this
+that I wrote up in about 4 hours: https://github.com/elfmaster/ecfs_exec
+
+Enjoy...
 
 ## SYNOPSIS - Extended core file snapshot technology
 

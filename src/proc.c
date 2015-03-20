@@ -304,9 +304,7 @@ int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
 		fscanf(fp, "%s	%d", none, &pos);
 		(*fdinfo)[fdcount].pos = (loff_t)pos;
 		fscanf(fp, "%s	%d", none, &perms);
-		log_msg(__LINE__, "perms: %d\n", perms);
 		(*fdinfo)[fdcount].perms = (unsigned int)octal2decimal(perms);
-		log_msg(__LINE__, "fd is: %d", (*fdinfo)[fdcount].fd);
 		fclose(fp);
 		fdcount++;
 	}
