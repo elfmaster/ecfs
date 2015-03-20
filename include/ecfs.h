@@ -175,15 +175,15 @@ struct section_meta {
 	ElfW(Addr) bssVaddr, dynVaddr, relVaddr, relaVaddr, ehframeVaddr,
 	    textVaddr, o_textVaddr, dataVaddr, o_dataVaddr, gotVaddr, noteVaddr,
 	    hashVaddr, initVaddr, finiVaddr, pltVaddr, dsymVaddr, dstrVaddr,
-	    interpVaddr, tlsVaddr, plt_relaVaddr, plt_relVaddr;
+	    interpVaddr, tlsVaddr, plt_relaVaddr, plt_relVaddr, ctorVaddr, dtorVaddr;
 
 	ElfW(Off) bssOff, dynOff, relOff, relaOff, noteOff, ehframeOff,
 	    textOffset, dataOffset, gotOff, hashOff, initOff, finiOff, pltOff,
-	    dsymOff, dstrOff, interpOff, tlsOff, plt_relaOff, plt_relOff;
+	    dsymOff, dstrOff, interpOff, tlsOff, plt_relaOff, plt_relOff, ctorOff, dtorOff;
 	
 	ElfW(Word) bssSiz, dynSiz, hashSiz, ehframeSiz, textfSize, textSize,
 	    dataSize, strSiz, pltSiz, interpSiz, tlsSiz, noteSiz, dsymSiz,
-	    dstrSiz, plt_relaSiz, plt_relSiz;
+	    dstrSiz, plt_relaSiz, plt_relSiz, ctorSiz, dtorSiz;
 };
 
 struct elf_thread_core_info {
@@ -465,8 +465,12 @@ struct {
         ssize_t ehframe_size;
         ssize_t plt_rela_size;
 	ssize_t plt_size;
+	ssize_t ctors_size;
+	ssize_t dtors_size;
 	unsigned long plt_vaddr;
 	unsigned long ehframe_vaddr;
+	unsigned long ctors_vaddr;
+	unsigned long dtors_vaddr;
         int eh_frame_offset_workaround;
 	int stripped; // means section headers are stripped
 } global_hacks;

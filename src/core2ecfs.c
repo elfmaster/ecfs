@@ -475,6 +475,44 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         strcpy(&StringTable[stoffset], ".eh_frame");
         stoffset += strlen(".eh_frame") + 1;
         scount++;
+	
+	if (global_hacks.ctors_vaddr != 0) {
+		/*
+	 	* .ctors (.init_array)
+	 	*/
+		shdr[scount].sh_type = SHT_PROGBITS;
+		shdr[scount].sh_offset = elfdesc->dataOffset + global_hacks.ctors_vaddr - elfdesc->dataVaddr;
+		shdr[scount].sh_addr = global_hacks.ctors_vaddr;
+		shdr[scount].sh_size = global_hacks.ctors_size;
+		shdr[scount].sh_flags = SHF_ALLOC;
+		shdr[scount].sh_link = 0;
+		shdr[scount].sh_info = 0;
+		shdr[scount].sh_entsize = sizeof(char *);
+		shdr[scount].sh_addralign = sizeof(char *);
+		shdr[scount].sh_name = stoffset;
+		strcpy(&StringTable[stoffset], ".ctors");
+		stoffset += strlen(".ctors") + 1;
+		scount++;
+	}
+
+	if (global_hacks.dtors_vaddr != 0) {
+      		/*
+         	* .dtors (.fini_array)
+         	*/
+        	shdr[scount].sh_type = SHT_PROGBITS;
+        	shdr[scount].sh_offset = elfdesc->dataOffset + global_hacks.dtors_vaddr - elfdesc->dataVaddr;
+        	shdr[scount].sh_addr = global_hacks.dtors_vaddr;
+		shdr[scount].sh_size = global_hacks.dtors_size;
+        	shdr[scount].sh_flags = SHF_ALLOC;
+        	shdr[scount].sh_link = 0;
+        	shdr[scount].sh_info = 0;
+        	shdr[scount].sh_entsize = sizeof(char *);
+        	shdr[scount].sh_addralign = sizeof(char *);
+        	shdr[scount].sh_name = stoffset;
+        	strcpy(&StringTable[stoffset], ".dtors");
+        	stoffset += strlen(".dtors") + 1;
+        	scount++;
+	}
 
 	if (dynamic) {
 	 	/*

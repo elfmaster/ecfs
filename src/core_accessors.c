@@ -234,6 +234,19 @@ static void pull_unknown_shdr_addrs(int pid)
 	 * binary, since there is no PT_GNU_EH_FRAME segment type in them.
 	 */
 	global_hacks.ehframe_vaddr = get_original_shdr_addr(pid, ".eh_frame");
+	
+	/*
+	 * I know no other way to find the location of .ctors (.init_array) and
+	 * .ctors (.fini_array) that is as reliable as this.
+	 */
+	global_hacks.ctors_vaddr = get_original_shdr_addr(pid, ".ctors");
+	if (global_hacks.ctors_vaddr == 0)
+		global_hacks.ctors_vaddr = get_original_shdr_addr(pid, ".init_array");
+	
+	global_hacks.dtors_vaddr = get_original_shdr_addr(pid, ".dtors");
+	if (global_hacks.dtors_vaddr == 0)
+		global_hacks.dtors_vaddr = get_original_shdr_addr(pid, ".fini_array");
+
 }
 
 /*
@@ -288,6 +301,12 @@ static void pull_unknown_shdr_sizes(int pid)
 	global_hacks.got_size = get_original_shdr_size(pid, ".got.plt");
 	global_hacks.plt_size = get_original_shdr_size(pid, ".plt");
 	global_hacks.ehframe_size = get_original_shdr_size(pid, ".eh_frame");
+	global_hacks.ctors_size = get_original_shdr_size(pid, ".ctors");
+	if (global_hacks.ctors_size == 0)
+		global_hacks.ctors_size = get_original_shdr_size(pid, ".init_array");
+	global_hacks.dtors_size = get_original_shdr_size(pid, ".dtors");
+	if (global_hacks.dtors_size == 0)
+		global_hacks.dtors_size = get_original_shdr_size(pid, ".fini_array");
 }
 
 void fill_global_hacks(int pid)
