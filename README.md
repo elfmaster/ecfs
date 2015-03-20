@@ -22,7 +22,7 @@ ECFS creates high resolution snapshots of a running process. These
 snapshots are ideal for forensics analysis, and malware analysis. 
 The libecfsreader API can be used to rapidly design advanced malware
 analysis solutions for automated detection of threats within a process.
-A brief example of this capability is demonstrates in POC||GTFO 0x7
+A brief example of this capability is demonstrated in POC||GTFO 0x7
 https://www.alchemistowl.org/pocorgtfo/pocorgtfo07.pdf
 
 IDA users will be happy to know that it is now possible to snapshot
