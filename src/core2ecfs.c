@@ -759,7 +759,23 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	strcpy(&StringTable[stoffset], ".arglist");
 	stoffset += strlen(".arglist") + 1;
 	scount++;
-
+	
+	/*
+	 * .fpregset
+	 */
+	shdr[scount].sh_type = SHT_PROGBITS;
+	shdr[scount].sh_offset = ecfs_file->fpregset_offset;
+	shdr[scount].sh_addr = 0;
+	shdr[scount].sh_flags = 0;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_entsize = sizeof(elf_fpregset_t);
+	shdr[scount].sh_size = ecfs_file->fpregset_size;
+	shdr[scount].sh_addralign = 0x8;
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".fpregset");
+	stoffset += strlen(".fpregset") + 1;
+	scount++;
+	
 	/*
          * .stack
          */
@@ -945,7 +961,9 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	ecfs_file->personality_size = sizeof(elf_stat_t);
 	ecfs_file->arglist_offset = ecfs_file->personality_offset + ecfs_file->personality_size;
 	ecfs_file->arglist_size = ELF_PRARGSZ;
-	ecfs_file->stb_offset = ecfs_file->arglist_offset + ecfs_file->arglist_size;
+	ecfs_file->fpregset_offset = ecfs_file->arglist_offset + ecfs_file->arglist_size;
+	ecfs_file->fpregset_size = notedesc->thread_count * sizeof(elf_fpregset_t);
+	ecfs_file->stb_offset = ecfs_file->fpregset_offset + ecfs_file->fpregset_size;
 	
 	/*
 	 * write original body of core file
@@ -1031,7 +1049,12 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	if( write(fd, handle->arglist, ELF_PRARGSZ) == -1) {
             	log_msg(__LINE__, "write %s", strerror(errno));
         }
-
+	
+	for (i = 0; i < notedesc->thread_count; i++) {
+		if (write(fd, notedesc->thread_core_info[i].fpu, sizeof(elf_fpregset_t)) < 0) {
+			log_msg(__LINE__, "write %s", strerror(errno));
+		}
+	}
 	/*
 	 * Build section header table
 	 */

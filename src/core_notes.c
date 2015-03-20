@@ -102,12 +102,12 @@ static void print_nt_files(struct nt_file_struct *file_maps)
 notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 {
 	notedesc_t *notedesc = (notedesc_t *)heapAlloc(sizeof(notedesc_t));
-	size_t i, len;
-	int tc;
+	size_t i, j, len;
+	int tc, fpregset_count = 0, fpxregset_count = 0;
 	uint8_t *desc;
 	struct nt_file_struct *nt_files; // for parsing NT_FILE in corefile
 	ElfW(Nhdr) *notes = elfdesc->nhdr;
-
+	
 	for (i = 0; i < elfdesc->noteSize; i += len) {
 		desc = ELFNOTE_DESC(notes);
 		switch(notes->n_type) {
@@ -133,6 +133,7 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 					notedesc->thread_core_info[notedesc->thread_count].prstatus = notedesc->prstatus;
 					break;
 				}
+				log_msg(__LINE__, "thread_count: %d", notedesc->thread_count);
 				notedesc->thread_count++;
 				break;
 			case NT_PRPSINFO:
@@ -169,14 +170,38 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 			case NT_FPREGSET:
 				if (notes->n_descsz != sizeof(elf_fpregset_t)) {
 #if DEBUG
-					log_msg(__LINE__, "error: The ELF note entry for NT_PRPSINFO is not the correct size\n");
+					log_msg(__LINE__, "error: The ELF note entry for NT_FPREGSET is not the correct size");
 #endif 
 					break;
 				}
-				notedesc->fpu = (elf_fpregset_t *)heapAlloc(sizeof(elf_fpregset_t));
-				memcpy(notedesc->fpu, desc, notes->n_descsz);
-				break;
 			
+#if DEBUG
+				log_msg(__LINE__, "copying elf_fpregset_t %d", fpregset_count);
+#endif
+				notedesc->thread_core_info[fpregset_count].fpu = (elf_fpregset_t *)heapAlloc(sizeof(elf_fpregset_t));
+				memcpy(notedesc->thread_core_info[fpregset_count].fpu, desc, notes->n_descsz);
+				fpregset_count++;
+				break;
+			case NT_X86_XSTATE:
+				/*
+				 * XXX
+				 * ignore this NT_X86_XSTATE check for now, due to 
+				 * unfigured out weirdness regarding types.
+				 */
+				break;
+				if (notes->n_descsz != sizeof(elf_fpxregset_t)) {
+#if DEBUG
+					log_msg(__LINE__, "error: The ELF note entry for NT_X86_XSTATE is incorrect size");
+#endif
+					break;
+				}
+#if DEBUG
+ 	                      	log_msg(__LINE__, "copying elf_fpxregset_t %d", fpxregset_count);
+#endif
+                              	notedesc->thread_core_info[fpxregset_count].xfpu = (elf_fpxregset_t *)heapAlloc(sizeof(elf_fpxregset_t));
+                               	memcpy(notedesc->thread_core_info[fpxregset_count].xfpu, desc, notes->n_descsz);
+				fpxregset_count++;
+                                break;
 		}
 		/*
 		 * note entries are always word aligned (4 bytes)

@@ -125,6 +125,28 @@
 
 #define MAX_SHDR_COUNT 2048
 
+/*
+ * user_fxpregs_struct used for 32bit only
+ */
+#if __x86_64__
+struct user_fxsr_struct {
+         unsigned short  cwd;
+         unsigned short  swd;
+         unsigned short  twd;
+         unsigned short  fop;
+         long    fip;
+         long    fcs;
+         long    foo;
+         long    fos;
+         long    mxcsr;
+         long    reserved;
+         long    st_space[32];   /* 8*16 bytes for each FP-reg = 128 bytes */
+         long    xmm_space[32];  /* 8*16 bytes for each XMM-reg = 128 bytes */
+         long    padding[56];
+};
+typedef struct user_fxsr_struct elf_fpxregset_t;
+#endif
+
 typedef struct elf_stats {
 #define ELF_STATIC (1 << 1) // if its statically linked (instead of dynamically)
 #define ELF_PIE (1 << 2)    // if its position indepdendent executable
@@ -191,6 +213,7 @@ struct elf_thread_core_info {
 	struct elf_prpsinfo *psinfo;
 	struct user_regs_struct *regs;
 	elf_fpregset_t *fpu;
+	elf_fpxregset_t *xfpu;
 	siginfo_t *siginfo;
 	 ElfW(Nhdr) * notes;
 };
@@ -205,6 +228,8 @@ typedef struct ecfs_file_fmt {
 	loff_t stb_offset;
 	loff_t personality_offset;
 	loff_t arglist_offset;
+	loff_t fpregset_offset;
+	loff_t xstate_offset;
 	size_t prstatus_size;
 	size_t prpsinfo_size;
 	size_t fdinfo_size;
@@ -213,6 +238,8 @@ typedef struct ecfs_file_fmt {
 	size_t exepath_size;
 	size_t personality_size;
 	size_t arglist_size;
+	size_t fpregset_size;
+	size_t xstate_size;
 	int thread_count;
 } ecfs_file_t;
 
@@ -251,7 +278,6 @@ typedef struct notedesc {
 #endif
 	struct siginfo_t *siginfo;
 	struct elf_thread_core_info thread_core_info[MAX_THREADS];
-	elf_fpregset_t *fpu;
 	int thread_count;
 	int thread_status_size;
 	int numnote;
