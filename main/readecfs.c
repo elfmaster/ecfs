@@ -220,7 +220,7 @@ usage:
 		ret = get_fd_info(desc, &fdinfo);
 		printf("- files/pipes/sockets (.fdinfo):\n");
 		for (i = 0; i < ret; i++) {
-			printf("\t[fd: %d:%d] perms: %lx path: %s\n", fdinfo[i].fd, (int)fdinfo[i].pos, fdinfo[i].perms, fdinfo[i].path);
+			printf("\t[fd: %d:%d] perms: %x path: %s\n", fdinfo[i].fd, (int)fdinfo[i].pos, fdinfo[i].perms, fdinfo[i].path);
 			if (fdinfo[i].net) {
 				switch(fdinfo[i].net) {
 				case NET_TCP:
