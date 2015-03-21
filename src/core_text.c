@@ -103,7 +103,6 @@ int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
         uint8_t *mem;
         struct stat st;
         int in, out, i = 0;
-        int data_index;
 
 	in = xopen(path, O_RDWR);
 	xfstat(in, &st);
