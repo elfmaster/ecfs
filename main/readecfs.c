@@ -178,7 +178,6 @@ usage:
 	printf("\n- readecfs output for file %s\n", argv[2]);
 	printf("- Executable path (.exepath): %s\n", path);
 	printf("- Command line: ");
-	printf("%s ");
 	char **argvec;
 	int argcount = get_arg_list(desc, &argvec);
 	for (i = 0; i < argcount; i++) 
@@ -210,9 +209,10 @@ usage:
 			printf("\t[thread[%d] pid: %d\n", i + 1, prstatus[i].pr_pid);
 		printf("\n");
 		printf("- Register values\n");
-		for (i = 0; i < ret; i++)
+		for (i = 0; i < ret; i++) {
 			print_registers(&prstatus[i].pr_reg);
-
+			printf("\n");
+		}
 		ret = get_siginfo(desc, &siginfo);
         	printf("- Exited on signal (.siginfo): %d\n", siginfo.si_signo);
  	       
