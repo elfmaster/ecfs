@@ -220,6 +220,59 @@ static int launch_gcore_utility(int pid, const char *filename)
 	return 0;
 }
 
+/* 
+ * the gcore utility creates blank section headers for
+ * the core files. Since ecfs creates a complete section 
+ * header table itself, we remove the one created by gcore
+ */
+static int strip_section_header_table(const char *corefile)
+{
+	int fd, tfd, tval;
+	uint8_t *mem;
+	uint8_t *copy;
+	struct timeval tv;
+	char *tmpfile;
+	struct stat st;
+
+	fd = xopen(corefile, O_RDONLY);
+	xfstat(fd, &st);
+	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
+	if (mem == MAP_FAILED) {
+		perror("1st. mmap");
+		exit(-1);
+	}
+	ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
+	if (ehdr->e_shoff == 0)
+		return 0;
+	
+	gettimeofday(&tv, NULL);
+	srand(tv.tv_usec);
+	tval = rand() & 0xffff;
+	asprintf(&tmpfile, "tmp.%s", corefile);
+	tfd = xopen(tmpfile, O_CREAT|O_WRONLY);
+	printf("doing mmap\n");
+	copy = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+	if (copy == MAP_FAILED) {
+		perror("2nd. mmap");
+		return -1;
+	}
+	printf("Copying from mem to copy %d bytes from %p to %p\n", ehdr->e_shoff, mem, copy);
+	memcpy(copy, mem, ehdr->e_shoff);
+	//unlink(corefile);
+	printf("Writing %d bytes\n", ehdr->e_shoff);
+	if (write(tfd, copy, ehdr->e_shoff) < 0) {
+		perror("write");
+		return -1;
+	}
+	fsync(tfd);
+	close(tfd);
+	munmap(copy, st.st_size);
+	printf("renaming %s to %s\n", tmpfile, corefile);
+	rename(tmpfile, corefile);
+	return 0;
+}
+
+	
 int main(int argc, char **argv)
 {
 		
@@ -284,7 +337,7 @@ int main(int argc, char **argv)
 	prctl(PR_SET_DUMPABLE, 0);
 	
 #if DEBUG
-	log_msg(__LINE__, "options: text_all: %d heuristics: %d outfile: %s exename: %s pid: %d", 
+	fprintf(stderr, "options: text_all: %d heuristics: %d outfile: %s exename: %s pid: %d\n", 
 			opts.text_all, opts.heuristics, outfile, exename, pid);
 #endif
 	if (opts.text_all) {
@@ -295,11 +348,13 @@ int main(int argc, char **argv)
 		 * to fix this problem. Even the hugest processes only
 		 * take ~3 seconds now.
 		 */
+		printf("Creating ramdisk\n");
 		int ramdisk_size = inquire_meminfo();
+		printf("ramdisk_size: %d\n", ramdisk_size);
 		if (ramdisk_size <= 0)
 			ramdisk_size = 1;
 		if (create_tmp_ramdisk(ramdisk_size) < 0) {
-			log_msg(__LINE__, "create_tmp_ramdisk failed");
+			fprintf(stderr, "create_tmp_ramdisk failed\n");
 		} else
 			opts.use_ramdisk = 1;
  	}
@@ -332,18 +387,30 @@ int main(int argc, char **argv)
 	pie = check_for_pie(pid);
 	memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
 	memdesc->o_entry = get_original_ep(pid);
-	if (opts.text_all)
+	if (opts.text_all) {
 		create_shlib_text_mappings(memdesc);
-
+	}
 	/*
 	 * load the core file from stdin (Passed by the kernel via core_pattern)
 	 */
 	
 		
 	asprintf(&corefile, "core.%s", exename);
-	fprintf(stdout, "corefile: %s\n", corefile);
+	
 	if (launch_gcore_utility(pid, corefile) < 0) {
 		fprintf(stderr, "ecfs-snapshot utility requires that the GDB gcore script is present on your system\n");
+		exit(-1);
+	}
+	/*
+	 * gcore actually will create core.%s.<pid> based on us passing it
+	 * core.%s, so we need to modify our filename so that we then open
+	 * that filename.
+	 */
+	xfree(corefile);
+	asprintf(&corefile, "core.%s.%d", exename, pid);
+	
+	if (strip_section_header_table(corefile) < 0) {
+		fprintf(stderr, "Unable to strip the section header table (created by gcore) on %s\n", corefile);
 		exit(-1);
 	}
 
@@ -397,9 +464,7 @@ int main(int argc, char **argv)
 	 * in terms of performance.
 	 */
 	if (elfdesc->text_memsz > elfdesc->text_filesz) {
-#if DEBUG
 		fprintf(stderr, "merging text into core\n");
-#endif
 		if (merge_exe_text_into_core((const char *)corefile, memdesc) < 0) {
 			log_msg(__LINE__, "Failed to merge text into core file");
 		}
@@ -554,7 +619,6 @@ int main(int argc, char **argv)
 		if (ret < 0) 
 			log_msg(__LINE__, "Unable to store runtime values into dynamic symbol table");
 	}
-	
 #if DEBUG
 	log_msg(__LINE__, "finished storing symvals");
 #endif
