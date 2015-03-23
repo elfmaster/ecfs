@@ -279,7 +279,7 @@ int main(int argc, char **argv)
 	notedesc_t *notedesc = NULL;
 	handle_t *handle = alloca(sizeof(handle_t));
 	pid_t pid = 0;
-	int i, j, ret, c, pie = 0;
+	int i, ret, c, pie = 0;
 	char *corefile = NULL;
 	char *outfile = NULL;
 	list_t *list_head;
