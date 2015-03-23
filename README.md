@@ -76,6 +76,24 @@ ELF files. readecfs parses and prints the details of an ecfs-core file to
 stdout. This utility uses libecfs as an example of how to use its
 functions.
 
+### ECFS quick snapshot tool
+
+In many cases it is not desirable to kill the program that you need to snapshot.
+For this you may use ecfs_snapshot (Installed into /usr/bin) as ecfsnap64 and
+ecfsnap32 respectively. This makes use of the /usr/bin/gcore script which is
+included with the GDB package. gcore creates a corefile of a running process
+without killing it, and ecfs will use gcore to create the bare bones core file
+and then build on top of that. 
+
+NOTE: ecfs will not transform a core file into an ecfs snapshot unless the 
+process is still running in memory. In other words you cannot simply pass a
+core file to ecfs an expect it to create an ecfs-core file as an output because
+it relies heavily on what resides in /proc/$pid during the transformation
+phase.
+
+$ ecfsnap64 -t -p `pidof sshd` -o sshd.ecfs
+
+
 ## INSTALL
 
 The following are instructions on building and installing the ecfs-core dump 

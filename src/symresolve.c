@@ -91,9 +91,7 @@ static int resolve_symbols(list_t **list, const char *path, unsigned long base)
 		symvector[i].size = symtab[i].st_size;
 		symvector[i].name = xstrdup(&dynstr[symtab[i].st_name]);
 	}
-	
 	ret = insert_item_front(&(*list), (void *)symvector, symcount * sizeof(symentry_t));	
-	
 	munmap(mem, st.st_size);
 	return ret;
 	
@@ -173,7 +171,7 @@ int fill_dynamic_symtab(list_t **list, struct lib_mappings *lm)
 	 */
 	for (i = 0; i < lm->libcount; i++) {
 #if DEBUG
-		printf("Resolving symbols for: %s\n", lm->libs[i].path);
+		printf("Resolving symbols for: %s addr: %lx\n", lm->libs[i].path, lm->libs[i].addr);
 #endif
 		ret = resolve_symbols((&(*list)), lm->libs[i].path, lm->libs[i].addr);
 	}

@@ -23,6 +23,13 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * XXX
+ * THIS CODE IS BASICALLY main/ecfs.c but has been modified to work with 
+ * snapshots of processes and does not rely on /proc/sys/kernel/core_pattern
+ * the same way that ecfs and ecfs_handler do.  
+*/
+
 #include "../include/ecfs.h"
 #include "../include/util.h"
 #include "../include/ptrace.h"
@@ -46,53 +53,6 @@
  */
 
 /*
- * This function will read the corefile from stdin
- * then write it to a temporary file which is then read
- * by the load_core_file() function above.
- */
-#define RBUF_LEN 4096 * 8
-elfdesc_t * load_core_file_stdin(char **corefile)
-{
-        uint8_t *buf = NULL;
-        ssize_t nread;
-	ssize_t bytes = 0, bw;
-	int i = 0;
-	int file;
-	
-	char *tmp_dir = opts.use_ramdisk ? ECFS_RAMDISK_DIR : ECFS_CORE_DIR;
-	
-	char *filepath = xfmtstrdup("%s/.tmp_core", tmp_dir);
-        do {
-                if (access(filepath, F_OK) == 0) {
-                        free(filepath);
-                        filepath = xfmtstrdup("%s/.tmp_core.%d", tmp_dir, ++i);
-                } else
-                        break;
-                        
-        } while(1);
-	
-	/*
-	 * Open tmp file for writing
-	 */
-	file = open(filepath, O_CREAT|O_RDWR, S_IRWXU);
-	buf = alloca(RBUF_LEN);
-	while ((nread = read(STDIN_FILENO, buf, RBUF_LEN)) > 0) {
-        	bytes += nread;
-		bw = write(file, buf, nread);
-		if (bw < 0) {
-			log_msg(__LINE__, "write %s", strerror(errno));
-			exit(-1);
-		}
-	}
-	syncfs(file);
-	close(file);
-	*corefile = xstrdup(filepath);
-	return load_core_file(filepath);
-
-}		
-#undef RBUF_LEN
-
-/*
  * Get /proc/pid/maps info to create data
  * about stack, heap etc. This can then be
  * merged with the info retrieved from the
@@ -101,7 +61,7 @@ elfdesc_t * load_core_file_stdin(char **corefile)
 
 char *exename = NULL;
 
-memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
+static memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 {
 	int i;
 	memdesc_t *memdesc = (memdesc_t *)heapAlloc(sizeof(memdesc_t));
@@ -174,6 +134,142 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 	
 }
 
+static char * itoa(long x, char *t)
+{
+        int i;
+        int j;
+
+        i = 0;
+        do
+        {
+                t[i] = (x % 10) + '0';
+                x /= 10;
+                i++;
+        } while (x!=0);
+
+        t[i] = 0;
+
+        for (j=0; j < i / 2; j++) {
+                t[j] ^= t[i - j - 1];
+                t[i - j - 1] ^= t[j];
+                t[j] ^= t[i - j - 1];
+        }
+
+        return t;
+}
+
+static char * get_exe_name(int pid)
+{
+	FILE *fp;
+	char *comm = (char *)heapAlloc(32);
+	char *path, *p;
+	
+	asprintf(&path, "/proc/%d/comm", pid);
+	
+	if ((fp = fopen(path, "r"))  == NULL) {
+		perror("fopen");
+		return NULL;
+	}
+
+	fgets(comm, sizeof(comm), fp);
+	if ((p = strchr(comm, '\n')) != NULL)
+		*p = '\0';
+	comm[sizeof(comm) - 1] = '\0';
+	fclose(fp);
+	return comm;
+}
+
+static int launch_gcore_utility(int pid, const char *filename)
+{
+	int ret, status;
+	char *gcore_path = NULL;
+	char *tmp = malloc(16);
+	char *args[5];
+	
+	if (access("/usr/bin/gcore", F_OK) == 0)
+		gcore_path = "/usr/bin/gcore";
+	else
+	if (access("/bin/gcore", F_OK) == 0)
+		gcore_path = "/bin/gcore";
+	else {
+		fprintf(stderr, "Unable to find GDB corefile utility 'gcore' in /bin or /usr/bin\n");
+		return -1;
+	}
+	
+	args[0] = gcore_path;
+	args[1] = "-o";
+	args[2] = (char *)filename;
+	args[3] = itoa(pid, tmp);
+	args[4] = NULL;
+
+	if ((pid = fork()) < 0) {
+		perror("fork()");
+		return -1;
+	}
+
+	if (pid == 0) {
+		ret = execve(gcore_path, args, NULL);
+		if (ret < 0) {
+			perror("execve");
+			exit(-1);
+		}
+		exit(0);
+	}
+	wait(&status);
+
+	return 0;
+}
+
+/* 
+ * the gcore utility creates blank section headers for
+ * the core files. Since ecfs creates a complete section 
+ * header table itself, we remove the one created by gcore
+ */
+static int strip_section_header_table(const char *corefile)
+{
+	int fd, tfd, tval;
+	uint8_t *mem;
+	uint8_t *copy;
+	struct timeval tv;
+	char *tmpfile;
+	struct stat st;
+
+	fd = xopen(corefile, O_RDONLY);
+	xfstat(fd, &st);
+	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
+	if (mem == MAP_FAILED) {
+		perror("1st. mmap");
+		exit(-1);
+	}
+	ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
+	if (ehdr->e_shoff == 0)
+		return 0;
+	
+	gettimeofday(&tv, NULL);
+	srand(tv.tv_usec);
+	tval = rand() & 0xffff;
+	asprintf(&tmpfile, "tmp.%s", corefile);
+	tfd = xopen(tmpfile, O_CREAT|O_WRONLY);
+	copy = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+	if (copy == MAP_FAILED) {
+		perror("2nd. mmap");
+		return -1;
+	}
+	memcpy(copy, mem, ehdr->e_shoff);
+	
+	if (write(tfd, copy, ehdr->e_shoff) < 0) {
+		perror("write");
+		return -1;
+	}
+	fsync(tfd);
+	close(tfd);
+	munmap(copy, st.st_size);
+	rename(tmpfile, corefile);
+	
+	return 0;
+}
+
+	
 int main(int argc, char **argv)
 {
 		
@@ -187,21 +283,15 @@ int main(int argc, char **argv)
 	char *corefile = NULL;
 	char *outfile = NULL;
 	list_t *list_head;
-	/*
-	 * When testing use:
-	 * ./ecfs -c corefile -o output.ecfs -p <pid>
-	 *
-	 * although when having run as automated with core pipes use
-	 * the following command within /proc/sys/kernel/core_pattern
-	 * ./ecfs -i -p %p -e %e
-	 */
-	if (argc < 2) {
-		fprintf(stdout, "Usage: %s [-peo]\n", argv[0]);
-		fprintf(stdout, "- Automated mode to be used with /proc/sys/kernel/core_pattern\n");
-		fprintf(stdout, "\n- Manual mode which allows for specifying existing core files (Debugging mode)\n");
+	
+	if (argc < 5) {
+		fprintf(stdout, "ECFS - Snapshotting tool by elfmaster[at]zoho.com\n");
+		fprintf(stdout, "Usage: %s -p <pid> -o <outfile>\n", argv[0]);
 		fprintf(stdout, "[-p]	pid of process (Must respawn a process after it crashes)\n");
-		fprintf(stdout, "[-e]	executable name (Supplied by %%e format arg in core_pattern)\n");
-		fprintf(stdout, "[-o]	output ecfs file\n\n");
+		fprintf(stdout, "[-o]	output ecfs file\n");
+		fprintf(stdout, "[-e]	(Optional) otherwise its grabbed from /proc/$pid/comm\n");
+		fprintf(stdout, "[-h]	(Optional) turns heuristics on for detecting dll injection and PLT hooks\n");
+		fprintf(stdout, "[-t]	(Optional) recommended, grabs entire text segment of exe and shlibs\n");
 		exit(-1);
 	}
 	memset(&opts, 0, sizeof(opts));
@@ -244,7 +334,7 @@ int main(int argc, char **argv)
 	prctl(PR_SET_DUMPABLE, 0);
 	
 #if DEBUG
-	log_msg(__LINE__, "options: text_all: %d heuristics: %d outfile: %s exename: %s pid: %d", 
+	fprintf(stderr, "options: text_all: %d heuristics: %d outfile: %s exename: %s pid: %d\n", 
 			opts.text_all, opts.heuristics, outfile, exename, pid);
 #endif
 	if (opts.text_all) {
@@ -255,45 +345,36 @@ int main(int argc, char **argv)
 		 * to fix this problem. Even the hugest processes only
 		 * take ~3 seconds now.
 		 */
+		printf("Creating ramdisk\n");
 		int ramdisk_size = inquire_meminfo();
+		printf("ramdisk_size: %d\n", ramdisk_size);
 		if (ramdisk_size <= 0)
 			ramdisk_size = 1;
 		if (create_tmp_ramdisk(ramdisk_size) < 0) {
-			log_msg(__LINE__, "create_tmp_ramdisk failed");
+			fprintf(stderr, "create_tmp_ramdisk failed\n");
 		} else
 			opts.use_ramdisk = 1;
  	}
 
-	/*
-	 * If we're reading from stdin we are probably waiting for the kernel
-	 * to write the corefile to us. Until we have read the core file completely
-	 * /proc/$pid/? will remain open to us, so we need to gather whatever we need
-	 * from this area now while our process is in a stopped zombie state.
-	 */
-#if DEBUG
-	log_msg(__LINE__, "Using stdin, outfile is: %s", outfile);
-#endif
-	/*
-	 * If we are getting core directly from the kernel then we must
-	 * read /proc/<pid>/ before we read the corefile. The process stays
-	 * open as long as the corefile hasn't been read yet.
-  	 */
        	if (exename == NULL) {
-		log_msg(__LINE__, "Must specify exename of process when using stdin mode; supplied by %%e of core_pattern");
-		exit(-1);
+		exename = get_exe_name(pid);
+		if (exename == NULL) {
+			log_msg(__LINE__, "Must specify exename of process when using stdin mode; supplied by %%e of core_pattern");
+			exit(-1);
+		}
 	}
 	if (pid == 0) {
         	log_msg(__LINE__, "Must specify a pid with -p");
             	exit(0);
         }
         if (outfile == NULL) {
-        	log_msg(__LINE__, "Did not specify an output file, defaulting to use 'ecfs.out'");
-              	outfile = xfmtstrdup("%s/ecfs.out", ECFS_CORE_DIR);
-       	}
+              	outfile = xfmtstrdup("%s/%s.%d", ECFS_CORE_DIR, exename, pid);
+       		fprintf(stdout, "Did not specify -o: writing to file %s\n", outfile);
+	}
 		
 	memdesc = build_proc_metadata(pid, notedesc);
        	if (memdesc == NULL) {
-               	log_msg(__LINE__, "Failed to retrieve process metadata");
+		fprintf(stderr, "build_proc_metadata() failed\n");
                	exit(-1);
        	}
 	memdesc->task.pid = pid;
@@ -303,16 +384,40 @@ int main(int argc, char **argv)
 	fill_global_hacks(pid, memdesc);
 	memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
 	memdesc->o_entry = get_original_ep(pid);
-	if (opts.text_all)
+	if (opts.text_all) {
 		create_shlib_text_mappings(memdesc);
-
+	}
 	/*
 	 * load the core file from stdin (Passed by the kernel via core_pattern)
 	 */
-	elfdesc = load_core_file_stdin(&corefile);
 	
+		
+	asprintf(&corefile, "core.%s", exename);
+	
+	if (launch_gcore_utility(pid, corefile) < 0) {
+		fprintf(stderr, "ecfs-snapshot utility requires that the GDB gcore script is present on your system\n");
+		exit(-1);
+	}
+	/*
+	 * gcore actually will create core.%s.<pid> based on us passing it
+	 * core.%s, so we need to modify our filename so that we then open
+	 * that filename.
+	 */
+	xfree(corefile);
+	asprintf(&corefile, "core.%s.%d", exename, pid);
+	
+	if (strip_section_header_table(corefile) < 0) {
+		fprintf(stderr, "Unable to strip the section header table (created by gcore) on %s\n", corefile);
+		exit(-1);
+	}
+
+	elfdesc = load_core_file(corefile);
+	if (elfdesc == NULL) {
+		fprintf(stderr, "load_core_file failed\n");
+		exit(-1);
+	}
 #if DEBUG
-	log_msg(__LINE__, "Successfully read core from stdin and created temporary corefile path: %s", corefile);
+	fprintf(stdout, "Successfully created temporary corefile: %s\n", corefile);
 #endif
 	/*
 	 * Retrieve 'struct elf_prstatus' and other structures
@@ -325,19 +430,19 @@ int main(int argc, char **argv)
 #endif
 	notedesc = (notedesc_t *)parse_notes_area(elfdesc);
 	if (notedesc == NULL) {
-		log_msg(__LINE__, "Failed to parse ELF notes segment\n");
+		fprintf(stderr, "Failed to parse ELF notes segment\n");
 		exit(-1);
 	}
 	
 #if DEBUG
-	log_msg(__LINE__, "check_for_pie returned %d", pie);
+	fprintf(stderr, "check_for_pie returned %d", pie);
 #endif
 	fill_in_pstatus(memdesc, notedesc);
 
 	if (pie > 0) {
 		unsigned long text_base = lookup_text_base(memdesc, notedesc->nt_files);
 		if (text_base == 0) {
-			log_msg(__LINE__, "Failed to locate text base address");
+			fprintf(stderr, "Failed to locate text base address");
 			goto done;
 		}
 		unsigned long hint = text_base;
@@ -356,9 +461,7 @@ int main(int argc, char **argv)
 	 * in terms of performance.
 	 */
 	if (elfdesc->text_memsz > elfdesc->text_filesz) {
-#if DEBUG
-		log_msg(__LINE__, "merging text into core");
-#endif
+		fprintf(stderr, "merging text into core\n");
 		if (merge_exe_text_into_core((const char *)corefile, memdesc) < 0) {
 			log_msg(__LINE__, "Failed to merge text into core file");
 		}
@@ -389,21 +492,8 @@ int main(int argc, char **argv)
 		}
 	}
 
-	/*
-	 * Which mappings are stored in actual phdr segments?
-	 */
-        for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
-                for (j = 0; j < memdesc->mapcount; j++) 
-                        if (memdesc->maps[j].base == (elfdesc->phdr + i)->p_vaddr)
-                                memdesc->maps[j].has_pt_load++;
-        }
-	
-	/*
-	 * attach to process with ptrace and parse original phdr table
-	 * to get more granular segment information.
-	 */
 #if DEBUG
-	log_msg(__LINE__, "parsing original phdr's in memory");
+	log_msg(__LINE__, "parsing original phdr's from /proc/$pid/exe");
 #endif
 	if (parse_orig_phdrs(elfdesc, memdesc, notedesc) < 0) {
 		log_msg(__LINE__, "Failed to parse program headers in memory");
@@ -526,7 +616,6 @@ int main(int argc, char **argv)
 		if (ret < 0) 
 			log_msg(__LINE__, "Unable to store runtime values into dynamic symbol table");
 	}
-	
 #if DEBUG
 	log_msg(__LINE__, "finished storing symvals");
 #endif

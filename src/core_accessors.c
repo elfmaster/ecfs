@@ -38,7 +38,7 @@ elfdesc_t * load_core_file(const char *path)
 	int i, fd;
 	
 	elfdesc->path = xstrdup(path);
-
+	
 	if ((fd = open(path, O_RDONLY)) < 0) {
 		log_msg(__LINE__, "open %s", strerror(errno));
 		return NULL;
@@ -224,7 +224,7 @@ static ssize_t get_original_shdr_addr(int pid, const char *name)
 	return 0;
 }
 
-static void pull_unknown_shdr_addrs(int pid)
+static void pull_unknown_shdr_addrs(int pid, memdesc_t *memdesc)
 {	
 	
 	global_hacks.plt_vaddr = get_original_shdr_addr(pid, ".plt");
@@ -234,7 +234,6 @@ static void pull_unknown_shdr_addrs(int pid)
 	 * binary, since there is no PT_GNU_EH_FRAME segment type in them.
 	 */
 	global_hacks.ehframe_vaddr = get_original_shdr_addr(pid, ".eh_frame");
-	
 	/*
 	 * I know no other way to find the location of .ctors (.init_array) and
 	 * .ctors (.fini_array) that is as reliable as this.
@@ -246,7 +245,19 @@ static void pull_unknown_shdr_addrs(int pid)
 	global_hacks.dtors_vaddr = get_original_shdr_addr(pid, ".dtors");
 	if (global_hacks.dtors_vaddr == 0)
 		global_hacks.dtors_vaddr = get_original_shdr_addr(pid, ".fini_array");
-
+	
+	log_msg(__LINE__, "memdesc->pie: %lx\n", memdesc->pie);
+	if (memdesc->pie) {
+		if (global_hacks.ctors_vaddr)
+			global_hacks.ctors_vaddr += memdesc->text.base;
+		if (global_hacks.dtors_vaddr)
+			global_hacks.dtors_vaddr += memdesc->text.base;
+		if (global_hacks.plt_vaddr)
+			global_hacks.plt_vaddr += memdesc->text.base;
+		if (global_hacks.ehframe_vaddr)
+			global_hacks.ehframe_vaddr += memdesc->text.base;
+	}
+	log_msg(__LINE__, "ctors is: %lx\n", global_hacks.ctors_vaddr);
 }
 
 /*
@@ -309,9 +320,9 @@ static void pull_unknown_shdr_sizes(int pid)
 		global_hacks.dtors_size = get_original_shdr_size(pid, ".fini_array");
 }
 
-void fill_global_hacks(int pid)
+void fill_global_hacks(int pid, memdesc_t *memdesc)
 {
 	pull_unknown_shdr_sizes(pid);
-	pull_unknown_shdr_addrs(pid);
+	pull_unknown_shdr_addrs(pid, memdesc);
 
 }
