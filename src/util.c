@@ -159,7 +159,7 @@ int inquire_meminfo(void)
         FILE *fp;
         int kbytes, gbytes;
 	char s1[32], s2[32];
-
+	
         fp = fopen("/proc/meminfo", "r");
         if (fp == NULL) {       
                 perror("fopen");

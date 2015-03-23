@@ -137,16 +137,16 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
         uint64_t symtab_offset = lseek(fd, 0, SEEK_CUR);
         for (i = 0; i < symcount; i++) {
                 if( write(fd, (char *)&symtab[i], sizeof(ElfW(Sym))) == -1 ) {
-                    log_msg(__LINE__, "write %s", strerror(errno));
-                    exit_failure(-1);
+                	log_msg(__LINE__, "write %s", strerror(errno));
+                    	exit_failure(-1);
                 }
         }
       	StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
         /* Write section hdr string table */
         uint64_t stloff = lseek(fd, 0, SEEK_CUR);
         if( write(fd, strtab, symstroff) == -1) {
-            log_msg(__LINE__, "write %s", strerror(errno));
-            exit_failure(-1);
+            	log_msg(__LINE__, "write %s", strerror(errno));
+            	exit_failure(-1);
         }
         shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
 	
@@ -481,6 +481,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	 	* .ctors (.init_array)
 	 	*/
 		shdr[scount].sh_type = SHT_PROGBITS;
+		log_msg(__LINE__, "ctors offset %lx + %lx - %lx\n", elfdesc->dataOffset, global_hacks.ctors_vaddr, elfdesc->dataVaddr);
 		shdr[scount].sh_offset = elfdesc->dataOffset + global_hacks.ctors_vaddr - elfdesc->dataVaddr;
 		shdr[scount].sh_addr = global_hacks.ctors_vaddr;
 		shdr[scount].sh_size = global_hacks.ctors_size;

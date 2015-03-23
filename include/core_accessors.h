@@ -66,6 +66,6 @@ ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int typ
  * to fill up global_hacks structure with information
  * needed for section headers. This is ugly and temporary
  */
-void fill_global_hacks(int pid);
+void fill_global_hacks(int pid, memdesc_t *memdesc);
 
 #endif

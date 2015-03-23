@@ -200,7 +200,7 @@ int main(int argc, char **argv)
 		fprintf(stdout, "- Automated mode to be used with /proc/sys/kernel/core_pattern\n");
 		fprintf(stdout, "\n- Manual mode which allows for specifying existing core files (Debugging mode)\n");
 		fprintf(stdout, "[-p]	pid of process (Must respawn a process after it crashes)\n");
-		fprintf(stdout, "[-e]	executable path (Supplied by %%e format arg in core_pattern)\n");
+		fprintf(stdout, "[-e]	executable name (Supplied by %%e format arg in core_pattern)\n");
 		fprintf(stdout, "[-o]	output ecfs file\n\n");
 		exit(-1);
 	}
@@ -258,7 +258,6 @@ int main(int argc, char **argv)
 		int ramdisk_size = inquire_meminfo();
 		if (ramdisk_size <= 0)
 			ramdisk_size = 1;
-		log_msg(__LINE__, "using ramdisk size: %d", ramdisk_size);
 		if (create_tmp_ramdisk(ramdisk_size) < 0) {
 			log_msg(__LINE__, "create_tmp_ramdisk failed");
 		} else
@@ -300,8 +299,8 @@ int main(int argc, char **argv)
 	memdesc->task.pid = pid;
 	pie = check_for_pie(pid);
 	global_hacks.stripped = check_for_stripped_shdr(pid);
-	fill_global_hacks(pid);
-	pie = check_for_pie(pid);
+	memdesc->pie = pie;
+	fill_global_hacks(pid, memdesc);
 	memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
 	memdesc->o_entry = get_original_ep(pid);
 	if (opts.text_all)

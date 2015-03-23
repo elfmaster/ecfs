@@ -383,8 +383,8 @@ int main(int argc, char **argv)
 	memdesc->task.pid = pid;
 	pie = check_for_pie(pid);
 	global_hacks.stripped = check_for_stripped_shdr(pid);
-	fill_global_hacks(pid);
-	pie = check_for_pie(pid);
+	memdesc->pie = pie;
+	fill_global_hacks(pid, memdesc);
 	memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
 	memdesc->o_entry = get_original_ep(pid);
 	if (opts.text_all) {

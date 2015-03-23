@@ -106,6 +106,7 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 	int tc, fpregset_count = 0, fpxregset_count = 0;
 	uint8_t *desc;
 	struct nt_file_struct *nt_files; // for parsing NT_FILE in corefile
+	printf("elfdesc: %p elfdesc->nhdr: %p\n", elfdesc, elfdesc->nhdr);
 	ElfW(Nhdr) *notes = elfdesc->nhdr;
 	
 	for (i = 0; i < elfdesc->noteSize; i += len) {
