@@ -250,13 +250,16 @@ static int strip_section_header_table(const char *corefile)
 	tval = rand() & 0xffff;
 	asprintf(&tmpfile, "tmp.%s", corefile);
 	tfd = xopen(tmpfile, O_CREAT|O_WRONLY);
+	printf("doing mmap\n");
 	copy = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
 	if (copy == MAP_FAILED) {
 		perror("2nd. mmap");
 		return -1;
 	}
+	printf("Copying from mem to copy %d bytes from %p to %p\n", ehdr->e_shoff, mem, copy);
 	memcpy(copy, mem, ehdr->e_shoff);
-	
+	//unlink(corefile);
+	printf("Writing %d bytes\n", ehdr->e_shoff);
 	if (write(tfd, copy, ehdr->e_shoff) < 0) {
 		perror("write");
 		return -1;
@@ -264,8 +267,8 @@ static int strip_section_header_table(const char *corefile)
 	fsync(tfd);
 	close(tfd);
 	munmap(copy, st.st_size);
+	printf("renaming %s to %s\n", tmpfile, corefile);
 	rename(tmpfile, corefile);
-	
 	return 0;
 }
 
