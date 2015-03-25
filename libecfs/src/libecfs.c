@@ -557,4 +557,19 @@ int get_arg_list(ecfs_elf_t *desc, char ***argv)
 	**argv = NULL;
 	return -1;
 }
+
+char * get_section_name_by_addr(ecfs_elf_t *desc, unsigned long addr)
+{
+	ElfW(Ehdr) *ehdr = desc->ehdr;
+	ElfW(Shdr) *shdr = desc->shdr;
+	char *shstrtab = desc->shstrtab;
+	int i;
+
+	for (i = 0; i < ehdr->e_shnum; i++) 
+		if (shdr[i].sh_addr == addr)
+			return &shstrtab[shdr[i].sh_name];
+	return NULL;
+}
+
+	
 	

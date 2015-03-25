@@ -157,12 +157,12 @@ void exit_failure(int code)
 int inquire_meminfo(void)
 {
         FILE *fp;
-        int kbytes, gbytes;
+        unsigned int kbytes, gbytes;
 	char s1[32], s2[32];
 	
         fp = fopen("/proc/meminfo", "r");
         if (fp == NULL) {       
-                perror("fopen");
+                log_msg(__LINE__, "fopen: %s", strerror(errno));
                 return -1;
         }
         fscanf(fp, "%s %u %s", s1, &kbytes, s2);

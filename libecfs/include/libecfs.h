@@ -136,3 +136,4 @@ int get_auxiliary_vector32(ecfs_elf_t *desc, Elf32_auxv_t **auxv);
 unsigned long get_fault_location(ecfs_elf_t *desc);
 int get_arg_list(ecfs_elf_t *desc, char ***argv);
 unsigned long get_section_va(ecfs_elf_t *desc, const char *name);
+char * get_section_name_by_addr(ecfs_elf_t *desc, unsigned long addr);
