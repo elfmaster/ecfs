@@ -3,7 +3,7 @@ NAME
 	ECFS (Extended core file snapshot) format. 
 
 SYNOPSIS
-	#include <ecfs.h>
+	#include <libecfs.h>
 
 DESCRIPTION - (XXX: Man page is only 30% complete)
 
@@ -12,7 +12,15 @@ or an existing corefile and produces a custom ELF file as the output. This outpu
 mostly backwards compatible with a regular core file, but it has a fully reconstructed set
 of section headers, and a fully reconstructed dynamic and local symbol table. This manual
 page will describe how to access the different components, which are primarily stored in 
-section headers and are therefore trivial to access.
+section headers and are therefore trivial to access. To make it even easier the ecfs authors
+have designed libecfs API 'libecfsreader.a' for automatically loading and parsing ecfs-core
+files. This man page documents both the ecfs file format itself, and the libecfs API that
+can be used to parse the file format with ease, making the design of tools for forensics
+and malware analysis extremely smooth.
+
+NOTE: libecfs API compiles both a 32bit and a 64bit version of libecfsreader.a, so currently
+you must use the 32bit library for parsing 32bit ecfs files and the 64bit compiled library
+for parsing 64bit ecfs file.
 
 FILE TYPE
 
@@ -80,15 +88,15 @@ Closing a file:
 void unload_ecfs_file(ecfs_elf_t *desc)
 
 
-This function will open the file pointed to by path, allocate an ecfs_elf_t 
+load_ecfs_file() will open the file pointed to by path, allocate an ecfs_elf_t 
 descriptor with malloc(), map all of the ECFS components into ecfs_elf_t, and return 
 a pointer to the structure.
 
+unload_ecfs_file() will unmap the file and free everything from memory.
+
 - RETURN VALUE
 
-NULL is returned on failure, otherwise a pointer to the ecfs_elf_t struct.
-
-
+load_ecfs_file(): NULL is returned on failure, otherwise a pointer to the ecfs_elf_t struct.
 
 
 -=[EXTRACTING THE NUMBER OF ACTIVE THREADS]
@@ -288,28 +296,112 @@ EXAMPLE:
 		printf("Name: %s value: %lx\n", &strtab[dsyms[i].nameoffset], dsyms[i].symval);
 	
 
+
+
+
 -=[GET POINTER FUNCTIONS]
 
 ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr);
 
--RETURN VALUE
+- SYNOPSIS / DESCRIPTION
 
 Returns the size of the stack on success, -1 on failure. Sets ptr to point to
 the stack inside of the desc struct on success, null on failure.
 
 
 
+
+
+
 ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr);
 
--RETURN VALUE
+- SYNOPSIS / DESCRIPTION
 
 Returns the size of the heap on success, -1 on failure. Sets ptr to point to the
 heap inside of the desc struct on success, null on failure.
 
 
 
+
+
+
 ssize_t get_ptr_for_va(ecfs_elf_t *desc, unsigned long vaddr, uint8_t **ptr)
 
 
+- SYNOPSIS / DESCRIPTION
 
+Returns the length of bytes until the end of the segment that 'vaddr' falls into
+or -1 on failure. Sets ptr to point to the memory location within the ecfs binary.
+
+
+
+
+
+
+ssize_t get_section_pointer(ecfs_elf_t *desc, const char *name, uint8_t **ptr);
+
+- SYNOPSIS / DESCRIPTION 
+
+Takes a section name, such as ".got.plt" and sets ptr to the beggining of that
+section within the binary. The function will return the number of bytes within
+the section, or -1 on error.
+
+
+
+
+
+
+
+-=[UNFINISHED]
+
+This manual page is not complete so for the sake of the reader still being aware
+of all functions, here is a complete list of the other functions not yet described
+in this man page. It is likely you will be able to figure out what they do.
+
+/*
+ * Fills an array of pltgot_info_t structs 
+ */
+ssize_t get_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo);
+
+/*
+ * Points auxv to the auxiliary vector within the binary.
+ * NOTE: This is the only function where both the 32bit and 64bit
+ * compiled versions of the library have a specific 32bit and 64bit
+ * version of a function. So for 64bit binaries use the 64bit function
+ * and the 32bit function for a 32bit binary. In the future this will
+ * change.
+ */
+int get_auxiliary_vector64(ecfs_elf_t *desc, Elf64_auxv_t **auxv);
+int get_auxiliary_vector32(ecfs_elf_t *desc, Elf32_auxv_t **auxv);
+
+
+/*
+ * This function returns the address that the program segfaulted on 
+ * if it crashed.
+ */
+unsigned long get_fault_location(ecfs_elf_t *desc);
+
+/*
+ * This function creates an argument vector containing the strings
+ * for argv[0], argv[1] .. argv[N]
+ */
+int get_arg_list(ecfs_elf_t *desc, char ***argv);
+
+/*
+ * This function returns the virtual address of a given section
+ */
+unsigned long get_section_va(ecfs_elf_t *desc, const char *name);
+
+
+/*
+ * This function returns the name of the section that a given virtual
+ * address falls into. and returns NULL if it can't find one.
+ */
+char * get_section_name_by_addr(ecfs_elf_t *desc, unsigned long addr);
+
+
+
+-= [CONTACT]
+
+elfmaster [at] zoho.com
 
