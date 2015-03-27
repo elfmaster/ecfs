@@ -13,7 +13,7 @@ reflect the state of code and data in runtime. ecfs-core files are
 also extremely straight forward to parse, moreso when using the
 complementary libecfs C library (Python bindings are a work in progress).
 See the manual page which describes how to access the different ecfs-core
-components in-depth.
+components in-depth [./manual/man.txt]
 
 
 ## USE CASES
