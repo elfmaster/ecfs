@@ -502,7 +502,6 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	 	* .ctors (.init_array)
 	 	*/
 		shdr[scount].sh_type = SHT_PROGBITS;
-		log_msg(__LINE__, "ctors offset %lx + %lx - %lx\n", elfdesc->dataOffset, global_hacks.ctors_vaddr, elfdesc->dataVaddr);
 		shdr[scount].sh_offset = elfdesc->dataOffset + global_hacks.ctors_vaddr - elfdesc->dataVaddr;
 		shdr[scount].sh_addr = global_hacks.ctors_vaddr;
 		shdr[scount].sh_size = global_hacks.ctors_size;
