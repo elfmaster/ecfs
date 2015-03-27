@@ -494,10 +494,14 @@ struct {
 	ssize_t plt_size;
 	ssize_t ctors_size;
 	ssize_t dtors_size;
+	ssize_t text_size;
+	ssize_t data_size;
 	unsigned long plt_vaddr;
 	unsigned long ehframe_vaddr;
 	unsigned long ctors_vaddr;
 	unsigned long dtors_vaddr;
+	unsigned long text_vaddr;  // for .text section of orig executable
+	unsigned long data_vaddr; // for .data section of orig executable
         int eh_frame_offset_workaround;
 	int stripped; // means section headers are stripped
 } global_hacks;

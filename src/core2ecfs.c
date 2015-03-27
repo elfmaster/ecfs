@@ -392,7 +392,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	}
 
 	 /*
-         * .text
+         * ._TEXT (text segment, not .text section)
          */
 	
         text_shdr_index = scount;
@@ -406,11 +406,32 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         shdr[scount].sh_size = elfdesc->textSize;
         shdr[scount].sh_addralign = 16;
         shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], ".text");
-        stoffset += strlen(".text") + 1;
+        strcpy(&StringTable[stoffset], "._TEXT");
+        stoffset += strlen("._TEXT") + 1;
         scount++;
 
-        
+ 	/*
+	 * .text.orig 
+	 * This section reflects the location of the .text section
+	 * from the original executable. In ecfs files there are two
+	 * .text sections: '.text' and '.text.orig'. The first one
+	 * reflects the entire text segment, and the 2nd one reflects
+	 * the text section only as in the originally linked executable
+	 * containing only the functions of the program.
+	 */
+	shdr[scount].sh_type = SHT_PROGBITS;
+	shdr[scount].sh_offset = elfdesc->textOffset + global_hacks.text_vaddr - elfdesc->textVaddr;     
+	shdr[scount].sh_addr = global_hacks.text_vaddr;
+	shdr[scount].sh_size = global_hacks.text_size;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 0;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_addralign = 16;
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".text");
+	stoffset += strlen(".text") + 1;
+	scount++;
+ 
 	if (dynamic) {
        	 	/*
          	 * .fini
@@ -551,16 +572,33 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
         	scount++;
 	}
 	/*
+	 * ._DATA (represents entire data segment)
+	 */
+	shdr[scount].sh_type = SHT_PROGBITS;
+	shdr[scount].sh_offset = elfdesc->dataOffset;
+	shdr[scount].sh_addr = elfdesc->dataVaddr;
+	shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
+        shdr[scount].sh_info = 0;
+        shdr[scount].sh_link = 0;
+        shdr[scount].sh_entsize = 0;
+        shdr[scount].sh_size = elfdesc->dataSize;
+        shdr[scount].sh_addralign = sizeof(long);
+        shdr[scount].sh_name = stoffset;
+        strcpy(&StringTable[stoffset], "._DATA");
+        stoffset += strlen("._DATA") + 1;
+        scount++;
+
+	/*
  	 * .data
        	 */
       	shdr[scount].sh_type = SHT_PROGBITS;
-       	shdr[scount].sh_offset = elfdesc->dataOffset;
-       	shdr[scount].sh_addr = elfdesc->dataVaddr;
+       	shdr[scount].sh_offset = elfdesc->dataOffset + (global_hacks.data_vaddr - elfdesc->dataVaddr);
+       	shdr[scount].sh_addr = global_hacks.data_vaddr;
        	shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
        	shdr[scount].sh_info = 0;
        	shdr[scount].sh_link = 0;
        	shdr[scount].sh_entsize = 0;
-       	shdr[scount].sh_size = elfdesc->dataSize;
+       	shdr[scount].sh_size = global_hacks.data_size;
        	shdr[scount].sh_addralign = sizeof(long);
        	shdr[scount].sh_name = stoffset;
        	strcpy(&StringTable[stoffset], ".data");

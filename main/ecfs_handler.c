@@ -43,7 +43,7 @@ static void load_ecfs_worker(char **argv, char **envp, const char *ecfs_worker_p
 	int status, pid;
 	int ret;
 
-	argv[0] = ecfs_worker_path;
+	argv[0] = (char *)ecfs_worker_path;
 	pid = fork();
 	
 	if (pid < 0) {

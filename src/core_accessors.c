@@ -127,7 +127,6 @@ ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int typ
 
         switch(type) {
                 case HEAP:
-			log_msg(__LINE__, "get_internal_sh_offset() seeking heap offset");
                         for (i = 0; i < memdesc->mapcount; i++) {
                                 if (maps[i].heap) {
 					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
@@ -138,7 +137,6 @@ ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int typ
 			}
                         break;
                 case STACK:
-			log_msg(__LINE__, "get_internal_sh_offset() seeking stack offset");
                          for (i = 0; i < memdesc->mapcount; i++) {
                                 if (maps[i].stack) {
 					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
@@ -157,7 +155,6 @@ ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int typ
                         }
                         break;
                 case VDSO:
-			log_msg(__LINE__, "get_internal_sh_offset() seeking vdso offset");
                          for (i = 0; i < memdesc->mapcount; i++) {
                                 if (maps[i].vdso) {
 					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
@@ -168,7 +165,6 @@ ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int typ
                        	}
                         break;
                 case VSYSCALL:
-			log_msg(__LINE__, "get_internal_sh_offset() seeking vsyscall offset");
                          for (i = 0; i < memdesc->mapcount; i++) {
                                 if (maps[i].vsyscall) {
 					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
@@ -202,7 +198,7 @@ ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int typ
 }
 static ssize_t get_original_shdr_addr(int pid, const char *name)
 {
-	   struct stat st;
+	struct stat st;
         int i;
         char *path = xfmtstrdup("/proc/%d/exe", pid);
         int fd = xopen(path, O_RDONLY);
@@ -227,6 +223,23 @@ static ssize_t get_original_shdr_addr(int pid, const char *name)
 static void pull_unknown_shdr_addrs(int pid, memdesc_t *memdesc)
 {	
 	
+	/*
+	 * We create a section in ecfs files called .text
+	 * that reflects the original .text section. Whereas our
+	 * ._TEXT section reflects the entire text segment. 
+	 */
+	global_hacks.text_vaddr = get_original_shdr_addr(pid, ".text");
+
+	/*
+	 * .data reflects original .data section and ._DATA reflects
+	 * the entire text segment. In this case we are getting the
+	 * vaddr of the original .data section.	
+ 	 */
+	global_hacks.data_vaddr = get_original_shdr_addr(pid, ".data");
+	
+	/*
+	 * Get plt location since its not marked in dynamic segment
+	 */
 	global_hacks.plt_vaddr = get_original_shdr_addr(pid, ".plt");
 	/*
 	 * We actually only rely on getting this from the original executables
@@ -246,7 +259,6 @@ static void pull_unknown_shdr_addrs(int pid, memdesc_t *memdesc)
 	if (global_hacks.dtors_vaddr == 0)
 		global_hacks.dtors_vaddr = get_original_shdr_addr(pid, ".fini_array");
 	
-	log_msg(__LINE__, "memdesc->pie: %lx\n", memdesc->pie);
 	if (memdesc->pie) {
 		if (global_hacks.ctors_vaddr)
 			global_hacks.ctors_vaddr += memdesc->text.base;
@@ -256,8 +268,11 @@ static void pull_unknown_shdr_addrs(int pid, memdesc_t *memdesc)
 			global_hacks.plt_vaddr += memdesc->text.base;
 		if (global_hacks.ehframe_vaddr)
 			global_hacks.ehframe_vaddr += memdesc->text.base;
+		if (global_hacks.text_vaddr)
+			global_hacks.text_vaddr += memdesc->text.base;
+		if (global_hacks.data_vaddr)
+			global_hacks.data_vaddr += memdesc->text.base;
 	}
-	log_msg(__LINE__, "ctors is: %lx\n", global_hacks.ctors_vaddr);
 }
 
 /*
@@ -306,7 +321,9 @@ static void pull_unknown_shdr_sizes(int pid)
 		global_hacks.rela_size = get_original_shdr_size(pid, ".rel.dyn");
 		global_hacks.plt_rela_size = get_original_shdr_size(pid, ".rel.plt");
 	}
-
+	
+	global_hacks.text_size = get_original_shdr_size(pid, ".text"); 
+	global_hacks.data_size = get_original_shdr_size(pid, ".data");
 	global_hacks.init_size = get_original_shdr_size(pid, ".init");
 	global_hacks.fini_size = get_original_shdr_size(pid, ".fini");
 	global_hacks.got_size = get_original_shdr_size(pid, ".got.plt");

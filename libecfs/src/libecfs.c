@@ -67,12 +67,12 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 			ecfs->dynOff = shdr[i].sh_offset;
 			ecfs->dyn = (ElfW(Dyn) *)&mem[shdr[i].sh_offset];
 		} else
-		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".data")) {
+		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], "._DATA")) {
                         ecfs->dataVaddr = shdr[i].sh_addr;
                         ecfs->dataSize = shdr[i].sh_size;
                         ecfs->dataOff = shdr[i].sh_offset;
                 } else
-		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".text")) {
+		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], "._TEXT")) {
                         ecfs->textVaddr = shdr[i].sh_addr;
                         ecfs->textSize = shdr[i].sh_size;
                         ecfs->textOff = shdr[i].sh_offset;

@@ -193,8 +193,8 @@ To modify your sysctl.conf (For systems not using systemd)
 For systemd based systems such as ARCH Linux
 
 Modify:
-
-    /usr/libsysctl.d/50-coredump.conf
+    
+    /usr/lib/sysctl.d/50-coredump.conf
 
 ## ECFS CORE FILES
 
