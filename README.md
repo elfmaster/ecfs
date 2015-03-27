@@ -1,6 +1,8 @@
 
 # ECFS
 
+### ECFS CORES
+
 ECFS is an extension to the existing ELF core file format in Linux. 
 Its job is to intercept the Linux core-dump handler, catch the core-dump
 before it is written to disk, and carefully reconstruct it into an
@@ -15,6 +17,16 @@ complementary libecfs C library (Python bindings are a work in progress).
 See the manual page which describes how to access the different ecfs-core
 components in-depth [./manual/man.txt]
 
+### ECFS SNAPSHOTS
+
+ECFS can also be used to take snapshots without killing the process
+which is often times more desirable. This can be accomplished by
+using the ecfsnap64 and ecfsnap32 utility (main/ecfs_snapshot.c)
+but at this point the utility is not quite working 100%. It relies
+on gcore (GDB based coredumping utility) and there are some aspects
+of the core files generated with this utility that are throwing off
+certain components of ecfs and causing failure. This will for certain
+be up to date and working by 4/15/2015
 
 ## USE CASES
 

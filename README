@@ -1,6 +1,8 @@
 
 # ECFS
 
+### ECFS CORES
+
 ECFS is an extension to the existing ELF core file format in Linux. 
 Its job is to intercept the Linux core-dump handler, catch the core-dump
 before it is written to disk, and carefully reconstruct it into an
@@ -13,9 +15,27 @@ reflect the state of code and data in runtime. ecfs-core files are
 also extremely straight forward to parse, moreso when using the
 complementary libecfs C library (Python bindings are a work in progress).
 See the manual page which describes how to access the different ecfs-core
-components in-depth.
+components in-depth [./manual/man.txt]
+
+### ECFS SNAPSHOTS
+
+ECFS can also be used to take snapshots without killing the process
+which is often times more desirable. This can be accomplished by
+using the ecfsnap64 and ecfsnap32 utility (main/ecfs_snapshot.c)
+but at this point the utility is not quite working 100%. It relies
+on gcore (GDB based coredumping utility) and there are some aspects
+of the core files generated with this utility that are throwing off
+certain components of ecfs and causing failure. This will for certain
+be up to date and working by 4/15/2015
 
 ## USE CASES
+
+* Runtime malware analysis
+* Process forensics
+* Reversing binary protection
+* Process snapshot execution (https://github.com/elfmaster/ecfs_exec)
+
+### USE CASE DESCRIPTION 
 
 ECFS creates high resolution snapshots of a running process. These 
 snapshots are ideal for forensics analysis, and malware analysis. 
@@ -42,17 +62,14 @@ that I wrote up in about 4 hours: https://github.com/elfmaster/ecfs_exec
 
 Enjoy...
 
-## SYNOPSIS - Extended core file snapshot technology
 
-### ECFS coredump plugin functionality 
+## SYNOPSIS - Extended core file snapshot technology
 
 This source code contains the ecfs suite of software which has several
 components. The primary component plugs ecfs-core dump functionality 
 into the Linux core dump routine. The secondary component being libecfs
 which is a library specifically designed to parse ecfs-core files with
-ease. ecfs-core snapshots can also be executed using ecfs-exec, so users
-may start a process where it left off, this functionality is currently
-being maintained in a separate repo that will come public soon.
+ease.
 
 On 64bit Linux systems this software is also cross compiled for 32bit
 so that a 32bit-handler can be dispatched in order to handle 32bit processes.
@@ -94,6 +111,7 @@ it relies heavily on what resides in /proc/$pid during the transformation
 phase.
 
 $ ecfsnap64 -t -p `pidof sshd` -o sshd.ecfs
+
 
 ## INSTALL
 
@@ -193,7 +211,7 @@ To modify your sysctl.conf (For systems not using systemd)
 For systemd based systems such as ARCH Linux
 
 Modify:
-    
+ 
     /usr/lib/sysctl.d/50-coredump.conf
 
 ## ECFS CORE FILES
