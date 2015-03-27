@@ -18,6 +18,13 @@ components in-depth.
 
 ## USE CASES
 
+* Runtime malware analysis
+* Process forensics
+* Reversing binary protection
+* Process snapshot execution (https://github.com/elfmaster/ecfs_exec)
+
+### USE CASE DESCRIPTION 
+
 ECFS creates high resolution snapshots of a running process. These 
 snapshots are ideal for forensics analysis, and malware analysis. 
 The libecfsreader API can be used to rapidly design advanced malware
