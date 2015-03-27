@@ -1126,7 +1126,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	ret = build_local_symtab_and_finalize(outfile, handle);
 	if (ret < 0) 
 		log_msg(__LINE__, "local symtab reconstruction failed");
-
+	
 	/* Open just once more to fill in the dynamic symbol table values */
 
 
