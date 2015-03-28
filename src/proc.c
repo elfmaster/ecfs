@@ -368,3 +368,64 @@ ElfW(Addr) get_original_ep(int pid)
         ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
         return ehdr->e_entry;
 }
+
+#define MAX_BLOB_SIZE 0x400000
+
+ssize_t snapshot_procfs(memdesc_t *memdesc, uint8_t **zlib_blob)
+{
+	uint8_t *mem;
+	char *tar, *cmd;
+	char *proc_path, *tmp_path;
+	int ret, in, out, rval;
+	struct timeval tv;
+	struct stat st;
+
+	*zlib_blob = NULL;
+	asprintf(&proc_path, "/proc/%d", memdesc->task.pid);
+	if (opts.use_ramdisk) {
+		gettimeofday(&tv, NULL);
+		srand(tv.tv_usec);
+		rval = rand() & 0x7fff;
+		// XXX in future check to make sure this
+	 	// file doesn't already exist with do while
+		// loop
+		asprintf(&tmp_path, "%s/.proc_snapshot.%d.tgz", ECFS_RAMDISK_DIR, rval);
+	} else {
+		asprintf(&tmp_path, "/tmp/.proc_snapshot.%d.tgz", rval);
+	}
+	if (access("/bin/tar", F_OK) == 0)
+		tar = "/bin/tar";
+	else
+	if (access("/usr/bin/tar", F_OK) == 0)
+		tar = "/usr/bin/tar";
+	else {
+		log_msg(__LINE__, "cannog find gzip utility");
+		return -1;
+	}
+	asprintf(&cmd, "%s -czf %s %s", tar, tmp_path, proc_path);
+	system(cmd);
+	if (access(tmp_path, F_OK) != 0) {
+		log_msg(__LINE__, "failed to create proc snapshot with tar");
+		return -1;
+	}
+	in = open(tmp_path, O_RDONLY);
+	if (in < 0) {
+		log_msg(__LINE__, "open %s failed: %s", tmp_path, strerror(errno));
+		return -1;
+	}
+	if (fstat(in, &st) < 0) {
+		log_msg(__LINE__, "fstat %s failed: %s", tmp_path, strerror(errno));
+		return -1;
+	}
+	mem = (uint8_t *)heapAlloc(st.st_size);
+	read(in, mem, st.st_size);
+
+	*zlib_blob = mem;
+	
+	close(in);
+	unlink(tmp_path);
+	
+	return st.st_size;
+}
+
+	
