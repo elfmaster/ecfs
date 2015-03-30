@@ -399,6 +399,9 @@ We can see that the relro page is mapped in, which is the first 4K
 of the data segment, marked as read-only as a security mechanism.
 And we can see that the data segment itself is mapped in.
 
+In some cases there are more than one data segment, in which case
+you would see a number appended to 'data'. i.e. 'libc.so.6.data.1'.
+	
 	
 	**********************************
 	*** SHT_INJECTED type sections ***
@@ -414,5 +417,80 @@ through __libc_dlopen_mode() or through mmap(). In this case the shared
 library gets marked as SHT_INJECTED instead of SHT_SHLIB.
 file.  One of these
 
+
+
+
+	Example of parsing an ecfs file to detect DLL injection and
+	PLT/GOT hooks. This example was taken from POC||GTFO 0x7.
+	
+	NOTE: The ecfs heuristics '-h' must be enabled for the auto-DLL detection
+	to have worked.
+
+#include "../include/libecfs.h"
+
+int main(int argc, char **argv)
+{
+	ecfs_elf_t *desc;
+	ecfs_sym_t *dsyms;
+	char *progname;
+	int i;
+	char *libname;
+	long evil_addr;
+	
+	if (argc < 2) {
+		printf("Usage: %s <ecfs_file>\n", argv[0]);
+		exit(0);
+	}
+	
+	/*
+	 * Load the ecfs file
+	 */
+	desc = load_ecfs_file(argv[1]);
+	
+	/*
+	 * Get the executable path
+	 */
+	progname = get_exe_path(desc);
+	
+	printf("Performing analysis on '%s' which corresponds to executable: %s\n", argv[1], progname);
+
+	/*
+	 * Look to see if we see any INJECTED shared libraries
+ 	 */
+	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+		if (desc->shdr[i].sh_type == SHT_INJECTED) {
+			libname = strdup(&desc->shstrtab[desc->shdr[i].sh_name]);
+			printf("[!] Found malicously injected shared library: %s\n", libname);
+		}
+	}
+
+	/*
+ 	 * Get the PLT/GOT info which will show us the
+	 * GOT values, and will show us what values we
+	 * should expect to see there.
+	 */
+	pltgot_info_t *pltgot;
+        int ret = get_pltgot_info(desc, &pltgot);
+	for (i = 0; i < ret; i++) {
+		if (pltgot[i].got_entry_va != pltgot[i].shl_entry_va && pltgot[i].got_entry_va != pltgot[i].plt_entry_va)
+			printf("[!] Found PLT/GOT hook, function 'name' is pointing at %lx instead of %lx\n", 
+				pltgot[i].got_entry_va, evil_addr = pltgot[i].shl_entry_va);
+	}
+	/*
+ 	 * Get the dynamic symbols so we can lookup
+	 * which function was hooked in the GOT.
+	 */
+	ret = get_dynamic_symbols(desc, &dsyms);
+        for (i = 0; i < ret; i++) {
+                if (dsyms[i].symval == evil_addr) {
+                        printf("[!] %lx corresponds to hijacked function: %s\n", dsyms[i].symval, &dsyms[i].strtab[dsyms[i].nameoffset]);
+                        break;
+                }
+        }
+
+}
+
+
+-= More documentation coming soon!
 
 
