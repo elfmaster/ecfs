@@ -1,0 +1,231 @@
+ECFS Specification document, April 2015 - elfmaster [at] zoho.com
+
+[See also, man.txt for documentation on using libecfs API]
+
+-= Intro
+
+ECFS (Extended core file snapshots) is an extensible ELF format
+that is somewhat like a hybrid between an ELF executable and
+and ELF core file. The purpose of an ecfs file (referred to as
+ecfs-core, or ecfs-snapshot files) is to aggregate and compile
+everything about a running program (A process) into a single
+snapshot file that follows and builds on the ELF file format.
+This file format allows reverse engineers and forensics analysts
+to quickly vet an entire process, while quickly identifying 
+anomalous characteristics that pertain to malware including
+rootkits, viruses, backdoors, and hot-patches. The ecfs technology
+has been covered in some detail in several other papers including
+POC||GTFO 0x7.
+
+spec.txt covers the ecfs specific extensions that augment
+the existing ELF format. Although some new section types
+and features exist, they still essentially stay within the
+bounds of the original ELF specification. There is an API named
+libecfs for parsing ecfs-snapshots that is documented in
+libecfs_manual.txt. 
+
+Here we will cover the specs of the ecfs file format itself
+as they differ from the original ELF format.
+
+-= ECFS philosophy
+
+ECFS is all about making runtime analysis of a program easier than
+ever before. The entire process is encased within a single file,
+and organized in such a way that locating and accessing data and
+code that is critical for detecting anomalies and infections is
+almost trivial to do. Part of this philosophy is that all process
+code and data is stored and accessible through ELF section headers.
+Everything from the shared library memory maps to the stack, the
+heap, and ecfs customly prepared data is available as a section header.
+Even the entire /proc/$pid directory tree is compressed and stored
+in an ELF section. Perhaps the most useful and clever aspect of ecfs
+is its ability to fully reconstruct the symbol tables for every single
+function in the local ('.symtab') and dynamic ('.dynsym') symbol tables.
+As any reverse engineer knows, symbols making reverse engineering so
+much easier. Symbols help connect all of the dots between reference
+points and code transfers. ECFS uses specialized techniques to fully
+reconstruct symbol tables.
+
+A good example of using ecfs and its corresponding libecfs parsing
+API is in https://www.alchemistowl.org/pocorgtfo/pocorgtfo07.pdf
+which demonstrates how easy it is to write a malware analyzer for
+detecting DLL injection and PLT hooks in a process that has been
+compromised by an attacker.
+
+
+-= ECFS custom sections
+
+	***********************
+	***   .procfs.tgz   ***
+	***********************
+
+This section was originally created so that certain
+technology (Such as google breakpad) that require a complete
+/proc/$pid in order to run, can work with offline ecfs-snapshots.
+The '.procfs.tgz' section contains the results of 'tar -czf /proc/$pid'.
+This section can be extracted from the ecfs file using either
+objcopy (Such as with the script/extract_proc.sh) or with the
+'readecfs -X <ecfs_file> <output.tgz>' command. Many of the 
+sections contained with an ecfs-core file are abstractions of
+data that were taken from /proc/$pid, but it certainly can't hurt
+to have a copy of the entire directory structure for analysis that
+requires it.
+
+	*********************
+	***   .prstatus   ***
+	*********************
+
+This section contains the 'struct elf_prstatus' structures. 
+There will be one struct for every thread. Traditional ELF core
+files also have these structs, but they are usually contained
+within the ELF notes segment, which is more difficult to parse
+than section headers. 
+
+/* These are contained within .prstatus section */
+
+struct elf_prstatus
+  {
+    struct elf_siginfo pr_info;         /* Info associated with signal.  */
+    short int pr_cursig;                /* Current signal.  */
+    unsigned long int pr_sigpend;       /* Set of pending signals.  */
+    unsigned long int pr_sighold;       /* Set of held signals.  */
+    __pid_t pr_pid;
+    __pid_t pr_ppid;
+    __pid_t pr_pgrp;
+    __pid_t pr_sid;
+    struct timeval pr_utime;            /* User time.  */
+    struct timeval pr_stime;            /* System time.  */
+    struct timeval pr_cutime;           /* Cumulative user time.  */
+    struct timeval pr_cstime;           /* Cumulative system time.  */
+    elf_gregset_t pr_reg;               /* GP registers.  */
+    int pr_fpvalid;                     /* True if math copro being used.  */
+  };
+
+
+	
+	*******************
+	***   .fdinfo   ***
+	*******************
+
+
+This section contains an ecfs custom struct that describes
+the files, pipes, and sockets that are open. An example of
+using libecfs to parse this information is available in the
+libecfs_manual.txt file. 
+
+typedef struct fdinfo {
+        int fd;			// fd number
+        char path[MAX_PATH];	// path to file, or may contain pipe or socket info
+        loff_t pos;		// position/offset within a file stream
+        unsigned int perms;	// perms of open() file descriptor (i.e. O_RDONLY)
+        struct {
+                struct in_addr src_addr; // src address of socket
+                struct in_addr dst_addr; // dst address of socket
+                uint16_t src_port;	 // src port of socket
+                uint16_t dst_port;	 // dst port of socket
+        } socket;	
+        char net;		// if net is 1 then TCP, if 2, then UDP
+} fd_info_t;
+
+
+
+	
+	********************
+	***   .siginfo   ***
+	********************
+
+This section contains the siginfo_t struct which obviously
+holds signal data about the process, including what signal
+killed it, and what address it faulted at (If it faulted).
+
+
+           siginfo_t {
+               int      si_signo;    /* Signal number */
+               int      si_errno;    /* An errno value */
+               int      si_code;     /* Signal code */
+               int      si_trapno;   /* Trap number that caused
+                                        hardware-generated signal
+                                        (unused on most architectures) */
+               pid_t    si_pid;      /* Sending process ID */
+               uid_t    si_uid;      /* Real user ID of sending process */
+               int      si_status;   /* Exit value or signal */
+               clock_t  si_utime;    /* User time consumed */
+               clock_t  si_stime;    /* System time consumed */
+               sigval_t si_value;    /* Signal value */
+               int      si_int;      /* POSIX.1b signal */
+               void    *si_ptr;      /* POSIX.1b signal */
+               int      si_overrun;  /* Timer overrun count; POSIX.1b timers */
+               int      si_timerid;  /* Timer ID; POSIX.1b timers */
+               void    *si_addr;     /* Memory location which caused fault */
+               long     si_band;     /* Band event (was int in
+                                        glibc 2.3.2 and earlier) */
+               int      si_fd;       /* File descriptor */
+               short    si_addr_lsb; /* Least significant bit of address
+                                        (since Linux 2.6.32) */
+           }
+
+
+
+
+	**********************
+	***   .auxvector   ***
+	**********************
+
+This section contains the processes auxiliary vector which
+is always setup at the bottom of the stack during process
+startup. This is taken directly from /proc/$pid/auxv and can
+be parsed using the functionality in libecfs API. An example
+of this can be found in the libecfs_manual.txt or the readecfs.c
+source code.
+
+
+
+
+	********************
+	***   .exepath   ***
+	******************** 
+
+This section simply contains the executable path of the program
+who's process it is.
+
+
+
+
+	************************
+	***   .personality   ***
+	************************
+
+This section contains certain personality traits of the ECFS
+file. The ecfs_elf_t struct contains a member of type elf_stat_t
+and you may see the readecfs.c source code for an example of how
+to check the presonality traits.
+
+	typedef struct elf_stats {
+
+#define ELF_STATIC (1 << 1) // if its statically linked (instead of dynamically)
+#define ELF_PIE (1 << 2)    // if its position indepdendent executable
+#define ELF_LOCSYM (1 << 3) // local symtab exists?
+#define ELF_HEURISTICS (1 << 4) // were detection heuristics used by ecfs?
+#define ELF_STRIPPED_SHDRS (1 << 8) // was the original executable stripped of section headers?
+ 	 
+	      unsigned int personality; // if (personality & ELF_STATIC)
+	} elf_stat_t;
+
+
+NOTE: Currently the ELF_LOCSYM personality trait is not in effect
+so please ignore the results associated with testing the ELF_LOCSYM bit.
+
+	
+
+
+
+
+	********************
+	***   .arglist   ***
+	********************
+
+This section contains the argv array of the programs main() function
+so that you can see the command line options that were used. An
+example of using this function can be found in readecfs.c source
+code.
+

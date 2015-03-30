@@ -5,6 +5,7 @@ NAME
 SYNOPSIS
 	#include <libecfs.h>
 
+
 DESCRIPTION - (XXX: Man page is only 30% complete)
 
 ECFS is an extension to the existing ELF core file format in Linux. It takes a process image
@@ -38,6 +39,7 @@ process image as a whole is trivial and primarily done through section headers, 
 the section name and in some cases the section type, such as with SHT_SHLIB sections.
 The following structure should be used as a handle to open ECFS files.
 
+/* From libecfs.h */
 		
 typedef struct ecfs_elf {
          uint8_t *mem;          /* raw memory pointer */
