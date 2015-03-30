@@ -52,8 +52,51 @@ which demonstrates how easy it is to write a malware analyzer for
 detecting DLL injection and PLT hooks in a process that has been
 compromised by an attacker.
 
+-= ECFS Execution
+
+ecfs-snapshot files are fecund with information about the program
+and process, and are therefore equipped with everything that is
+needed to re-execute. In other words, ecfs technology can be used
+to snapshot/stop a process, and then restart it later in time. This
+is a side project of ecfs and is still in early prototype stages.
+See https://github.com/elfmaster/ecfs_exec
+
+
 
 -= ECFS custom sections
+
+Here we will list any ELF section types that are newly introduced
+with the ecfs format. Any sections other than what we are discussing
+below, were in existence prior to ecfs technology, and generally 
+retain the same definition, other than the fact that they will reflect
+the state of code or data as they are at runtime.
+
+
+	******************
+	***   ._TEXT   ***
+	******************
+
+This section is not to be confused with .text which is the text
+section of the executable. The ._TEXT section actually refers to
+the entire text segment of the executable. This way a user can quickly
+locate the text segment without having to deduce where it exists by
+looking at the program headers.
+
+
+
+
+	******************
+	***   ._DATA   ***
+	******************
+
+This section is not to be confused with .data which is the data
+section of the executable. The ._DATA section actually refers to
+the entire data segment of the executable. This way a user can quickly
+locate the data segment without having to deduce where it exists by
+looking at the program headers.
+
+
+
 
 	***********************
 	***   .procfs.tgz   ***
@@ -70,6 +113,9 @@ sections contained with an ecfs-core file are abstractions of
 data that were taken from /proc/$pid, but it certainly can't hurt
 to have a copy of the entire directory structure for analysis that
 requires it.
+
+
+
 
 	*********************
 	***   .prstatus   ***
@@ -228,4 +274,145 @@ This section contains the argv array of the programs main() function
 so that you can see the command line options that were used. An
 example of using this function can be found in readecfs.c source
 code.
+
+	argv[0] '/bin/ls'
+	argv[1] '-l'
+	argv[2] '/etc'
+
+	
+
+
+	*********************
+	***   .fpregset   ***
+	*********************
+
+This section contains the floating pointer register set for each
+thread of the process. The general registers are available in elf_prstatus
+structs, but the floating pointer registers are not, which is why
+they have their own section.
+
+
+	- x86_64 -
+
+	struct user_fpregs_struct
+	{
+ 	 unsigned short int    cwd;
+  	 unsigned short int    swd;
+  	 unsigned short int    ftw;
+  	 unsigned short int    fop;
+  	 __extension__ unsigned long long int rip;
+  	 __extension__ unsigned long long int rdp;
+  	 unsigned int          mxcsr;
+  	 unsigned int          mxcr_mask;
+  	 unsigned int          st_space[32];   /* 8*16 bytes for each FP-reg = 128 bytes */
+  	 unsigned int          xmm_space[64];  /* 16*16 bytes for each XMM-reg = 256 bytes */
+  	 unsigned int          padding[24];
+	};
+
+
+	- x86_32 - 
+	
+	struct user_fpregs_struct
+	{
+  	 long int cwd;
+  	 long int swd;
+  	 long int twd;
+  	 long int fip;
+  	 long int fcs;
+  	 long int foo;
+  	 long int fos;
+  	 long int st_space [20];
+	};
+
+
+	
+
+	******************
+	***   .stack   ***
+	******************
+
+This section contains the stack segment for the process.
+In multi-threaded processes there will be a separate stack
+for each thread. Currently these extra stacks are only accessible
+via the program headers of an ecfs-file, but in the near future
+additional sections that will be named '.stack.<tid>' will be
+added, as it is on the design road map.
+
+
+
+
+	*****************
+	***   .heap   ***
+	*****************
+
+This section contains the heap segment for the process. In Linux
+the glibc heap is allocated by the sbrk() syscall at runtime.
+
+
+
+
+	****************
+	***   .bss   ***
+	****************
+
+This section is not new, but we are including it here because the
+.bss section in an ecfs file is not SHT_NOBITS, in other words it
+actually is allocated and initialized and contains the .bss area
+from the actual memory image.
+
+
+
+
+	*****************
+	***   .vdso   ***
+	*****************
+
+This section contains the [vdso] page from the process
+
+
+
+
+	*********************
+	***   .vsyscall   ***
+	*********************
+
+This section contains the [vsyscall] page from the process
+
+	
+
+	*******************************
+	*** SHT_SHLIB type sections ***
+	*******************************
+
+Sections that are marked as type SHLIB are sections that contain
+a segment from a shared library. The segments are marked accordingly
+
+Here is an example of the dynamic linker which is a shared library
+itself and mapped into every dynamically linked program.
+
+  [334] ld-2.19.so.text   SHLIB           f54d9000 14316000 020000 00   A  0   0  8
+  [335] ld-2.19.so.relro  SHLIB           f54f9000 14317000 001000 00   A  0   0  8
+  [336] ld-2.19.so.data   SHLIB           f54fa000 14318000 001000 00   A  0   0  8
+
+We can see that the text segment is mapped in and is 0x20000 bytes.
+We can see that the relro page is mapped in, which is the first 4K
+of the data segment, marked as read-only as a security mechanism.
+And we can see that the data segment itself is mapped in.
+
+	
+	**********************************
+	*** SHT_INJECTED type sections ***
+	**********************************
+
+If the ecfs heuristics are enabled, then certain heuristics are ran
+when analyzing the process and creating the ecfs-core file. One of these
+heuristics is the ability to be able to tell if a shared library has 
+been injected; that is to say not loaded by the dynamic linker, and not
+loaded by a legitimate dlopen() call, and not loaded by LD_PRELOAD.
+This indicates that an attacker has injected the shared library, probably
+through __libc_dlopen_mode() or through mmap(). In this case the shared
+library gets marked as SHT_INJECTED instead of SHT_SHLIB.
+file.  One of these
+
+
 
