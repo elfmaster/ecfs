@@ -678,6 +678,24 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 			xfree(str);
 		}
 	}
+	/*
+	 * .procfs.tgz
+	 *
+	 * This section contains a tgz file of /proc/$pid
+	 */
+	shdr[scount].sh_type = SHT_LOUSER;
+	shdr[scount].sh_offset = ecfs_file->procfs_offset;
+	shdr[scount].sh_addr = 0;
+	shdr[scount].sh_flags = 0;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 1;
+	shdr[scount].sh_size = ecfs_file->procfs_size;
+	shdr[scount].sh_addralign = sizeof(long);
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".procfs.tgz");
+	stoffset += strlen(".procfs.tgz") + 1;
+	scount++;
 	
 	/*
 	 * .prstatus
@@ -690,7 +708,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	shdr[scount].sh_link = 0;
 	shdr[scount].sh_entsize = sizeof(struct elf_prstatus);
 	shdr[scount].sh_size = ecfs_file->prstatus_size;
-	shdr[scount].sh_addralign = 4;
+	shdr[scount].sh_addralign = sizeof(long);
 	shdr[scount].sh_name = stoffset;
 	strcpy(&StringTable[stoffset], ".prstatus");
 	stoffset += strlen(".prstatus") + 1;
@@ -985,6 +1003,10 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	chmod(outfile, S_IRWXU|S_IRWXG);
 	stat(elfdesc->path, &st); // stat the corefile
 	
+	ssize_t procfs_size = handle->procfs_size;
+	if (procfs_size < 0) 
+		log_msg(__LINE__, "ALERT: snapshotting procfs failed, section header .procfs.tgz will be empty");
+		
 	ecfs_file->prstatus_offset = st.st_size;
 	ecfs_file->prstatus_size = notedesc->thread_count * sizeof(struct elf_prstatus);
 	ecfs_file->fdinfo_offset = ecfs_file->prstatus_offset + notedesc->thread_count * sizeof(struct elf_prstatus);
@@ -1001,7 +1023,9 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	ecfs_file->arglist_size = ELF_PRARGSZ;
 	ecfs_file->fpregset_offset = ecfs_file->arglist_offset + ecfs_file->arglist_size;
 	ecfs_file->fpregset_size = notedesc->thread_count * sizeof(elf_fpregset_t);
-	ecfs_file->stb_offset = ecfs_file->fpregset_offset + ecfs_file->fpregset_size;
+	ecfs_file->procfs_offset = ecfs_file->fpregset_offset + ecfs_file->fpregset_size;
+	ecfs_file->procfs_size = (size_t)procfs_size;
+	ecfs_file->stb_offset = ecfs_file->procfs_offset + ecfs_file->procfs_size;
 	
 	/*
 	 * write original body of core file
@@ -1088,11 +1112,24 @@ int core2ecfs(const char *outfile, handle_t *handle)
             	log_msg(__LINE__, "write %s", strerror(errno));
         }
 	
+	/*
+	 * write thread fpu registers
+	 */
 	for (i = 0; i < notedesc->thread_count; i++) {
 		if (write(fd, notedesc->thread_core_info[i].fpu, sizeof(elf_fpregset_t)) < 0) {
 			log_msg(__LINE__, "write %s", strerror(errno));
 		}
 	}
+	
+	/* 
+	 * write .procfs.tgz
+ 	 */
+	if (procfs_size > 0) {
+		if (write(fd, handle->procfs_tarball, procfs_size) < 0) {
+			log_msg(__LINE__, "write %s", strerror(errno));
+		}
+	}
+
 	/*
 	 * Build section header table
 	 */

@@ -374,12 +374,11 @@ ElfW(Addr) get_original_ep(int pid)
 ssize_t snapshot_procfs(memdesc_t *memdesc, uint8_t **zlib_blob)
 {
 	uint8_t *mem;
-	char *tar, *cmd;
-	char *proc_path, *tmp_path;
-	int ret, in, out, rval;
+	char *tar, *cmd, *proc_path, *tmp_path, *args[5];
+	int ret, in, out, rval, status, pid;
 	struct timeval tv;
 	struct stat st;
-
+	
 	*zlib_blob = NULL;
 	asprintf(&proc_path, "/proc/%d", memdesc->task.pid);
 	if (opts.use_ramdisk) {
@@ -403,7 +402,26 @@ ssize_t snapshot_procfs(memdesc_t *memdesc, uint8_t **zlib_blob)
 		return -1;
 	}
 	asprintf(&cmd, "%s -czf %s %s", tar, tmp_path, proc_path);
-	system(cmd);
+#if DEBUG
+	log_msg(__LINE__, "%s", cmd);
+#endif
+	args[0] = tar;
+	args[1] = "-czf";
+	args[2] = tmp_path;
+	args[3] = proc_path;
+	args[4] = NULL;
+	
+	pid = fork();
+	if (pid < 0) {
+		log_msg(__LINE__, "fork() failed for execve(\"/bin/tar\", ...)");
+		return -1;
+	}
+	if (pid == 0) {
+		execve(args[0], args, NULL);
+		exit(0);
+	}
+	wait(&status);
+
 	if (access(tmp_path, F_OK) != 0) {
 		log_msg(__LINE__, "failed to create proc snapshot with tar");
 		return -1;
@@ -417,6 +435,7 @@ ssize_t snapshot_procfs(memdesc_t *memdesc, uint8_t **zlib_blob)
 		log_msg(__LINE__, "fstat %s failed: %s", tmp_path, strerror(errno));
 		return -1;
 	}
+	log_msg(__LINE__, "%s is %d bytes\n", tmp_path, st.st_size);
 	mem = (uint8_t *)heapAlloc(st.st_size);
 	read(in, mem, st.st_size);
 
@@ -425,6 +444,10 @@ ssize_t snapshot_procfs(memdesc_t *memdesc, uint8_t **zlib_blob)
 	close(in);
 	unlink(tmp_path);
 	
+	xfree(cmd);
+	xfree(tmp_path);
+	xfree(proc_path);
+
 	return st.st_size;
 }
 

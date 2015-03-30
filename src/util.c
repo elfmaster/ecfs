@@ -148,6 +148,18 @@ void log_msg(unsigned int lineno, char *fmt, ...)
 
 }
 
+void xsystem(char *str, ...)
+{
+  	char string[512];
+        va_list va;
+	
+        va_start (va, str);
+        vsnprintf (string, 512, str, va);
+        va_end (va);
+
+        system (string);
+}
+
 void exit_failure(int code)
 {
 	umount(ECFS_RAMDISK_DIR);

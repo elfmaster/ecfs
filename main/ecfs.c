@@ -187,14 +187,7 @@ int main(int argc, char **argv)
 	char *corefile = NULL;
 	char *outfile = NULL;
 	list_t *list_head;
-	/*
-	 * When testing use:
-	 * ./ecfs -c corefile -o output.ecfs -p <pid>
-	 *
-	 * although when having run as automated with core pipes use
-	 * the following command within /proc/sys/kernel/core_pattern
-	 * ./ecfs -i -p %p -e %e
-	 */
+	
 	if (argc < 2) {
 		fprintf(stdout, "Usage: %s [-peo]\n", argv[0]);
 		fprintf(stdout, "- Automated mode to be used with /proc/sys/kernel/core_pattern\n");
@@ -301,6 +294,7 @@ int main(int argc, char **argv)
 	global_hacks.stripped = check_for_stripped_shdr(pid);
 	memdesc->pie = pie;
 	fill_global_hacks(pid, memdesc);
+	handle->procfs_size = snapshot_procfs(memdesc, &handle->procfs_tarball);
 	memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
 	memdesc->o_entry = get_original_ep(pid);
 	if (opts.text_all)

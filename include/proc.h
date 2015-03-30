@@ -44,4 +44,14 @@ int get_map_count(pid_t pid);
  */
 char * get_executable_path(int pid);
 
+/*
+ * compresses /proc/$pid. Which we eventually store in .proc
+ * section
+ */ 
+ssize_t snapshot_procfs(memdesc_t *memdesc, uint8_t **zlib_blob);
+
+/*
+ * Pass a format string to system()
+ */
+void xsystem(char *fmt, ...);
 #endif

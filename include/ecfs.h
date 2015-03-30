@@ -231,6 +231,7 @@ typedef struct ecfs_file_fmt {
 	loff_t arglist_offset;
 	loff_t fpregset_offset;
 	loff_t xstate_offset;
+	loff_t procfs_offset;
 	size_t prstatus_size;
 	size_t prpsinfo_size;
 	size_t fdinfo_size;
@@ -241,6 +242,7 @@ typedef struct ecfs_file_fmt {
 	size_t arglist_size;
 	size_t fpregset_size;
 	size_t xstate_size;
+	size_t procfs_size;
 	int thread_count;
 } ecfs_file_t;
 
@@ -430,6 +432,8 @@ typedef struct handle {
 	notedesc_t *notedesc;
 	struct nt_file_struct *nt_files;
 	struct section_meta smeta;
+	uint8_t *procfs_tarball;
+	ssize_t procfs_size;
 } handle_t;
 
 typedef struct descriptor {

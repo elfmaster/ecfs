@@ -16,7 +16,7 @@ perf_LDFLAGS = -ldwarf -lelf -lm
 perf_TGT = ${BINS}
 perf_CC = gcc
 
-prod_CFLAGS = -D_GNU_SOURCE -m${B}
+prod_CFLAGS = -DDEBUG -D_GNU_SOURCE -m${B}
 prod_LDFLAGS = -ldwarf -lelf -lm
 prod_TGT = ${BINS}
 prod_CC = gcc
