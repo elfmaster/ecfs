@@ -386,8 +386,13 @@ usage:
 	}
 	
 	if (opts.procfs) {
+		uint8_t *ptr;
 		char *objcmd, *tarcmd;
-
+		ssize_t section_size = get_section_pointer(desc, ".procfs.tgz", &ptr);
+		if (section_size < 0) {
+			printf("[!] Cannot locate section .procfs.tgz\n");
+			goto done;
+		}
 		printf("- Extracting .procfs.tgz section from %s into %s\n", path, argv[3]);
 		if (access(argv[3], F_OK) != 0) {		
 			if (mkdir(argv[3], S_IRWXU|S_IRWXG) < 0) {
