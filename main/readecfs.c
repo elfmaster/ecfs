@@ -42,6 +42,7 @@ struct {
 	int gotinfo;
 	int auxv;
 	int personality;
+	int procfs;
 	int all;
 } opts = {0};
 
@@ -107,19 +108,22 @@ usage:
 		printf("-A	print Auxiliary vector\n");
 		printf("-P	print personality info\n");
 		printf("-e	print ecfs specific (auiliary vector, process state, sockets, pipes, fd's, etc.)\n"); 
-		printf("\n-[Secondary use to view raw data from a section]\n");
+		printf("\n\n-[Secondary use to view raw data from a section]\n");
 		printf("-R <ecfscore> <section>\n\n");
+		printf("\n\n-[Extract /proc/$pid from .procfs.tgz section into directory]\n");
+		printf("-X <ecfscore> <output_dir>\n\n");
 		printf("Examples:\n");
 		printf("%s -e <ecfscore>\n", argv[0]);
 		printf("%s -Ag <ecfscore>\n", argv[0]);
 		printf("%s -R <ecfscore> .stack\n", argv[0]);
 		printf("%s -R <ecfscore> .bss\n", argv[0]);
 		printf("%s -eR <ecfscore> .heap\n", argv[0]);
+		printf("%s -X <ecfscore> procfs_dir\n", argv[0]);
 		printf("\n");
 		exit(-1);
 	}
 	
-	while ((c = getopt(argc, argv, "RAPSslphega")) != -1) {
+	while ((c = getopt(argc, argv, "XRAPSslphega")) != -1) {
 		switch(c) {
 			case 'S':
 				opts.shdrs++;
@@ -157,6 +161,13 @@ usage:
 					exit(0);
 				}
 				opts.raw++;
+				break;
+			case 'X':
+				if (argc < 4) {
+					printf("-X requires you to specify an output directory to put the /proc/$pid data\n");
+					exit(0);
+				}
+				opts.procfs++;
 				break;
 			default:
 				goto usage;
@@ -373,7 +384,24 @@ usage:
 		}
 		printf("\n");
 	}
+	
+	if (opts.procfs) {
+		char *objcmd, *tarcmd;
 
+		printf("- Extracting .procfs.tgz section from %s into %s\n", path, argv[3]);
+		if (access(argv[3], F_OK) != 0) {		
+			if (mkdir(argv[3], S_IRWXU|S_IRWXG) < 0) {
+				printf("mkdir(\"%s\") failed: %s", argv[3], strerror(errno));
+				exit(-1);
+			}
+		}
+		asprintf(&objcmd, "objcopy -O binary --set-section-flags .procfs.tgz=alloc --only-section=.procfs.tgz %s %s/.ptest.tgz", argv[2], argv[3]);
+		system(objcmd);
+		asprintf(&tarcmd, "tar -xf %s/.ptest.tgz", argv[3]);
+		system(tarcmd);
+	}
+
+			
 done:
 	unload_ecfs_file(desc);
 }		
