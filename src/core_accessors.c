@@ -207,12 +207,12 @@ static ssize_t get_original_shdr_addr(int pid, const char *name)
         uint8_t *mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
         if (mem == MAP_FAILED) {
                 log_msg(__LINE__, "mmap %s", strerror(errno));
-                return -1;
+                return 0;
         }
         ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
         ElfW(Shdr) *shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
         if (ehdr->e_shstrndx == 0 || ehdr->e_shnum == 0)
-                return -1;
+                return 0;
         char *StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
         for (i = 0; i < ehdr->e_shnum; i++)
                 if (!strcmp(&StringTable[shdr[i].sh_name], name))
@@ -229,14 +229,12 @@ static void pull_unknown_shdr_addrs(int pid, memdesc_t *memdesc)
 	 * ._TEXT section reflects the entire text segment. 
 	 */
 	global_hacks.text_vaddr = get_original_shdr_addr(pid, ".text");
-
 	/*
 	 * .data reflects original .data section and ._DATA reflects
 	 * the entire text segment. In this case we are getting the
 	 * vaddr of the original .data section.	
  	 */
 	global_hacks.data_vaddr = get_original_shdr_addr(pid, ".data");
-	
 	/*
 	 * Get plt location since its not marked in dynamic segment
 	 */
