@@ -57,7 +57,7 @@ int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
 			}
 			j = 0;
 		}
-		if (index >= MAX_STRINGS) {
+		if (index == (MAX_STRINGS - 1)) {
 #if DEBUG
 			log_msg(__LINE__, "build_rodata_strings() performing realloc on %p", *stra);
 #endif
@@ -310,7 +310,7 @@ int get_dt_needed_libs_all(memdesc_t *memdesc, struct needed_libs **needed_libs)
 	qsort(all_libs, total_needed, sizeof(struct needed_libs), qsort_cmp_by_str);
 #if DEBUG
 	for (i = 0; i < total_needed; i++) {
-		if (i >= 1)
+		if (i >= 1) 
 			if (!strcmp(all_libs[i].libpath, all_libs[i - 1].libpath))
 				continue;
 		log_msg(__LINE__, "[%s] needs dependency: %s", all_libs[i].master, all_libs[i].libpath);
@@ -329,12 +329,10 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs *dl_libs, int index
 	ElfW(Phdr) *phdr = NULL;
 	ElfW(Rela) *rela = NULL;
 	ElfW(Sym) *symtab = NULL;
-	//ElfW(Off) dataOffset;
-	//ElfW(Addr) dataVaddr, textVaddr;
 	uint8_t *mem = NULL;
 	uint8_t *text_ptr = NULL, *rodata_ptr = NULL;
-	size_t /*text_size, dataSize,*/ rodata_size = 0, i; //text_size refers to size of .text not the text segment
-	int ret, fd, scount = 0, /*relcount = 0,*/ symcount = 0, found_dlopen = 0;
+	size_t rodata_size = 0, i; 
+	int ret, fd, scount = 0, symcount = 0, found_dlopen = 0;
 	char **strings, *dynstr, tmp[512];
 	struct stat st;
 	
@@ -356,30 +354,15 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs *dl_libs, int index
 	shdr = (ElfW(Shdr) *)&mem[ehdr->e_shoff];
 	phdr = (ElfW(Phdr) *)&mem[ehdr->e_phoff];
 	
-	for (i = 0; i < ehdr->e_phnum; i++) {
-		if (phdr[i].p_type == PT_LOAD) {	
-			if (phdr[i].p_offset == 0 && phdr[i].p_flags & PF_X) {
-				//textVaddr = phdr[i].p_vaddr;
-			} else
-			if (phdr[i].p_offset != 0 && phdr[i].p_flags & PF_W) {
-				//dataOffset = phdr[i].p_offset;
-				//dataVaddr = phdr[i].p_vaddr;
-				//dataSize = phdr[i].p_memsz;
-				break;
-			}
-		}
-	}
 	char *shstrtab = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
 	
 	for (i = 0; i < ehdr->e_shnum; i++) {
 		if (!strcmp(&shstrtab[shdr[i].sh_name], ".text")) {
 			text_ptr = (uint8_t *)&mem[shdr[i].sh_offset];
-			//text_size = shdr[i].sh_size;	
 		} else
 		if (!strcmp(&shstrtab[shdr[i].sh_name], ".rela.plt")) {
 			rela = (ElfW(Rela) *)&mem[shdr[i].sh_offset];
 			symtab = (ElfW(Sym) *)&mem[shdr[shdr[i].sh_link].sh_offset];
-			//relcount = shdr[i].sh_size / sizeof(ElfW(Rela));
 		} else
 		if (!strcmp(&shstrtab[shdr[i].sh_name], ".rodata")) {
 			rodata_ptr = (uint8_t *)&mem[shdr[i].sh_offset];

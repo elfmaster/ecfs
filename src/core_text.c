@@ -268,7 +268,6 @@ static int merge_text_image(const char *path, unsigned long text_addr, uint8_t *
                         nextOffset = phdr[i + 1].p_offset;   // data segment usually always i + 1 after text
                         textSize = phdr[i].p_memsz;         // get memsz of text
 			phdr[i].p_filesz = phdr[i].p_memsz; // make filesz same as memsz
-                        log_msg(__LINE__, "found %lx setting filesz to %lx\n", phdr[i].p_vaddr, phdr[i].p_filesz);
 			found_text++;
 			continue;
 
