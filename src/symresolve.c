@@ -72,7 +72,7 @@ static int resolve_symbols(list_t **list, const char *path, unsigned long base)
 	}
 	StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
 
- 	for (i = 0; i < ehdr->e_shnum; i++) {
+	for (i = 0; i < ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".dynsym")) {
 			symcount = shdr[i].sh_size / shdr[i].sh_entsize;
 			symtab = (ElfW(Sym) *)&mem[shdr[i].sh_offset];
@@ -115,27 +115,27 @@ unsigned long lookup_from_symlist(const char *name, list_t *list)
 
 
 int store_dynamic_symvals(list_t *list, const char *path)
-{	
-        struct stat st;
-        int fd;
-        uint8_t *mem;
-        ElfW(Ehdr) *ehdr = NULL;
-        ElfW(Shdr) *shdr = NULL;
-        ElfW(Sym) *symtab = NULL;
-        char *StringTable = NULL, *dynstr = NULL;
-        size_t i, j, symcount;
+{
+	struct stat st;
+	int fd;
+	uint8_t *mem;
+	ElfW(Ehdr) *ehdr = NULL;
+	ElfW(Shdr) *shdr = NULL;
+	ElfW(Sym) *symtab = NULL;
+	char *StringTable = NULL, *dynstr = NULL;
+	size_t i, j, symcount;
 
-        fd = xopen(path, O_RDWR);
-        xfstat(fd, &st);
-        mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-        if (mem == MAP_FAILED) {
-                perror("mmap");
-                return -1;
-        }
+	fd = xopen(path, O_RDWR);
+	xfstat(fd, &st);
+	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	if (mem == MAP_FAILED) {
+		perror("mmap");
+		return -1;
+	}
 
-        ehdr = (ElfW(Ehdr) *)mem;
-        shdr = (ElfW(Shdr) *)&mem[ehdr->e_shoff];
-        StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
+	ehdr = (ElfW(Ehdr) *)mem;
+	shdr = (ElfW(Shdr) *)&mem[ehdr->e_shoff];
+	StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
 	
 	for (i = 0; i < ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".dynstr")) {
@@ -158,10 +158,10 @@ int store_dynamic_symvals(list_t *list, const char *path)
 int fill_dynamic_symtab(list_t **list, struct lib_mappings *lm)
 {
 	int i, ret = -1;
-        /*
-         * The .dynsym section is in the output ecfs executable and does not exist
-         * yet when this function is called. We therefore 
-         */ 
+	/*
+	 * The .dynsym section is in the output ecfs executable and does not exist
+	 * yet when this function is called. We therefore 
+	 */ 
 	*list = (list_t *)heapAlloc(sizeof(**list));
 	(*list)->tail = NULL;
 	(*list)->head = NULL;

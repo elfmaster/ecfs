@@ -71,8 +71,8 @@ static int text_shdr_index;
 static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle)
 {
 	struct fde_func_data *fndata, *fdp;
-        int fncount, fd;
-        struct stat st;
+	int fncount, fd;
+	struct stat st;
 	uint8_t *mem;
 	ElfW(Ehdr) *ehdr;
 	ElfW(Shdr) *shdr;
@@ -80,105 +80,103 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
 	char *StringTable;
 	char *strtab = heapAlloc(8192 * 32);
 
-        fncount = get_all_functions(outfile, &fndata);
- 	if (fncount < 0)
-		fncount = 0;             	
+	fncount = get_all_functions(outfile, &fndata);
+	if (fncount < 0)
+		fncount = 0;
 	
 #if DEBUG
 	log_msg(__LINE__, "Found %d local functions from .eh_frame\n", fncount);
 #endif
-        
+
 	ElfW(Sym) *symtab = (ElfW(Sym) *)heapAlloc(fncount * sizeof(ElfW(Sym)));
-        fdp = (struct fde_func_data *)fndata; 
-        char *sname;
-        int symstroff = 0;
-        int symcount = fncount;
-        int dsymcount = 0;
-        
-        for (i = 0; i < fncount; i++) {
-                symtab[i].st_value = fdp[i].addr;
-                symtab[i].st_size = fdp[i].size;
-                symtab[i].st_info = (((STB_GLOBAL) << 4) + ((STT_FUNC) & 0xf));
-                symtab[i].st_other = 0;
-                symtab[i].st_shndx = text_shdr_index;
-                symtab[i].st_name = symstroff;
-                sname = xfmtstrdup("sub_%lx", fdp[i].addr);
-                strcpy(&strtab[symstroff], sname);
-                symstroff += strlen(sname) + 1;
-                free(sname);    
-                
-        }
- 	 /*
-         * We append symbol table sections last 
-         */
-        if ((fd = open(outfile, O_RDWR)) < 0) {
-                log_msg(__LINE__, "open %s", strerror(errno));
-                exit_failure(-1);
-        }
+	fdp = (struct fde_func_data *)fndata; 
+	char *sname;
+	int symstroff = 0;
+	int symcount = fncount;
+	int dsymcount = 0;
 
-        if (fstat(fd, &st) < 0) {
-                log_msg(__LINE__, "fstat %s", strerror(errno));
-                exit_failure(-1);
-        }
+	for (i = 0; i < fncount; i++) {
+		symtab[i].st_value = fdp[i].addr;
+		symtab[i].st_size = fdp[i].size;
+		symtab[i].st_info = (((STB_GLOBAL) << 4) + ((STT_FUNC) & 0xf));
+		symtab[i].st_other = 0;
+		symtab[i].st_shndx = text_shdr_index;
+		symtab[i].st_name = symstroff;
+		sname = xfmtstrdup("sub_%lx", fdp[i].addr);
+		strcpy(&strtab[symstroff], sname);
+		symstroff += strlen(sname) + 1;
+		free(sname);
+	}
+	/*
+	 * We append symbol table sections last 
+	 */
+	if ((fd = open(outfile, O_RDWR)) < 0) {
+		log_msg(__LINE__, "open %s", strerror(errno));
+		exit_failure(-1);
+	}
 
-        mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-        if (mem == MAP_FAILED) {
-                log_msg(__LINE__, "mmap %s : this will result in failure of reconstructing .symtab", strerror(errno));
-                exit_failure(-1);
-        }
-        ehdr = (ElfW(Ehdr) *)mem;
-        shdr = (ElfW(Shdr) *)&mem[ehdr->e_shoff];
+	if (fstat(fd, &st) < 0) {
+		log_msg(__LINE__, "fstat %s", strerror(errno));
+		exit_failure(-1);
+	}
 
-        if (lseek(fd, 0, SEEK_END) < 0) {
-                log_msg(__LINE__, "lseek %s", strerror(errno));
-                exit_failure(-1);
-        }
-	
-        uint64_t symtab_offset = lseek(fd, 0, SEEK_CUR);
-        for (i = 0; i < symcount; i++) {
-                if( write(fd, (char *)&symtab[i], sizeof(ElfW(Sym))) == -1 ) {
-                	log_msg(__LINE__, "write %s", strerror(errno));
-                    	exit_failure(-1);
-                }
-        }
-      	StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
-        /* Write section hdr string table */
-        uint64_t stloff = lseek(fd, 0, SEEK_CUR);
-        if( write(fd, strtab, symstroff) == -1) {
-            	log_msg(__LINE__, "write %s", strerror(errno));
-            	exit_failure(-1);
-        }
-        shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
-	
-        for (i = 0; i < ehdr->e_shnum; i++) {
-                if (!strcmp(&StringTable[shdr[i].sh_name], ".symtab")) {
-                        shdr[i].sh_offset = symtab_offset;
-                        shdr[i].sh_size = sizeof(ElfW(Sym)) * fncount;
-                } else
-                if (!strcmp(&StringTable[shdr[i].sh_name], ".strtab")) {
-                        shdr[i].sh_offset = stloff;
-                        shdr[i].sh_size = symstroff;
-                } else
-                if (!strcmp(&StringTable[shdr[i].sh_name], ".dynsym")) 
-                        dsymcount = shdr[i].sh_size / sizeof(ElfW(Sym));
-                        
-        }
-	  /*
-         * We resize the global offset table now that we know how many dynamic
-         * symbols there are. The GOT has the first 3 entries reserved (Which is sizeof(long) * 3)
-         * plus the size of dsymcount longwords.
-         */
-        for (i = 0; i < ehdr->e_shnum; i++) {
-                if (!strcmp(&StringTable[shdr[i].sh_name], ".got.plt")) {
-                        shdr[i].sh_size = (dsymcount * sizeof(ElfW(Addr))) + (3 * sizeof(ElfW(Addr)));
-                        break;
-                }
-        }
-        
+	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	if (mem == MAP_FAILED) {
+		log_msg(__LINE__, "mmap %s : this will result in failure of reconstructing .symtab", strerror(errno));
+		exit_failure(-1);
+	}
+	ehdr = (ElfW(Ehdr) *)mem;
+	shdr = (ElfW(Shdr) *)&mem[ehdr->e_shoff];
+
+	if (lseek(fd, 0, SEEK_END) < 0) {
+		log_msg(__LINE__, "lseek %s", strerror(errno));
+		exit_failure(-1);
+	}
+
+	uint64_t symtab_offset = lseek(fd, 0, SEEK_CUR);
+	for (i = 0; i < symcount; i++) {
+		if( write(fd, (char *)&symtab[i], sizeof(ElfW(Sym))) == -1 ) {
+			log_msg(__LINE__, "write %s", strerror(errno));
+			exit_failure(-1);
+		}
+	}
+	StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
+	/* Write section hdr string table */
+	uint64_t stloff = lseek(fd, 0, SEEK_CUR);
+	if( write(fd, strtab, symstroff) == -1) {
+		log_msg(__LINE__, "write %s", strerror(errno));
+		exit_failure(-1);
+	}
+	shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
+
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (!strcmp(&StringTable[shdr[i].sh_name], ".symtab")) {
+			shdr[i].sh_offset = symtab_offset;
+			shdr[i].sh_size = sizeof(ElfW(Sym)) * fncount;
+		} else
+		if (!strcmp(&StringTable[shdr[i].sh_name], ".strtab")) {
+			shdr[i].sh_offset = stloff;
+			shdr[i].sh_size = symstroff;
+		} else
+		if (!strcmp(&StringTable[shdr[i].sh_name], ".dynsym")) 
+			dsymcount = shdr[i].sh_size / sizeof(ElfW(Sym));  
+	}
+	/*
+	 * We resize the global offset table now that we know how many dynamic
+	 * symbols there are. The GOT has the first 3 entries reserved (Which is sizeof(long) * 3)
+	 * plus the size of dsymcount longwords.
+	 */
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (!strcmp(&StringTable[shdr[i].sh_name], ".got.plt")) {
+			shdr[i].sh_size = (dsymcount * sizeof(ElfW(Addr))) + (3 * sizeof(ElfW(Addr)));
+			break;
+		}
+	}
+
 	free(strtab);
-        msync(mem, st.st_size, MS_SYNC);
-        munmap(mem, st.st_size);
-        close(fd);
+	msync(mem, st.st_size, MS_SYNC);
+	munmap(mem, st.st_size);
+	close(fd);
 
 	return 0;
 }
@@ -186,14 +184,14 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
 static int build_section_headers(int fd, const char *outfile, handle_t *handle, ecfs_file_t *ecfs_file)
 {
 	elfdesc_t *elfdesc = handle->elfdesc;
-        memdesc_t *memdesc = handle->memdesc;
-        notedesc_t *notedesc = handle->notedesc;
-        struct section_meta *smeta = &handle->smeta;
+	memdesc_t *memdesc = handle->memdesc;
+	notedesc_t *notedesc = handle->notedesc;
+	struct section_meta *smeta = &handle->smeta;
 	ElfW(Shdr) *shdr = heapAlloc(sizeof(ElfW(Shdr)) * MAX_SHDR_COUNT);
-        char *StringTable = (char *)heapAlloc(MAX_SHDR_COUNT * 64);
+	char *StringTable = (char *)heapAlloc(MAX_SHDR_COUNT * 64);
 	struct stat st;
-        unsigned int stoffset = 0;
-        int scount = 0, dynsym_index;
+	unsigned int stoffset = 0;
+	int scount = 0, dynsym_index;
 	int i, dynamic;
 
 	dynamic = !(handle->elfstat.personality & ELF_STATIC);
@@ -203,178 +201,177 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	loff_t e_shoff = lseek(fd, 0, SEEK_CUR);
 	
 	shdr[scount].sh_type = SHT_NULL;
-        shdr[scount].sh_offset = 0;
-        shdr[scount].sh_addr = 0;
-        shdr[scount].sh_flags = 0;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_entsize = 0;
-        shdr[scount].sh_size = 0;
-        shdr[scount].sh_addralign = 0;
-        shdr[scount].sh_name = 0;
-        strcpy(&StringTable[stoffset], "");
-        stoffset += 1;
-        scount++;
-	
+	shdr[scount].sh_offset = 0;
+	shdr[scount].sh_addr = 0;
+	shdr[scount].sh_flags = 0;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_entsize = 0;
+	shdr[scount].sh_size = 0;
+	shdr[scount].sh_addralign = 0;
+	shdr[scount].sh_name = 0;
+	strcpy(&StringTable[stoffset], "");
+	stoffset += 1;
+	scount++;
+
 	if (dynamic) {
- 		/*
-        	 * .interp
-         	 */
-        	shdr[scount].sh_type = SHT_PROGBITS;
-        	shdr[scount].sh_offset = elfdesc->interpOffset;
-        	shdr[scount].sh_addr = elfdesc->interpVaddr;
-        	shdr[scount].sh_flags = SHF_ALLOC;
-        	shdr[scount].sh_info = 0;
-        	shdr[scount].sh_link = 0;
-        	shdr[scount].sh_entsize = 0;
-        	shdr[scount].sh_size = elfdesc->interpSize;
-        	shdr[scount].sh_addralign = 1;
-        	shdr[scount].sh_name = stoffset;
-        	strcpy(&StringTable[stoffset], ".interp");
-        	stoffset += strlen(".interp") + 1;
-        	scount++;
+		/*
+		 * .interp
+		 */
+		shdr[scount].sh_type = SHT_PROGBITS;
+		shdr[scount].sh_offset = elfdesc->interpOffset;
+		shdr[scount].sh_addr = elfdesc->interpVaddr;
+		shdr[scount].sh_flags = SHF_ALLOC;
+		shdr[scount].sh_info = 0;
+		shdr[scount].sh_link = 0;
+		shdr[scount].sh_entsize = 0;
+		shdr[scount].sh_size = elfdesc->interpSize;
+		shdr[scount].sh_addralign = 1;
+		shdr[scount].sh_name = stoffset;
+		strcpy(&StringTable[stoffset], ".interp");
+		stoffset += strlen(".interp") + 1;
+		scount++;
 	}
-	
-	 /*
-         *.note
-         */
-        shdr[scount].sh_type = SHT_NOTE;
-        shdr[scount].sh_offset = elfdesc->noteOffset;
-        shdr[scount].sh_addr = elfdesc->noteVaddr;
-        shdr[scount].sh_flags = SHF_ALLOC;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = 0;
-        shdr[scount].sh_entsize = 0;
-        shdr[scount].sh_size = elfdesc->noteSize;
-        shdr[scount].sh_addralign = 4;
-        shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], ".note");
-        stoffset += strlen(".note") + 1;
-        scount++;
-	
+
+	/*
+	 *.note
+	 */
+	shdr[scount].sh_type = SHT_NOTE;
+	shdr[scount].sh_offset = elfdesc->noteOffset;
+	shdr[scount].sh_addr = elfdesc->noteVaddr;
+	shdr[scount].sh_flags = SHF_ALLOC;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 0;
+	shdr[scount].sh_size = elfdesc->noteSize;
+	shdr[scount].sh_addralign = 4;
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".note");
+	stoffset += strlen(".note") + 1;
+	scount++;
+
 	if (dynamic) {
-        	/*
-         	 * .hash
-          	 */
-        	shdr[scount].sh_type = SHT_GNU_HASH; // use SHT_HASH?
-        	shdr[scount].sh_offset = smeta->hashOff; 
-        	shdr[scount].sh_addr = smeta->hashVaddr;
-        	shdr[scount].sh_flags = SHF_ALLOC;
-        	shdr[scount].sh_info = 0;
-        	shdr[scount].sh_link = 0;
-        	shdr[scount].sh_entsize = 0;
-        	shdr[scount].sh_size = global_hacks.hash_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.hash_size;
-        	shdr[scount].sh_addralign = 4;
-        	shdr[scount].sh_name = stoffset;
-        	strcpy(&StringTable[stoffset], ".hash");
-        	stoffset += strlen(".hash") + 1;
-        	scount++;
-	
-	 	/*
-         	 * .dynsym
-        	 */
+		/*
+		 * .hash
+		 */
+		shdr[scount].sh_type = SHT_GNU_HASH; // use SHT_HASH?
+		shdr[scount].sh_offset = smeta->hashOff; 
+		shdr[scount].sh_addr = smeta->hashVaddr;
+		shdr[scount].sh_flags = SHF_ALLOC;
+		shdr[scount].sh_info = 0;
+		shdr[scount].sh_link = 0;
+		shdr[scount].sh_entsize = 0;
+		shdr[scount].sh_size = global_hacks.hash_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.hash_size;
+		shdr[scount].sh_addralign = 4;
+		shdr[scount].sh_name = stoffset;
+		strcpy(&StringTable[stoffset], ".hash");
+		stoffset += strlen(".hash") + 1;
+		scount++;
+
+		/*
+		 * .dynsym
+		 */
 		dynsym_index = scount;
-        	shdr[scount].sh_type = SHT_DYNSYM;
-        	shdr[scount].sh_offset = smeta->dsymOff;
-        	shdr[scount].sh_addr = smeta->dsymVaddr;
-        	shdr[scount].sh_flags = SHF_ALLOC;
-        	shdr[scount].sh_info = 0;
-        	shdr[scount].sh_link = scount + 1;
-        	shdr[scount].sh_entsize = sizeof(ElfW(Sym));
-        	shdr[scount].sh_size = smeta->dstrOff - smeta->dsymOff;
-        	shdr[scount].sh_addralign = sizeof(long);
-        	shdr[scount].sh_name = stoffset;
-        	strcpy(&StringTable[stoffset], ".dynsym");
-        	stoffset += strlen(".dynsym") + 1;
-        	scount++;
+		shdr[scount].sh_type = SHT_DYNSYM;
+		shdr[scount].sh_offset = smeta->dsymOff;
+		shdr[scount].sh_addr = smeta->dsymVaddr;
+		shdr[scount].sh_flags = SHF_ALLOC;
+		shdr[scount].sh_info = 0;
+		shdr[scount].sh_link = scount + 1;
+		shdr[scount].sh_entsize = sizeof(ElfW(Sym));
+		shdr[scount].sh_size = smeta->dstrOff - smeta->dsymOff;
+		shdr[scount].sh_addralign = sizeof(long);
+		shdr[scount].sh_name = stoffset;
+		strcpy(&StringTable[stoffset], ".dynsym");
+		stoffset += strlen(".dynsym") + 1;
+		scount++;
 
-        	/*
-         	* .dynstr
-         	*/
-        	shdr[scount].sh_type = SHT_STRTAB;
-        	shdr[scount].sh_offset = smeta->dstrOff;
-        	shdr[scount].sh_addr = smeta->dstrVaddr;
-        	shdr[scount].sh_flags = SHF_ALLOC;
-        	shdr[scount].sh_info = 0;
-       		shdr[scount].sh_link = 0;
-        	shdr[scount].sh_entsize = sizeof(ElfW(Sym));
-        	shdr[scount].sh_size = smeta->strSiz;
-        	shdr[scount].sh_addralign = 1;
-        	shdr[scount].sh_name = stoffset;
-        	strcpy(&StringTable[stoffset], ".dynstr");
-        	stoffset += strlen(".dynstr") + 1;
-        	scount++;
-	
 		/*
-         	* rela.dyn
-         	*/
-        	shdr[scount].sh_type = (__ELF_NATIVE_CLASS == 64) ? SHT_RELA : SHT_REL;
-        	shdr[scount].sh_offset = (__ELF_NATIVE_CLASS == 64) ? smeta->relaOff : smeta->relOff;
-		shdr[scount].sh_addr = (__ELF_NATIVE_CLASS == 64) ? smeta->relaVaddr : smeta->relVaddr;
-        	shdr[scount].sh_flags = SHF_ALLOC;
-        	shdr[scount].sh_info = 0;
-       	 	shdr[scount].sh_link = dynsym_index;
-        	shdr[scount].sh_entsize = (__ELF_NATIVE_CLASS == 64) ? sizeof(Elf64_Rela) : sizeof(Elf32_Rel);
-        	shdr[scount].sh_size = global_hacks.rela_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.rela_size;
-        	shdr[scount].sh_addralign = sizeof(long); 
-        	shdr[scount].sh_name = stoffset;
-        	if (__ELF_NATIVE_CLASS == 64) {
-                	strcpy(&StringTable[stoffset], ".rela.dyn");
-                	stoffset += strlen(".rela.dyn") + 1;
-        	} else {
-                	strcpy(&StringTable[stoffset], ".rel.dyn");
-                	stoffset += strlen(".rel.dyn") + 1;
-        	}
-       	 	scount++;
-	
-		/*
-	 	* rela.plt
-	 	*/
+		* .dynstr
+		*/
+		shdr[scount].sh_type = SHT_STRTAB;
+		shdr[scount].sh_offset = smeta->dstrOff;
+		shdr[scount].sh_addr = smeta->dstrVaddr;
+		shdr[scount].sh_flags = SHF_ALLOC;
+		shdr[scount].sh_info = 0;
+		shdr[scount].sh_link = 0;
+		shdr[scount].sh_entsize = sizeof(ElfW(Sym));
+		shdr[scount].sh_size = smeta->strSiz;
+		shdr[scount].sh_addralign = 1;
+		shdr[scount].sh_name = stoffset;
+		strcpy(&StringTable[stoffset], ".dynstr");
+		stoffset += strlen(".dynstr") + 1;
+		scount++;
+
+	   /*
+		* rela.dyn
+		*/
 		shdr[scount].sh_type = (__ELF_NATIVE_CLASS == 64) ? SHT_RELA : SHT_REL;
-        	shdr[scount].sh_offset = (__ELF_NATIVE_CLASS == 64) ? smeta->plt_relaOff : smeta->plt_relOff;
-        	shdr[scount].sh_addr = (__ELF_NATIVE_CLASS == 64) ? smeta->plt_relaVaddr : smeta->plt_relVaddr;
-        	shdr[scount].sh_flags = SHF_ALLOC;
-        	shdr[scount].sh_info = 0;
-        	shdr[scount].sh_link = dynsym_index;
-        	shdr[scount].sh_entsize = (__ELF_NATIVE_CLASS == 64) ? sizeof(Elf64_Rela) : sizeof(Elf32_Rel);
-        	shdr[scount].sh_size = global_hacks.plt_rela_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.plt_rela_size;
-        	shdr[scount].sh_addralign = sizeof(long);
-        	shdr[scount].sh_name = stoffset;
-        	if (__ELF_NATIVE_CLASS == 64) {
-                	strcpy(&StringTable[stoffset], ".rela.plt");
-                	stoffset += strlen(".rela.plt") + 1;
-        	} else {
-                	strcpy(&StringTable[stoffset], ".rel.plt");
-                	stoffset += strlen(".rel.plt") + 1;
-        	}
-        	scount++;
+		shdr[scount].sh_offset = (__ELF_NATIVE_CLASS == 64) ? smeta->relaOff : smeta->relOff;
+		shdr[scount].sh_addr = (__ELF_NATIVE_CLASS == 64) ? smeta->relaVaddr : smeta->relVaddr;
+		shdr[scount].sh_flags = SHF_ALLOC;
+		shdr[scount].sh_info = 0;
+		shdr[scount].sh_link = dynsym_index;
+		shdr[scount].sh_entsize = (__ELF_NATIVE_CLASS == 64) ? sizeof(Elf64_Rela) : sizeof(Elf32_Rel);
+		shdr[scount].sh_size = global_hacks.rela_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.rela_size;
+		shdr[scount].sh_addralign = sizeof(long); 
+		shdr[scount].sh_name = stoffset;
+		if (__ELF_NATIVE_CLASS == 64) {
+			strcpy(&StringTable[stoffset], ".rela.dyn");
+			stoffset += strlen(".rela.dyn") + 1;
+		} else {
+			strcpy(&StringTable[stoffset], ".rel.dyn");
+			stoffset += strlen(".rel.dyn") + 1;
+		}
+		scount++;
 
-
-        	/*
-         	 * .init
-         	 */
-        	shdr[scount].sh_type = SHT_PROGBITS;
-        	shdr[scount].sh_offset = smeta->initOff;
-        	shdr[scount].sh_addr = smeta->initVaddr;
-        	shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
-        	shdr[scount].sh_info = 0;
-        	shdr[scount].sh_link = 0;
-        	shdr[scount].sh_entsize = 0;
-        	shdr[scount].sh_size = global_hacks.init_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.init_size;
-        	shdr[scount].sh_addralign = sizeof(long);
-        	shdr[scount].sh_name = stoffset;
-        	strcpy(&StringTable[stoffset], ".init");
-        	stoffset += strlen(".init") + 1;
-        	scount++;
-	
 		/*
-	 	* .plt
-	 	*/
+		* rela.plt
+		*/
+		shdr[scount].sh_type = (__ELF_NATIVE_CLASS == 64) ? SHT_RELA : SHT_REL;
+		shdr[scount].sh_offset = (__ELF_NATIVE_CLASS == 64) ? smeta->plt_relaOff : smeta->plt_relOff;
+		shdr[scount].sh_addr = (__ELF_NATIVE_CLASS == 64) ? smeta->plt_relaVaddr : smeta->plt_relVaddr;
+		shdr[scount].sh_flags = SHF_ALLOC;
+		shdr[scount].sh_info = 0;
+		shdr[scount].sh_link = dynsym_index;
+		shdr[scount].sh_entsize = (__ELF_NATIVE_CLASS == 64) ? sizeof(Elf64_Rela) : sizeof(Elf32_Rel);
+		shdr[scount].sh_size = global_hacks.plt_rela_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.plt_rela_size;
+		shdr[scount].sh_addralign = sizeof(long);
+		shdr[scount].sh_name = stoffset;
+		if (__ELF_NATIVE_CLASS == 64) {
+			strcpy(&StringTable[stoffset], ".rela.plt");
+			stoffset += strlen(".rela.plt") + 1;
+		} else {
+			strcpy(&StringTable[stoffset], ".rel.plt");
+			stoffset += strlen(".rel.plt") + 1;
+		}
+		scount++;
+
+		/*
+		 * .init
+		 */
+		shdr[scount].sh_type = SHT_PROGBITS;
+		shdr[scount].sh_offset = smeta->initOff;
+		shdr[scount].sh_addr = smeta->initVaddr;
+		shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
+		shdr[scount].sh_info = 0;
+		shdr[scount].sh_link = 0;
+		shdr[scount].sh_entsize = 0;
+		shdr[scount].sh_size = global_hacks.init_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.init_size;
+		shdr[scount].sh_addralign = sizeof(long);
+		shdr[scount].sh_name = stoffset;
+		strcpy(&StringTable[stoffset], ".init");
+		stoffset += strlen(".init") + 1;
+		scount++;
+
+		/*
+		* .plt
+		*/
 		shdr[scount].sh_type = SHT_PROGBITS;
 		shdr[scount].sh_offset = smeta->initOff + (global_hacks.init_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.init_size);
 		/* NOTE: plt has an align of 16, and needs to be aligned to that in the address, which sometimes leaves space between
-	 	* the end of .init and the beggining of plt. So we handle that alignment by increasing the sh_offset in an aligned
-	 	* way.
-	 	*/
+		* the end of .init and the beggining of plt. So we handle that alignment by increasing the sh_offset in an aligned
+		* way.
+		*/
 		shdr[scount].sh_offset += 
 		((smeta->initVaddr + (global_hacks.init_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.init_size) + 16) & ~15) - 
 		(smeta->initVaddr + (global_hacks.init_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.init_size));
@@ -391,26 +388,26 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 		scount++;
 	}
 
-	 /*
-         * ._TEXT (text segment, not .text section)
-         */
-	
-        text_shdr_index = scount;
-        shdr[scount].sh_type = SHT_PROGBITS;
-        shdr[scount].sh_offset = elfdesc->textOffset;
-        shdr[scount].sh_addr = elfdesc->textVaddr;
-        shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = 0;
-        shdr[scount].sh_entsize = 0;
-        shdr[scount].sh_size = elfdesc->textSize;
-        shdr[scount].sh_addralign = 16;
-        shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], "._TEXT");
-        stoffset += strlen("._TEXT") + 1;
-        scount++;
+	/*
+	 * ._TEXT (text segment, not .text section)
+	 */
 
- 	/*
+	text_shdr_index = scount;
+	shdr[scount].sh_type = SHT_PROGBITS;
+	shdr[scount].sh_offset = elfdesc->textOffset;
+	shdr[scount].sh_addr = elfdesc->textVaddr;
+	shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 0;
+	shdr[scount].sh_size = elfdesc->textSize;
+	shdr[scount].sh_addralign = 16;
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], "._TEXT");
+	stoffset += strlen("._TEXT") + 1;
+	scount++;
+
+	/*
 	 * .text.orig 
 	 * This section reflects the location of the .text section
 	 * from the original executable. In ecfs files there are two
@@ -431,76 +428,76 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	strcpy(&StringTable[stoffset], ".text");
 	stoffset += strlen(".text") + 1;
 	scount++;
- 
+
 	if (dynamic) {
-       	 	/*
-         	 * .fini
-         	 */
-        	shdr[scount].sh_type = SHT_PROGBITS;
-        	shdr[scount].sh_offset = smeta->finiOff;
-        	shdr[scount].sh_addr = smeta->finiVaddr;
-        	shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
-        	shdr[scount].sh_info = 0;
-        	shdr[scount].sh_link = 0;
-        	shdr[scount].sh_entsize = 0;
-        	shdr[scount].sh_size = global_hacks.fini_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.fini_size;
-        	shdr[scount].sh_addralign = 16;
-        	shdr[scount].sh_name = stoffset;
-        	strcpy(&StringTable[stoffset], ".fini");
-        	stoffset += strlen(".fini") + 1;
-        	scount++;
+		/*
+		 * .fini
+		 */
+		shdr[scount].sh_type = SHT_PROGBITS;
+		shdr[scount].sh_offset = smeta->finiOff;
+		shdr[scount].sh_addr = smeta->finiVaddr;
+		shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
+		shdr[scount].sh_info = 0;
+		shdr[scount].sh_link = 0;
+		shdr[scount].sh_entsize = 0;
+		shdr[scount].sh_size = global_hacks.fini_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.fini_size;
+		shdr[scount].sh_addralign = 16;
+		shdr[scount].sh_name = stoffset;
+		strcpy(&StringTable[stoffset], ".fini");
+		stoffset += strlen(".fini") + 1;
+		scount++;
 
 		/*
-         	 * .eh_frame_hdr
-         	 */
-        	shdr[scount].sh_type = SHT_PROGBITS;
-        	shdr[scount].sh_offset = elfdesc->ehframeOffset;
-        	shdr[scount].sh_addr = elfdesc->ehframe_Vaddr;    
-        	shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
-        	shdr[scount].sh_info = 0;
-        	shdr[scount].sh_link = 0;
-        	shdr[scount].sh_entsize = 0;
-       	 	shdr[scount].sh_size = elfdesc->ehframe_Size;
-        	shdr[scount].sh_addralign = 4;
-        	shdr[scount].sh_name = stoffset;
-        	strcpy(&StringTable[stoffset], ".eh_frame_hdr");
-        	stoffset += strlen(".eh_frame_hdr") + 1;
-        	scount++;
-       } 
-       	/*
-       	 * .eh_frame
+		 * .eh_frame_hdr
+		 */
+		shdr[scount].sh_type = SHT_PROGBITS;
+		shdr[scount].sh_offset = elfdesc->ehframeOffset;
+		shdr[scount].sh_addr = elfdesc->ehframe_Vaddr;    
+		shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
+		shdr[scount].sh_info = 0;
+		shdr[scount].sh_link = 0;
+		shdr[scount].sh_entsize = 0;
+		shdr[scount].sh_size = elfdesc->ehframe_Size;
+		shdr[scount].sh_addralign = 4;
+		shdr[scount].sh_name = stoffset;
+		strcpy(&StringTable[stoffset], ".eh_frame_hdr");
+		stoffset += strlen(".eh_frame_hdr") + 1;
+		scount++;
+	} 
+	/*
+	 * .eh_frame
 	 */
-        shdr[scount].sh_type = SHT_PROGBITS;
+	shdr[scount].sh_type = SHT_PROGBITS;
 	/*
 	 * For dynamically linked case:
- 	 * .eh_frame starts safter .eh_frame_hdr, so we that's why to get the offset
+	 * .eh_frame starts safter .eh_frame_hdr, so we that's why to get the offset
 	 * we do sh_offset = elfdesc->ehFrameOffset + elfdesc->ehframe_size;
 	 * in other words, elfdesc->ehframeOffset points to eh_frame_hdr not eh_frame
 	 */
 	shdr[scount].sh_offset = dynamic ? (elfdesc->ehframeOffset + elfdesc->ehframe_Size) : elfdesc->ehframeOffset;
-        // XXX workaround for an alignment bug where eh_frame has 4 bytes of zeroes
-        // that should not be there at the beggining
+	// XXX workaround for an alignment bug where eh_frame has 4 bytes of zeroes
+	// that should not be there at the beggining
 	if (*(uint32_t *)&elfdesc->mem[shdr[scount].sh_offset] == (uint32_t)0x00000000) {
 		shdr[scount].sh_offset += 4;
 		global_hacks.eh_frame_offset_workaround = 1; // XXX ugly hack
 	}
 	shdr[scount].sh_addr = dynamic ? (elfdesc->ehframe_Vaddr + elfdesc->ehframe_Size) : global_hacks.ehframe_vaddr;
-        shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = 0;
-        shdr[scount].sh_entsize = 0;
-        size_t ehsz = (ElfW(Off))((elfdesc->ehframe_Vaddr + elfdesc->ehframe_Size) - elfdesc->textVaddr);
-        shdr[scount].sh_size = global_hacks.ehframe_size <= 0 ? ehsz : global_hacks.ehframe_size;
+	shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 0;
+	size_t ehsz = (ElfW(Off))((elfdesc->ehframe_Vaddr + elfdesc->ehframe_Size) - elfdesc->textVaddr);
+	shdr[scount].sh_size = global_hacks.ehframe_size <= 0 ? ehsz : global_hacks.ehframe_size;
 	shdr[scount].sh_addralign = 8;
-        shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], ".eh_frame");
-        stoffset += strlen(".eh_frame") + 1;
-        scount++;
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".eh_frame");
+	stoffset += strlen(".eh_frame") + 1;
+	scount++;
 	
 	if (global_hacks.ctors_vaddr != 0) {
 		/*
-	 	* .ctors (.init_array)
-	 	*/
+		* .ctors (.init_array)
+		*/
 		shdr[scount].sh_type = SHT_PROGBITS;
 		shdr[scount].sh_offset = elfdesc->dataOffset + global_hacks.ctors_vaddr - elfdesc->dataVaddr;
 		shdr[scount].sh_addr = global_hacks.ctors_vaddr;
@@ -517,58 +514,58 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	}
 
 	if (global_hacks.dtors_vaddr != 0) {
-      		/*
-         	* .dtors (.fini_array)
-         	*/
-        	shdr[scount].sh_type = SHT_PROGBITS;
-        	shdr[scount].sh_offset = elfdesc->dataOffset + global_hacks.dtors_vaddr - elfdesc->dataVaddr;
-        	shdr[scount].sh_addr = global_hacks.dtors_vaddr;
+		/*
+		* .dtors (.fini_array)
+		*/
+		shdr[scount].sh_type = SHT_PROGBITS;
+		shdr[scount].sh_offset = elfdesc->dataOffset + global_hacks.dtors_vaddr - elfdesc->dataVaddr;
+		shdr[scount].sh_addr = global_hacks.dtors_vaddr;
 		shdr[scount].sh_size = global_hacks.dtors_size;
-        	shdr[scount].sh_flags = SHF_ALLOC;
-        	shdr[scount].sh_link = 0;
-        	shdr[scount].sh_info = 0;
-        	shdr[scount].sh_entsize = sizeof(char *);
-        	shdr[scount].sh_addralign = sizeof(char *);
-        	shdr[scount].sh_name = stoffset;
-        	strcpy(&StringTable[stoffset], ".dtors");
-        	stoffset += strlen(".dtors") + 1;
-        	scount++;
+		shdr[scount].sh_flags = SHF_ALLOC;
+		shdr[scount].sh_link = 0;
+		shdr[scount].sh_info = 0;
+		shdr[scount].sh_entsize = sizeof(char *);
+		shdr[scount].sh_addralign = sizeof(char *);
+		shdr[scount].sh_name = stoffset;
+		strcpy(&StringTable[stoffset], ".dtors");
+		stoffset += strlen(".dtors") + 1;
+		scount++;
 	}
 
 	if (dynamic) {
-	 	/*
-         	 * .dynamic 
-         	 */
-        	shdr[scount].sh_type = SHT_DYNAMIC;
-        	shdr[scount].sh_offset = elfdesc->dynOffset;
-        	shdr[scount].sh_addr = elfdesc->dynVaddr;
-        	shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
-        	shdr[scount].sh_info = 0;
-        	shdr[scount].sh_link = 0;
-        	shdr[scount].sh_entsize = (__ELF_NATIVE_CLASS == 64) ? 16 : 8;
-        	shdr[scount].sh_size = elfdesc->dynSize;
-        	shdr[scount].sh_addralign = sizeof(long);
-        	shdr[scount].sh_name = stoffset;
-        	strcpy(&StringTable[stoffset], ".dynamic");
-        	stoffset += strlen(".dynamic") + 1;
-        	scount++;
+	   /*
+		 * .dynamic 
+		 */
+		shdr[scount].sh_type = SHT_DYNAMIC;
+		shdr[scount].sh_offset = elfdesc->dynOffset;
+		shdr[scount].sh_addr = elfdesc->dynVaddr;
+		shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
+		shdr[scount].sh_info = 0;
+		shdr[scount].sh_link = 0;
+		shdr[scount].sh_entsize = (__ELF_NATIVE_CLASS == 64) ? 16 : 8;
+		shdr[scount].sh_size = elfdesc->dynSize;
+		shdr[scount].sh_addralign = sizeof(long);
+		shdr[scount].sh_name = stoffset;
+		strcpy(&StringTable[stoffset], ".dynamic");
+		stoffset += strlen(".dynamic") + 1;
+		scount++;
 
-        	/*
-        	 * .got.plt
-         	 */
-        	shdr[scount].sh_type = SHT_PROGBITS;
-        	shdr[scount].sh_offset = smeta->gotOff;
-        	shdr[scount].sh_addr = smeta->gotVaddr;
-        	shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
-        	shdr[scount].sh_info = 0;
-        	shdr[scount].sh_link = 0;
-        	shdr[scount].sh_entsize = sizeof(long);
+		/*
+		 * .got.plt
+		 */
+		shdr[scount].sh_type = SHT_PROGBITS;
+		shdr[scount].sh_offset = smeta->gotOff;
+		shdr[scount].sh_addr = smeta->gotVaddr;
+		shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
+		shdr[scount].sh_info = 0;
+		shdr[scount].sh_link = 0;
+		shdr[scount].sh_entsize = sizeof(long);
 		shdr[scount].sh_size = global_hacks.got_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.got_size;
-        	shdr[scount].sh_addralign = sizeof(long);
-        	shdr[scount].sh_name = stoffset;
-        	strcpy(&StringTable[stoffset], ".got.plt");
-       	 	stoffset += strlen(".got.plt") + 1;
-        	scount++;
+		shdr[scount].sh_addralign = sizeof(long);
+		shdr[scount].sh_name = stoffset;
+		strcpy(&StringTable[stoffset], ".got.plt");
+		stoffset += strlen(".got.plt") + 1;
+		scount++;
 	}
 	/*
 	 * ._DATA (represents entire data segment)
@@ -577,66 +574,66 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	shdr[scount].sh_offset = elfdesc->dataOffset;
 	shdr[scount].sh_addr = elfdesc->dataVaddr;
 	shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = 0;
-        shdr[scount].sh_entsize = 0;
-        shdr[scount].sh_size = elfdesc->dataSize;
-        shdr[scount].sh_addralign = sizeof(long);
-        shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], "._DATA");
-        stoffset += strlen("._DATA") + 1;
-        scount++;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 0;
+	shdr[scount].sh_size = elfdesc->dataSize;
+	shdr[scount].sh_addralign = sizeof(long);
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], "._DATA");
+	stoffset += strlen("._DATA") + 1;
+	scount++;
 
 	/*
- 	 * .data
-       	 */
-      	shdr[scount].sh_type = SHT_PROGBITS;
-       	shdr[scount].sh_offset = elfdesc->dataOffset + (global_hacks.data_vaddr - elfdesc->dataVaddr);
-       	shdr[scount].sh_addr = global_hacks.data_vaddr;
-       	shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
-       	shdr[scount].sh_info = 0;
-       	shdr[scount].sh_link = 0;
-       	shdr[scount].sh_entsize = 0;
-       	shdr[scount].sh_size = global_hacks.data_size;
-       	shdr[scount].sh_addralign = sizeof(long);
-       	shdr[scount].sh_name = stoffset;
-       	strcpy(&StringTable[stoffset], ".data");
-       	stoffset += strlen(".data") + 1;
-       	scount++;
+	 * .data
+	 */
+	shdr[scount].sh_type = SHT_PROGBITS;
+	shdr[scount].sh_offset = elfdesc->dataOffset + (global_hacks.data_vaddr - elfdesc->dataVaddr);
+	shdr[scount].sh_addr = global_hacks.data_vaddr;
+	shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 0;
+	shdr[scount].sh_size = global_hacks.data_size;
+	shdr[scount].sh_addralign = sizeof(long);
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".data");
+	stoffset += strlen(".data") + 1;
+	scount++;
 
-        /*
-         * .bss
-         */
-        shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
-        shdr[scount].sh_offset = elfdesc->bssOffset;
-        shdr[scount].sh_addr = elfdesc->bssVaddr;
-        shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = 0;
-        shdr[scount].sh_entsize = 0;
-        shdr[scount].sh_size = elfdesc->bssSize;
-        shdr[scount].sh_addralign = sizeof(long);
-        shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], ".bss");
-        stoffset += strlen(".bss") + 1;
-        scount++;
+	/*
+	 * .bss
+	 */
+	shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
+	shdr[scount].sh_offset = elfdesc->bssOffset;
+	shdr[scount].sh_addr = elfdesc->bssVaddr;
+	shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 0;
+	shdr[scount].sh_size = elfdesc->bssSize;
+	shdr[scount].sh_addralign = sizeof(long);
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".bss");
+	stoffset += strlen(".bss") + 1;
+	scount++;
 
-        /*
-         * .heap
-         */
-        shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
-        shdr[scount].sh_offset = get_internal_sh_offset(elfdesc, memdesc, HEAP);
-        shdr[scount].sh_addr = memdesc->heap.base;
-        shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = 0;
-        shdr[scount].sh_entsize = 0;
-        shdr[scount].sh_size = memdesc->heap.size;
-        shdr[scount].sh_addralign = sizeof(long);
-        shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], ".heap");
-        stoffset += strlen(".heap") + 1;
-        scount++;
+	/*
+	 * .heap
+	 */
+	shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
+	shdr[scount].sh_offset = get_internal_sh_offset(elfdesc, memdesc, HEAP);
+	shdr[scount].sh_addr = memdesc->heap.base;
+	shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 0;
+	shdr[scount].sh_size = memdesc->heap.size;
+	shdr[scount].sh_addralign = sizeof(long);
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".heap");
+	stoffset += strlen(".heap") + 1;
+	scount++;
 	
 	if (dynamic) {
 	/*
@@ -713,57 +710,57 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	strcpy(&StringTable[stoffset], ".prstatus");
 	stoffset += strlen(".prstatus") + 1;
 	scount++;
-	
+
 	/*
 	 * .fd_info
 	 */
-      	shdr[scount].sh_type = SHT_PROGBITS;
-        shdr[scount].sh_offset = ecfs_file->fdinfo_offset;
-        shdr[scount].sh_addr = 0;
-        shdr[scount].sh_flags = 0;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = 0;
-        shdr[scount].sh_entsize = sizeof(fd_info_t);
-        shdr[scount].sh_size = ecfs_file->fdinfo_size;
-        shdr[scount].sh_addralign = 4;
-        shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], ".fdinfo");
-        stoffset += strlen(".fdinfo") + 1;
-        scount++;
+	shdr[scount].sh_type = SHT_PROGBITS;
+	shdr[scount].sh_offset = ecfs_file->fdinfo_offset;
+	shdr[scount].sh_addr = 0;
+	shdr[scount].sh_flags = 0;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = sizeof(fd_info_t);
+	shdr[scount].sh_size = ecfs_file->fdinfo_size;
+	shdr[scount].sh_addralign = 4;
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".fdinfo");
+	stoffset += strlen(".fdinfo") + 1;
+	scount++;
 
 	/*
 	 * siginfo_t
 	 */
 	shdr[scount].sh_type = SHT_PROGBITS;
-        shdr[scount].sh_offset = ecfs_file->siginfo_offset;
-        shdr[scount].sh_addr = 0;
-        shdr[scount].sh_flags = 0;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = 0;
-        shdr[scount].sh_entsize = sizeof(siginfo_t);
-        shdr[scount].sh_size = ecfs_file->siginfo_size;
-        shdr[scount].sh_addralign = 4;
-        shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], ".siginfo");
-        stoffset += strlen(".siginfo") + 1;
-        scount++;
+	shdr[scount].sh_offset = ecfs_file->siginfo_offset;
+	shdr[scount].sh_addr = 0;
+	shdr[scount].sh_flags = 0;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = sizeof(siginfo_t);
+	shdr[scount].sh_size = ecfs_file->siginfo_size;
+	shdr[scount].sh_addralign = 4;
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".siginfo");
+	stoffset += strlen(".siginfo") + 1;
+	scount++;
 
 	/*
 	 * auxv
 	 */
-   	shdr[scount].sh_type = SHT_PROGBITS;
-        shdr[scount].sh_offset = ecfs_file->auxv_offset;
-        shdr[scount].sh_addr = 0;
-        shdr[scount].sh_flags = 0;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = 0;
-        shdr[scount].sh_entsize = 8;
-        shdr[scount].sh_size = ecfs_file->auxv_size;
-        shdr[scount].sh_addralign = 8;
-        shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], ".auxvector");
-        stoffset += strlen(".auxvector") + 1;
-        scount++;
+	shdr[scount].sh_type = SHT_PROGBITS;
+	shdr[scount].sh_offset = ecfs_file->auxv_offset;
+	shdr[scount].sh_addr = 0;
+	shdr[scount].sh_flags = 0;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 8;
+	shdr[scount].sh_size = ecfs_file->auxv_size;
+	shdr[scount].sh_addralign = 8;
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".auxvector");
+	stoffset += strlen(".auxvector") + 1;
+	scount++;
 
 	/*
 	 * .exepath
@@ -771,36 +768,36 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	shdr[scount].sh_type = SHT_PROGBITS;
 	shdr[scount].sh_offset = ecfs_file->exepath_offset;
 	shdr[scount].sh_addr = 0;
-        shdr[scount].sh_flags = 0;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = 0;
-        shdr[scount].sh_entsize = 8;
-        shdr[scount].sh_size = ecfs_file->exepath_size;
-        shdr[scount].sh_addralign = 1;
-        shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], ".exepath");
-        stoffset += strlen(".exepath") + 1;
-        scount++;
+	shdr[scount].sh_flags = 0;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 8;
+	shdr[scount].sh_size = ecfs_file->exepath_size;
+	shdr[scount].sh_addralign = 1;
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".exepath");
+	stoffset += strlen(".exepath") + 1;
+	scount++;
 
 	/*
 	 * .personality
 	 */
 	shdr[scount].sh_type = SHT_PROGBITS;
-        shdr[scount].sh_offset = ecfs_file->personality_offset;
-        shdr[scount].sh_addr = 0;
-        shdr[scount].sh_flags = 0;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = 0;
-        shdr[scount].sh_entsize = sizeof(elf_stat_t);
-        shdr[scount].sh_size = ecfs_file->personality_size;
-        shdr[scount].sh_addralign = 1;
-        shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], ".personality");
-        stoffset += strlen(".personality") + 1;
-        scount++;
+	shdr[scount].sh_offset = ecfs_file->personality_offset;
+	shdr[scount].sh_addr = 0;
+	shdr[scount].sh_flags = 0;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = sizeof(elf_stat_t);
+	shdr[scount].sh_size = ecfs_file->personality_size;
+	shdr[scount].sh_addralign = 1;
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".personality");
+	stoffset += strlen(".personality") + 1;
+	scount++;
 
 	/*
- 	 * .arglist
+	 * .arglist
 	 */
 	shdr[scount].sh_type = SHT_PROGBITS;
 	shdr[scount].sh_offset = ecfs_file->arglist_offset;
@@ -815,7 +812,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	strcpy(&StringTable[stoffset], ".arglist");
 	stoffset += strlen(".arglist") + 1;
 	scount++;
-	
+
 	/*
 	 * .fpregset
 	 */
@@ -831,152 +828,152 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	strcpy(&StringTable[stoffset], ".fpregset");
 	stoffset += strlen(".fpregset") + 1;
 	scount++;
-	
+
 	/*
-         * .stack
-         */
-        shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
-        shdr[scount].sh_offset = get_internal_sh_offset(elfdesc, memdesc, STACK);
-        shdr[scount].sh_addr = memdesc->stack.base;
-        shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = 0;
-        shdr[scount].sh_entsize = 0;
-        shdr[scount].sh_size = memdesc->stack.size;
-        shdr[scount].sh_addralign = sizeof(long);
-        shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], ".stack");
-        stoffset += strlen(".stack") + 1;
-        scount++;
+	 * .stack
+	 */
+	shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
+	shdr[scount].sh_offset = get_internal_sh_offset(elfdesc, memdesc, STACK);
+	shdr[scount].sh_addr = memdesc->stack.base;
+	shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 0;
+	shdr[scount].sh_size = memdesc->stack.size;
+	shdr[scount].sh_addralign = sizeof(long);
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".stack");
+	stoffset += strlen(".stack") + 1;
+	scount++;
 
-        /*
-         * .vdso
-         */
-        shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
-        shdr[scount].sh_offset = get_internal_sh_offset(elfdesc, memdesc, VDSO);
-        shdr[scount].sh_addr = memdesc->vdso.base;
-        shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = 0;
-        shdr[scount].sh_entsize = 0;
-        shdr[scount].sh_size = memdesc->vdso.size;
-        shdr[scount].sh_addralign = sizeof(long);
-        shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], ".vdso");
-        stoffset += strlen(".vdso") + 1;
-        scount++;
+	/*
+	 * .vdso
+	 */
+	shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
+	shdr[scount].sh_offset = get_internal_sh_offset(elfdesc, memdesc, VDSO);
+	shdr[scount].sh_addr = memdesc->vdso.base;
+	shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 0;
+	shdr[scount].sh_size = memdesc->vdso.size;
+	shdr[scount].sh_addralign = sizeof(long);
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".vdso");
+	stoffset += strlen(".vdso") + 1;
+	scount++;
 
-        /*
-         * .vsyscall
-         */
-        shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
-        shdr[scount].sh_offset = get_internal_sh_offset(elfdesc, memdesc, VSYSCALL);
-        shdr[scount].sh_addr = memdesc->vsyscall.base;
-        shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = 0;
-        shdr[scount].sh_entsize = 0;
-        shdr[scount].sh_size = memdesc->vsyscall.size;
-        shdr[scount].sh_addralign = sizeof(long);
-        shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], ".vsyscall");
-        stoffset += strlen(".vsyscall") + 1;
-        scount++;
+	/*
+	 * .vsyscall
+	 */
+	shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
+	shdr[scount].sh_offset = get_internal_sh_offset(elfdesc, memdesc, VSYSCALL);
+	shdr[scount].sh_addr = memdesc->vsyscall.base;
+	shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 0;
+	shdr[scount].sh_size = memdesc->vsyscall.size;
+	shdr[scount].sh_addralign = sizeof(long);
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".vsyscall");
+	stoffset += strlen(".vsyscall") + 1;
+	scount++;
 
-	 /*
-         * .symtab
-         */
-        shdr[scount].sh_type = SHT_SYMTAB;
-        shdr[scount].sh_offset = 0;
-        shdr[scount].sh_addr = 0;
-        shdr[scount].sh_flags = 0;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = scount + 1;
-        shdr[scount].sh_entsize = sizeof(ElfW(Sym));
-        shdr[scount].sh_size = 0;
-        shdr[scount].sh_addralign = 4;
-        shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], ".symtab");
-        stoffset += strlen(".symtab") + 1;
-        scount++;
+	/*
+	 * .symtab
+	 */
+	shdr[scount].sh_type = SHT_SYMTAB;
+	shdr[scount].sh_offset = 0;
+	shdr[scount].sh_addr = 0;
+	shdr[scount].sh_flags = 0;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = scount + 1;
+	shdr[scount].sh_entsize = sizeof(ElfW(Sym));
+	shdr[scount].sh_size = 0;
+	shdr[scount].sh_addralign = 4;
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".symtab");
+	stoffset += strlen(".symtab") + 1;
+	scount++;
 
-        /*
-         * .strtab
-         */
-        shdr[scount].sh_type = SHT_STRTAB;
-        shdr[scount].sh_offset = 0;
-        shdr[scount].sh_addr = 0;
-        shdr[scount].sh_flags = 0;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = 0;
-        shdr[scount].sh_entsize = 0;
-        shdr[scount].sh_size = 0;
-        shdr[scount].sh_addralign = 1;
-        shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], ".strtab");
-        stoffset += strlen(".strtab") + 1;
-        scount++;
+	/*
+	 * .strtab
+	 */
+	shdr[scount].sh_type = SHT_STRTAB;
+	shdr[scount].sh_offset = 0;
+	shdr[scount].sh_addr = 0;
+	shdr[scount].sh_flags = 0;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 0;
+	shdr[scount].sh_size = 0;
+	shdr[scount].sh_addralign = 1;
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".strtab");
+	stoffset += strlen(".strtab") + 1;
+	scount++;
 
-        /*
-         * .shstrtab
-         */
-        shdr[scount].sh_type = SHT_STRTAB;
-        shdr[scount].sh_offset = e_shoff + (sizeof(ElfW(Shdr)) * (scount  + 1));
-        shdr[scount].sh_addr = 0;
-        shdr[scount].sh_flags = 0;
-        shdr[scount].sh_info = 0;
-        shdr[scount].sh_link = 0;
-        shdr[scount].sh_entsize = 0;
-        shdr[scount].sh_size = stoffset + strlen(".shstrtab") + 1; 
-        shdr[scount].sh_addralign = 1;
-        shdr[scount].sh_name = stoffset;
-        strcpy(&StringTable[stoffset], ".shstrtab");
-        stoffset += strlen(".shstrtab") + 1;
-        scount++;
+	/*
+	 * .shstrtab
+	 */
+	shdr[scount].sh_type = SHT_STRTAB;
+	shdr[scount].sh_offset = e_shoff + (sizeof(ElfW(Shdr)) * (scount  + 1));
+	shdr[scount].sh_addr = 0;
+	shdr[scount].sh_flags = 0;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_link = 0;
+	shdr[scount].sh_entsize = 0;
+	shdr[scount].sh_size = stoffset + strlen(".shstrtab") + 1; 
+	shdr[scount].sh_addralign = 1;
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".shstrtab");
+	stoffset += strlen(".shstrtab") + 1;
+	scount++;
 
-	 /* We will add the actual sections for .symtab and .strtab
-         * after we write out the current section headers first and
-         * use them to retrieve symtab info from eh_frame
-         */
+	/* We will add the actual sections for .symtab and .strtab
+	 * after we write out the current section headers first and
+	 * use them to retrieve symtab info from eh_frame
+	 */
 	const char *filepath = outfile;
-        int e_shstrndx = scount - 1;
-        for (i = 0; i < scount; i++) 
-                if (write(fd, (char *)&shdr[i], sizeof(ElfW(Shdr))) < 0)
+	int e_shstrndx = scount - 1;
+	for (i = 0; i < scount; i++) 
+		if (write(fd, (char *)&shdr[i], sizeof(ElfW(Shdr))) < 0)
 			log_msg(__LINE__, "write %s", strerror(errno));
-        
-        ssize_t b = write(fd, (char *)StringTable, stoffset);
+		
+	ssize_t b = write(fd, (char *)StringTable, stoffset);
 	if (b < 0) {
 		log_msg(__LINE__, "FATAL: write %s", strerror(errno));
 		exit_failure(-1);
 	}
-        fsync(fd);
-        close(fd);
-        
+	fsync(fd);
+	close(fd);
+		
 	fd = xopen(filepath, O_RDWR);
-        
-        if (fstat(fd, &st) < 0) {
-                log_msg(__LINE__, "FATAL: fstat %s", strerror(errno));
-                exit_failure(-1);
-        }
+		
+	if (fstat(fd, &st) < 0) {
+		log_msg(__LINE__, "FATAL: fstat %s", strerror(errno));
+		exit_failure(-1);
+	}
 
-        uint8_t *mem = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-        if (mem == MAP_FAILED) {
-                log_msg(__LINE__, "FATAL: mmap %s (%lx bytes)", strerror(errno), st.st_size);
-                exit_failure(-1);
-        }
+	uint8_t *mem = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	if (mem == MAP_FAILED) {
+		log_msg(__LINE__, "FATAL: mmap %s (%lx bytes)", strerror(errno), st.st_size);
+		exit_failure(-1);
+	}
 
-        ElfW(Ehdr *)ehdr = (ElfW(Ehdr) *)mem;
-        ehdr->e_entry = memdesc->o_entry; // this is unsigned
+	ElfW(Ehdr *)ehdr = (ElfW(Ehdr) *)mem;
+	ehdr->e_entry = memdesc->o_entry; // this is unsigned
 	ehdr->e_shoff = e_shoff;
-        ehdr->e_shstrndx = e_shstrndx;
+	ehdr->e_shstrndx = e_shstrndx;
 	ehdr->e_shentsize = sizeof(ElfW(Shdr));
-        ehdr->e_shnum = scount;
-        ehdr->e_type = ET_NONE;
+	ehdr->e_shnum = scount;
+	ehdr->e_type = ET_NONE;
 	
 	msync(mem, 4096, MS_SYNC);
-        munmap(mem, 4096);
+	munmap(mem, 4096);
 
-        close(fd);
+	close(fd);
 	free(shdr);
 	free(StringTable);
 
@@ -1059,58 +1056,58 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 * write prstatus structs
 	 */
 	if( write(fd, notedesc->prstatus, sizeof(struct elf_prstatus)) == -1 ) {
-        	log_msg(__LINE__, "write %s", strerror(errno));
-           	exit_failure(-1);
-        }
+		log_msg(__LINE__, "write %s", strerror(errno));
+		exit_failure(-1);
+	}
 	for (i = 1; i < notedesc->thread_count; i++) {
 		if( write(fd, notedesc->thread_core_info[i].prstatus, sizeof(struct elf_prstatus)) == -1) {
-                	log_msg(__LINE__, "write %s", strerror(errno));
-                    	exit_failure(-1);
-                }
-        }
+			log_msg(__LINE__, "write %s", strerror(errno));
+			exit_failure(-1);
+		}
+	}
 	
 	/*
 	 * write fdinfo structs
 	 */
 	if( write(fd, memdesc->fdinfo, ecfs_file->fdinfo_size) == -1) {
-        	log_msg(__LINE__, "write %s", strerror(errno));
-        }
+		log_msg(__LINE__, "write %s", strerror(errno));
+	}
 
 	/*
 	 * write siginfo_t struct
 	 */
 	if( write(fd, notedesc->siginfo, sizeof(siginfo_t)) == -1) {
-            	log_msg(__LINE__, "write %s", strerror(errno));
-        }
+		log_msg(__LINE__, "write %s", strerror(errno));
+	}
 	
 	/*
- 	 * write auxv data
+	 * write auxv data
 	 */
 	if( write(fd, notedesc->auxv, notedesc->auxv_size) == -1) {
-            	log_msg(__LINE__, "write %s", strerror(errno));
-        }
+			log_msg(__LINE__, "write %s", strerror(errno));
+	}
 	
 	/*
 	 * write exepath string
 	 */
 	if( write(fd, memdesc->exe_path, strlen(memdesc->exe_path) + 1) == -1) {
-            	log_msg(__LINE__, "write %s", strerror(errno));
-        }
+		log_msg(__LINE__, "write %s", strerror(errno));
+	}
 
 	/*
 	 * write ELF personality
 	 */
 	build_elf_stats(handle);
 	if( write(fd, &handle->elfstat, sizeof(elf_stat_t)) == -1) { 
-            	log_msg(__LINE__, "write %s", strerror(errno));
-        }
+		log_msg(__LINE__, "write %s", strerror(errno));
+	}
 	
 	/*
 	 * write .arglist section data
 	 */
 	if( write(fd, handle->arglist, ELF_PRARGSZ) == -1) {
-            	log_msg(__LINE__, "write %s", strerror(errno));
-        }
+		log_msg(__LINE__, "write %s", strerror(errno));
+	}
 	
 	/*
 	 * write thread fpu registers
@@ -1123,7 +1120,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	
 	/* 
 	 * write .procfs.tgz
- 	 */
+	 */
 	if (procfs_size > 0) {
 		if (write(fd, handle->procfs_tarball, procfs_size) < 0) {
 			log_msg(__LINE__, "write %s", strerror(errno));
@@ -1166,7 +1163,5 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	
 	/* Open just once more to fill in the dynamic symbol table values */
 
-
 	return 0;
 }
-	

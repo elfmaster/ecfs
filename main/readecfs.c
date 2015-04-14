@@ -48,37 +48,37 @@ struct {
 
 static void print_registers(elf_gregset_t *reg)
 {
-        struct user_regs_struct pt_reg;
-        memcpy(&pt_reg, reg, sizeof(struct user_regs_struct));
-        
+	struct user_regs_struct pt_reg;
+	memcpy(&pt_reg, reg, sizeof(struct user_regs_struct));
+
 #ifdef __x86_64__
 	printf("r15:\t%llx\n"
-        	"r14:\t%llx\n"
-        	"r13:\t%llx\n" 
-        	"r12:\t%llx\n"
-       		"rbp:\t%llx\n"
-        	"rbx:\t%llx\n"   
-        	"r11:\t%llx\n"
-        	"r10:\t%llx\n"
-        	"r9: \t%llx\n"
-        	"r8: \t%llx\n"
-        	"rax:\t%llx\n"
-        	"rcx:\t%llx\n"
-       		"rdx:\t%llx\n"
-        	"rsi:\t%llx\n"
-        	"rdi:\t%llx\n"
-        	"rip:\t%llx\n"
-        	"rsp:\t%llx\n"
-        	"cs: \t%llx\n"
-        	"ss: \t%llx\n"
-        	"ds: \t%llx\n"
-        	"es: \t%llx\n"
-        	"fs: \t%llx\n" 
-        	"gs: \t%llx\n"
-        	"eflags: %llx\n", 
+			"r14:\t%llx\n"
+			"r13:\t%llx\n" 
+			"r12:\t%llx\n"
+			"rbp:\t%llx\n"
+			"rbx:\t%llx\n"   
+			"r11:\t%llx\n"
+			"r10:\t%llx\n"
+			"r9: \t%llx\n"
+			"r8: \t%llx\n"
+			"rax:\t%llx\n"
+			"rcx:\t%llx\n"
+			"rdx:\t%llx\n"
+			"rsi:\t%llx\n"
+			"rdi:\t%llx\n"
+			"rip:\t%llx\n"
+			"rsp:\t%llx\n"
+			"cs: \t%llx\n"
+			"ss: \t%llx\n"
+			"ds: \t%llx\n"
+			"es: \t%llx\n"
+			"fs: \t%llx\n" 
+			"gs: \t%llx\n"
+			"eflags: %llx\n", 
 	pt_reg.r15, pt_reg.r14, pt_reg.r13, pt_reg.r12, pt_reg.rbp, pt_reg.rbx, pt_reg.r11,
-        pt_reg.r10, pt_reg.r9, pt_reg.r8, pt_reg.rax, pt_reg.rcx, pt_reg.rdx, pt_reg.rsi, pt_reg.rdi,
-        pt_reg.rip, pt_reg.rsp, pt_reg.cs, pt_reg.ss, pt_reg.ds, pt_reg.es, pt_reg.fs, pt_reg.gs, pt_reg.eflags);
+	pt_reg.r10, pt_reg.r9, pt_reg.r8, pt_reg.rax, pt_reg.rcx, pt_reg.rdx, pt_reg.rsi, pt_reg.rdi,
+	pt_reg.rip, pt_reg.rsp, pt_reg.cs, pt_reg.ss, pt_reg.ds, pt_reg.es, pt_reg.fs, pt_reg.gs, pt_reg.eflags);
 #endif
 /* must add 32bit support */
 }
@@ -225,9 +225,9 @@ usage:
 			printf("\n");
 		}
 		ret = get_siginfo(desc, &siginfo);
-        	printf("- Exited on signal (.siginfo): %d\n", siginfo.si_signo);
- 	       
-	
+		printf("- Exited on signal (.siginfo): %d\n", siginfo.si_signo);
+
+
 		ret = get_fd_info(desc, &fdinfo);
 		printf("- files/pipes/sockets (.fdinfo):\n");
 		for (i = 0; i < ret; i++) {
@@ -242,9 +242,9 @@ usage:
 					break;
 				case NET_UDP:
 					printf("\tPROTOCOL: UDP\n");
-                                        printf("\tSRC: %s:%d\n", inet_ntoa(fdinfo[i].socket.src_addr), fdinfo[i].socket.src_port);
-                                        printf("\tDST: %s:%d\n", inet_ntoa(fdinfo[i].socket.dst_addr), fdinfo[i].socket.dst_port);
-                                        printf("\n");
+					printf("\tSRC: %s:%d\n", inet_ntoa(fdinfo[i].socket.src_addr), fdinfo[i].socket.src_port);
+					printf("\tDST: %s:%d\n", inet_ntoa(fdinfo[i].socket.dst_addr), fdinfo[i].socket.dst_port);
+					printf("\n");
 					break;
 				}
 
@@ -347,7 +347,7 @@ usage:
 		"e_shoff:\t0x%lx\n"
 		"e_phoff:\t0x%lx\n" 
 		"e_shstrndx:\t%d\n", ehdr->e_entry, ehdr->e_phnum, ehdr->e_shnum, 
-				    ehdr->e_shoff, ehdr->e_phoff, ehdr->e_shstrndx);
+					ehdr->e_shoff, ehdr->e_phoff, ehdr->e_shstrndx);
 		
 	}
 	if (opts.all || opts.shdrs) {
@@ -406,8 +406,7 @@ usage:
 		system(tarcmd);
 	}
 
-			
+
 done:
 	unload_ecfs_file(desc);
-}		
-
+}

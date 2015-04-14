@@ -57,20 +57,20 @@ int check_for_pie(int pid)
 	
 int check_for_stripped_shdr(int pid)
 {
-        uint8_t *mem;
-        struct stat st;
+	uint8_t *mem;
+	struct stat st;
 
-        char *path = xfmtstrdup("/proc/%d/exe", pid);
-        int fd = xopen(path, O_RDONLY);
-        fstat(fd, &st);
+	char *path = xfmtstrdup("/proc/%d/exe", pid);
+	int fd = xopen(path, O_RDONLY);
+	fstat(fd, &st);
 
-        mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-        if (mem == MAP_FAILED) {
-                log_msg(__LINE__, "mmap %s", strerror(errno));
-                exit(-1);
-        }
-        free(path);
-        ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
+	mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (mem == MAP_FAILED) {
+		log_msg(__LINE__, "mmap %s", strerror(errno));
+		exit(-1);
+	}
+	free(path);
+	ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
 	
 	if (ehdr->e_shnum == 0 || ehdr->e_shoff == SHN_UNDEF) {
 		munmap(mem, st.st_size);

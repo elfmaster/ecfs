@@ -197,12 +197,12 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 					break;
 				}
 #if DEBUG
- 	                      	log_msg(__LINE__, "copying elf_fpxregset_t %d", fpxregset_count);
+				log_msg(__LINE__, "copying elf_fpxregset_t %d", fpxregset_count);
 #endif
-                              	notedesc->thread_core_info[fpxregset_count].xfpu = (elf_fpxregset_t *)heapAlloc(sizeof(elf_fpxregset_t));
-                               	memcpy(notedesc->thread_core_info[fpxregset_count].xfpu, desc, notes->n_descsz);
+				notedesc->thread_core_info[fpxregset_count].xfpu = (elf_fpxregset_t *)heapAlloc(sizeof(elf_fpxregset_t));
+				memcpy(notedesc->thread_core_info[fpxregset_count].xfpu, desc, notes->n_descsz);
 				fpxregset_count++;
-                                break;
+				break;
 		}
 		/*
 		 * note entries are always word aligned (4 bytes)
@@ -216,9 +216,9 @@ notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 
 void fill_in_pstatus(memdesc_t *memdesc, notedesc_t *notedesc)
 {
-                memdesc->task.uid = notedesc->psinfo->pr_uid;
-                memdesc->task.gid = notedesc->psinfo->pr_gid;
-                memdesc->task.ppid = notedesc->psinfo->pr_ppid;
-                memdesc->task.exit_signal = notedesc->prstatus->pr_info.si_signo;
-                memdesc->path = memdesc->comm = notedesc->psinfo->pr_fname;
+	memdesc->task.uid = notedesc->psinfo->pr_uid;
+	memdesc->task.gid = notedesc->psinfo->pr_gid;
+	memdesc->task.ppid = notedesc->psinfo->pr_ppid;
+	memdesc->task.exit_signal = notedesc->prstatus->pr_info.si_signo;
+	memdesc->path = memdesc->comm = notedesc->psinfo->pr_fname;
 }

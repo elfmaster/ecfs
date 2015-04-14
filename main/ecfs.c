@@ -53,8 +53,8 @@
 #define RBUF_LEN 4096 * 8
 elfdesc_t * load_core_file_stdin(char **corefile)
 {
-        uint8_t *buf = NULL;
-        ssize_t nread;
+	uint8_t *buf = NULL;
+	ssize_t nread;
 	ssize_t bytes = 0, bw;
 	int i = 0;
 	int file;
@@ -62,14 +62,14 @@ elfdesc_t * load_core_file_stdin(char **corefile)
 	char *tmp_dir = opts.use_ramdisk ? ECFS_RAMDISK_DIR : ECFS_CORE_DIR;
 	
 	char *filepath = xfmtstrdup("%s/.tmp_core", tmp_dir);
-        do {
-                if (access(filepath, F_OK) == 0) {
-                        free(filepath);
-                        filepath = xfmtstrdup("%s/.tmp_core.%d", tmp_dir, ++i);
-                } else
-                        break;
-                        
-        } while(1);
+	do {
+		if (access(filepath, F_OK) == 0) {
+			free(filepath);
+			filepath = xfmtstrdup("%s/.tmp_core.%d", tmp_dir, ++i);
+		} else
+			break;
+
+	} while(1);
 	
 	/*
 	 * Open tmp file for writing
@@ -77,7 +77,7 @@ elfdesc_t * load_core_file_stdin(char **corefile)
 	file = open(filepath, O_CREAT|O_RDWR, S_IRWXU);
 	buf = alloca(RBUF_LEN);
 	while ((nread = read(STDIN_FILENO, buf, RBUF_LEN)) > 0) {
-        	bytes += nread;
+		bytes += nread;
 		bw = write(file, buf, nread);
 		if (bw < 0) {
 			log_msg(__LINE__, "write %s", strerror(errno));
@@ -107,14 +107,14 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 	memdesc_t *memdesc = (memdesc_t *)heapAlloc(sizeof(memdesc_t));
 	
 	memdesc->mapcount = get_map_count(pid);
-        if (memdesc->mapcount < 0) {
-                log_msg(__LINE__, "failed to get mapcount from /proc/%d/maps", pid);
-                return NULL;
-        }
-        memdesc->maps = (mappings_t *)heapAlloc(sizeof(mappings_t) * memdesc->mapcount);
-        
-        memset((void *)memdesc->maps, 0, sizeof(mappings_t) * memdesc->mapcount);
-        
+	if (memdesc->mapcount < 0) {
+		log_msg(__LINE__, "failed to get mapcount from /proc/%d/maps", pid);
+		return NULL;
+	}
+	memdesc->maps = (mappings_t *)heapAlloc(sizeof(mappings_t) * memdesc->mapcount);
+
+	memset((void *)memdesc->maps, 0, sizeof(mappings_t) * memdesc->mapcount);
+
 	/*
 	 * comm and path should be different. comm should be just the filename
 	 * whereas path should be the complete filepath. Although due to an early
@@ -130,42 +130,42 @@ memdesc_t * build_proc_metadata(pid_t pid, notedesc_t *notedesc)
 	memdesc->exe_path = get_executable_path(pid); 
 	memdesc->exe_comm = strrchr(memdesc->exe_path, '/') + 1;
 	if (get_maps(pid, memdesc->maps, memdesc->exe_comm) < 0) {
-                log_msg(__LINE__, "failed to get data from /proc/%d/maps", pid);
-                return NULL;
-        }
-        
-        memdesc->task.pid = memdesc->pid = pid;
+		log_msg(__LINE__, "failed to get data from /proc/%d/maps", pid);
+		return NULL;
+	}
+
+	memdesc->task.pid = memdesc->pid = pid;
 	
 
-        for (i = 0; i < memdesc->mapcount; i++) {
-                if (memdesc->maps[i].heap) {
-                        memdesc->heap.base = memdesc->maps[i].base;
-                        memdesc->heap.size = memdesc->maps[i].size;
-                } else
-                if (memdesc->maps[i].stack) {
-                        memdesc->stack.base = memdesc->maps[i].base;
-                        memdesc->stack.size = memdesc->maps[i].size;
-                } else
-                if (memdesc->maps[i].vdso) {
-                        memdesc->vdso.base = memdesc->maps[i].base;
-                        memdesc->vdso.size = memdesc->maps[i].size;
-                } else
-                if (memdesc->maps[i].vsyscall) {
-                        memdesc->vsyscall.base = memdesc->maps[i].base;
-                        memdesc->vsyscall.size = memdesc->maps[i].size;
-                }
+	for (i = 0; i < memdesc->mapcount; i++) {
+		if (memdesc->maps[i].heap) {
+			memdesc->heap.base = memdesc->maps[i].base;
+			memdesc->heap.size = memdesc->maps[i].size;
+		} else
+		if (memdesc->maps[i].stack) {
+			memdesc->stack.base = memdesc->maps[i].base;
+			memdesc->stack.size = memdesc->maps[i].size;
+		} else
+		if (memdesc->maps[i].vdso) {
+			memdesc->vdso.base = memdesc->maps[i].base;
+			memdesc->vdso.size = memdesc->maps[i].size;
+		} else
+		if (memdesc->maps[i].vsyscall) {
+			memdesc->vsyscall.base = memdesc->maps[i].base;
+			memdesc->vsyscall.size = memdesc->maps[i].size;
+		}
 		if (memdesc->maps[i].textbase) {
 			memdesc->text.base = memdesc->maps[i].base;
 			memdesc->text.size = memdesc->maps[i].size;
 		}
-        }
+	}
 #if DEBUG
 	log_msg(__LINE__, "executable text base: %lx\n", memdesc->text.base);
 #endif
 	ssize_t tlen = get_segment_from_pmem(memdesc->text.base, memdesc, &memdesc->textseg);
-        if (tlen < 0) {
+	if (tlen < 0) {
 		log_msg(__LINE__, "get_segment_from_pmem() failed: %s\n", strerror(errno));
-        	/* NOTE: Do not return NULL here. If we fail to get this, then the
+		/* NOTE: Do not return NULL here. If we fail to get this, then the
 		 * result should NOT be to fail, but rather produce an ecfs-core file
 		 * that has truncated text segments (like a regular core file.
 		 */
@@ -226,7 +226,7 @@ int main(int argc, char **argv)
 	 * Don't allow itself to core in the event of a bug.
 	 */
 	
-    	if (setrlimit(RLIMIT_CORE, &limit_core) < 0) {
+	if (setrlimit(RLIMIT_CORE, &limit_core) < 0) {
 		log_msg(__LINE__, "setrlimit %s", strerror(errno));
 		exit(-1);
 	}
@@ -255,7 +255,7 @@ int main(int argc, char **argv)
 			log_msg(__LINE__, "create_tmp_ramdisk failed");
 		} else
 			opts.use_ramdisk = 1;
- 	}
+	}
 
 	/*
 	 * If we're reading from stdin we are probably waiting for the kernel
@@ -270,25 +270,25 @@ int main(int argc, char **argv)
 	 * If we are getting core directly from the kernel then we must
 	 * read /proc/<pid>/ before we read the corefile. The process stays
 	 * open as long as the corefile hasn't been read yet.
-  	 */
-       	if (exename == NULL) {
+	 */
+	if (exename == NULL) {
 		log_msg(__LINE__, "Must specify exename of process when using stdin mode; supplied by %%e of core_pattern");
 		exit(-1);
 	}
 	if (pid == 0) {
-        	log_msg(__LINE__, "Must specify a pid with -p");
-            	exit(0);
-        }
-        if (outfile == NULL) {
-        	log_msg(__LINE__, "Did not specify an output file, defaulting to use 'ecfs.out'");
-              	outfile = xfmtstrdup("%s/ecfs.out", ECFS_CORE_DIR);
-       	}
+		log_msg(__LINE__, "Must specify a pid with -p");
+		exit(0);
+	}
+	if (outfile == NULL) {
+		log_msg(__LINE__, "Did not specify an output file, defaulting to use 'ecfs.out'");
+			outfile = xfmtstrdup("%s/ecfs.out", ECFS_CORE_DIR);
+	}
 		
 	memdesc = build_proc_metadata(pid, notedesc);
-       	if (memdesc == NULL) {
-               	log_msg(__LINE__, "Failed to retrieve process metadata");
-               	exit(-1);
-       	}
+	if (memdesc == NULL) {
+		log_msg(__LINE__, "Failed to retrieve process metadata");
+		exit(-1);
+	}
 	memdesc->task.pid = pid;
 	pie = check_for_pie(pid);
 	global_hacks.stripped = check_for_stripped_shdr(pid);
@@ -342,7 +342,7 @@ int main(int argc, char **argv)
 	 * XXX the linux kernel only dumps 4096 bytes of any code segment
 	 * in order to save space, and this is generally OK since the code
 	 * segment isn't suppose to change in memory. Unfortunatley for
- 	 * our purposes we want this, so we have to retrieve the text from
+	 * our purposes we want this, so we have to retrieve the text from
 	 * /proc/$pid/mem and merge it into our corefile which is a pain
 	 * and after we do this, we must re-load the corefile again.
 	 * if opts.text_all is enabled we do the same thing for the text images
@@ -357,11 +357,11 @@ int main(int argc, char **argv)
 			log_msg(__LINE__, "Failed to merge text into core file");
 		}
 		
-        	elfdesc = reload_core_file(elfdesc);
-        	if (elfdesc == NULL) {
-        		log_msg(__LINE__, "Failed to parse text-merged core file");	
-                	exit(-1);
-        	} 
+		elfdesc = reload_core_file(elfdesc);
+		if (elfdesc == NULL) {
+			log_msg(__LINE__, "Failed to parse text-merged core file");	
+			exit(-1);
+		}
 	}
 	if (opts.text_all) {
 #if DEBUG
@@ -386,11 +386,11 @@ int main(int argc, char **argv)
 	/*
 	 * Which mappings are stored in actual phdr segments?
 	 */
-        for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
-                for (j = 0; j < memdesc->mapcount; j++) 
-                        if (memdesc->maps[j].base == (elfdesc->phdr + i)->p_vaddr)
-                                memdesc->maps[j].has_pt_load++;
-        }
+	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
+		for (j = 0; j < memdesc->mapcount; j++) 
+			if (memdesc->maps[j].base == (elfdesc->phdr + i)->p_vaddr)
+				memdesc->maps[j].has_pt_load++;
+	}
 	
 	/*
 	 * attach to process with ptrace and parse original phdr table
@@ -491,7 +491,7 @@ int main(int argc, char **argv)
 #if DEBUG
 			log_msg(__LINE__, "calling mark_dll_injection()");
 #endif
-	 		mark_dll_injection(notedesc, memdesc, elfdesc);
+			mark_dll_injection(notedesc, memdesc, elfdesc);
 		}
 	memset(handle->arglist, 0xff, ELF_PRARGSZ);
 	memcpy(handle->arglist, (char *)notedesc->psinfo->pr_psargs, ELF_PRARGSZ);
@@ -525,13 +525,13 @@ int main(int argc, char **argv)
 	log_msg(__LINE__, "finished storing symvals");
 #endif
 done: 
-        
+
 	unlink(elfdesc->path); // unlink tmp file
-        if (corefile) {// incase we had to re-write file and mege in text
+	if (corefile) {// incase we had to re-write file and mege in text
 #if DEBUG
 		log_msg(__LINE__, "unlink(%s)", corefile);	
 #endif
-        	unlink(corefile);
+		unlink(corefile);
 	}
 #if DEBUG
 	log_msg(__LINE__, "umount %s", ECFS_RAMDISK_DIR);
@@ -540,6 +540,6 @@ done:
 	/*
 	 * XXX add line to umount ramdisk
 	 */
-        return 0;
+	return 0;
 }
 

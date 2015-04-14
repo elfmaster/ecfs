@@ -64,9 +64,9 @@ void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_file_stru
 			tmp[j] = p[j];
 		tmp[j] = '\0';
 		/*
-	 	 * path and name are MAX_LIB_N + 1 in size hence no need
+		 * path and name are MAX_LIB_N + 1 in size hence no need
 		 * to take byte for null terminator into account with strncpy
-	 	 */
+		 */
 		strncpy(lm->libs[lm->libcount].path, fmaps->files[i].path, MAX_LIB_PATH);
 		strncpy(lm->libs[lm->libcount].name, tmp, MAX_LIB_NAME);
 #if DEBUG
@@ -83,126 +83,126 @@ void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_file_stru
 
 int get_maps(pid_t pid, mappings_t *maps, const char *path)
 {
-        char mpath[256], buf[256], tmp[256], *p, *chp, *q = alloca(32);
-        FILE *fd;
-        int lc, i;
-        
-        snprintf(mpath, sizeof(mpath), "/proc/%d/maps", pid);
-        if ((fd = fopen(mpath, "r")) == NULL) 
-                return -1;
+	char mpath[256], buf[256], tmp[256], *p, *chp, *q = alloca(32);
+	FILE *fd;
+	int lc, i;
+	
+	snprintf(mpath, sizeof(mpath), "/proc/%d/maps", pid);
+	if ((fd = fopen(mpath, "r")) == NULL) 
+			return -1;
 
-        for (lc = 0; (fgets(buf, sizeof(buf), fd) != NULL); lc++) {
-                strcpy(tmp, buf); //tmp and buf are same sized buffers
-                p = strchr(buf, '-');
-                *p = '\0';
-                p++;
-                maps[lc].elfmap = 0;
-                maps[lc].base = strtoul(buf, NULL, 16);
-                maps[lc].size = strtoul(p, NULL, 16) - maps[lc].base;
+	for (lc = 0; (fgets(buf, sizeof(buf), fd) != NULL); lc++) {
+		strcpy(tmp, buf); //tmp and buf are same sized buffers
+		p = strchr(buf, '-');
+		*p = '\0';
+		p++;
+		maps[lc].elfmap = 0;
+		maps[lc].base = strtoul(buf, NULL, 16);
+		maps[lc].size = strtoul(p, NULL, 16) - maps[lc].base;
 		chp = strrchr(tmp, '/'); 
 		if (chp) 
 			*(char *)strchr(chp, '\n') = '\0';
 		if (chp && !strcmp(&chp[1], path)) {
-                        if (!strstr(tmp, "---p")) {
-                                maps[lc].filename = xstrdup(strchr(tmp, '/'));
-                                maps[lc].elfmap++;
+			if (!strstr(tmp, "---p")) {
+				maps[lc].filename = xstrdup(strchr(tmp, '/'));
+				maps[lc].elfmap++;
 				if (strstr(tmp, "r-xp") || strstr(tmp, "rwxp")) //sometimes text is polymorphic
 					maps[lc].textbase++;
 			}
-                }
-                else
-                if (strstr(tmp, "[heap]")) 
-                        maps[lc].heap++;
-                else
-                if (strstr(tmp, "[stack]"))
-                        maps[lc].stack++;
-                else
-                if (strstr(tmp, "[stack:")) { /* thread stack */
-                        for (i = 0, p = strchr(tmp, ':') + 1; *p != ']'; p++, i++)
-                                q[i] = *p;
-                        maps[i].thread_stack++;
-                        maps[i].stack_tid = atoi(q);
-                }
-                else 
-                if (strstr(tmp, "---p")) 
-                        maps[lc].padding++;
-                else
-                if (strstr(tmp, "[vdso]")) 
-                        maps[lc].vdso++; 
-                else
-                if (strstr(tmp, "[vsyscall]"))
-                        maps[lc].vsyscall++;
-                else
-                if ((p = strrchr(tmp, '/'))) {
-                        if (strstr(p, ".so")) {
+		}
+		else
+		if (strstr(tmp, "[heap]")) 
+			maps[lc].heap++;
+		else
+		if (strstr(tmp, "[stack]"))
+			maps[lc].stack++;
+		else
+		if (strstr(tmp, "[stack:")) { /* thread stack */
+			for (i = 0, p = strchr(tmp, ':') + 1; *p != ']'; p++, i++)
+				q[i] = *p;
+			maps[i].thread_stack++;
+			maps[i].stack_tid = atoi(q);
+		}
+		else 
+		if (strstr(tmp, "---p")) 
+				maps[lc].padding++;
+		else
+		if (strstr(tmp, "[vdso]")) 
+				maps[lc].vdso++; 
+		else
+		if (strstr(tmp, "[vsyscall]"))
+				maps[lc].vsyscall++;
+		else
+		if ((p = strrchr(tmp, '/'))) {
+			if (strstr(p, ".so")) {
 #if DEBUG
 				log_msg(__LINE__, "marked %s as shared library", p);
 #endif
-                                maps[lc].shlib++;
-                                maps[lc].filename = xstrdup(strchr(tmp, '/'));
-                        }
-                        else
-                        if (strstr(p, "rwxp") || strstr(p, "r-xp")) {
-                                maps[lc].filename = xstrdup(strchr(tmp, '/'));
-                                maps[lc].filemap_exe++; // executable file mapping
-                        }
-                        else {
-                                maps[lc].filename = xstrdup(strchr(tmp, '/'));
-                                maps[lc].filemap++; // regular file mapping
-                        }       
-                } else
-                if (strstr(tmp, "rwxp") || strstr(tmp, "r-xp")) 
-                        maps[lc].anonmap_exe++; // executable anonymous mapping
-                
-                /*      
-                 * Set segment permissions (Or is it a special file?)
-                 */
-                if (strstr(tmp, "r--p")) 
-                        maps[lc].p_flags = PF_R;
-                else
-                if (strstr(tmp, "rw-p"))
-                        maps[lc].p_flags = PF_R|PF_W;
-                else
-                if (strstr(tmp, "-w-p"))
-                        maps[lc].p_flags = PF_W;
-                else
-                if (strstr(tmp, "--xp"))
-                        maps[lc].p_flags = PF_X;
-                else
-                if (strstr(tmp, "r-xp"))
-                        maps[lc].p_flags = PF_X|PF_R;
-                else
-                if (strstr(tmp, "-wxp"))
-                        maps[lc].p_flags = PF_X|PF_W;
- 		else
-                if (strstr(tmp, "rwxp"))
-                        maps[lc].p_flags = PF_X|PF_W|PF_R;
-                else
-                if (strstr(tmp, "r--s"))
-                        maps[lc].special++;
-                else
-                if (strstr(tmp, "rw-s"))
-                        maps[lc].special++;
-                else
-                if (strstr(tmp, "-w-s"))
-                        maps[lc].special++;
-                else
-                if (strstr(tmp, "--xs"))
-                        maps[lc].special++;
-                else
-                if (strstr(tmp, "r-xs"))
-                        maps[lc].special++;
-                else
-                if (strstr(tmp, "-wxs"))
-                        maps[lc].special++;
-                else
-                if (strstr(tmp, "rwxs"))
-                        maps[lc].special++;
-                
-        }
-        fclose(fd);
+				maps[lc].shlib++;
+				maps[lc].filename = xstrdup(strchr(tmp, '/'));
+			}
+			else
+			if (strstr(p, "rwxp") || strstr(p, "r-xp")) {
+				maps[lc].filename = xstrdup(strchr(tmp, '/'));
+				maps[lc].filemap_exe++; // executable file mapping
+			}
+			else {
+				maps[lc].filename = xstrdup(strchr(tmp, '/'));
+				maps[lc].filemap++; // regular file mapping
+			}       
+		} else
+		if (strstr(tmp, "rwxp") || strstr(tmp, "r-xp")) 
+				maps[lc].anonmap_exe++; // executable anonymous mapping
+		
+		/*      
+		 * Set segment permissions (Or is it a special file?)
+		 */
+		if (strstr(tmp, "r--p")) 
+			maps[lc].p_flags = PF_R;
+		else
+		if (strstr(tmp, "rw-p"))
+			maps[lc].p_flags = PF_R|PF_W;
+		else
+		if (strstr(tmp, "-w-p"))
+			maps[lc].p_flags = PF_W;
+		else
+		if (strstr(tmp, "--xp"))
+			maps[lc].p_flags = PF_X;
+		else
+		if (strstr(tmp, "r-xp"))
+			maps[lc].p_flags = PF_X|PF_R;
+		else
+		if (strstr(tmp, "-wxp"))
+				maps[lc].p_flags = PF_X|PF_W;
+		else
+		if (strstr(tmp, "rwxp"))
+			maps[lc].p_flags = PF_X|PF_W|PF_R;
+		else
+		if (strstr(tmp, "r--s"))
+			maps[lc].special++;
+		else
+		if (strstr(tmp, "rw-s"))
+			maps[lc].special++;
+		else
+		if (strstr(tmp, "-w-s"))
+			maps[lc].special++;
+		else
+		if (strstr(tmp, "--xs"))
+			maps[lc].special++;
+		else
+		if (strstr(tmp, "r-xs"))
+			maps[lc].special++;
+		else
+		if (strstr(tmp, "-wxs"))
+			maps[lc].special++;
+		else
+		if (strstr(tmp, "rwxs"))
+			maps[lc].special++;
+				
+	}
+	fclose(fd);
 
-        return 0;
+	return 0;
 }
 
 static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
@@ -215,7 +215,7 @@ static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
 	if( fgets(buf, sizeof(buf), fp) == NULL ) {
 		log_msg(__LINE__, "fgets %s", strerror(errno));
 		exit(-1);
-        }
+	}
 	while (fgets(buf, sizeof(buf), fp)) {
 		sscanf(buf, "%d: %64[0-9A-Fa-f]:%X %64[0-9A-Fa-f]:%X %X %lX:%lX %X:%lX %lX %d %d %ld %512s\n",
 			&d, local_addr, &local_port, rem_addr, &rem_port, &state,
@@ -237,23 +237,23 @@ static void fill_sock_info(fd_info_t *fdinfo, unsigned int inode)
 	if( fgets(buf, sizeof(buf), fp) == NULL ) {
 		log_msg(__LINE__, "fgets %s", strerror(errno));
 		exit(-1);
-        }
-        while (fgets(buf, sizeof(buf), fp)) {
-                sscanf(buf, "%d: %64[0-9A-Fa-f]:%X %64[0-9A-Fa-f]:%X %X %lX:%lX %X:%lX %lX %d %d %ld %512s\n",
-                        &d, local_addr, &local_port, rem_addr, &rem_port, &state,
-                        &txq, &rxq, &timer_run, &time_len, &retr, &uid, &timeout, &_inode, more);
-                if (_inode == inode) {
+	}
+	while (fgets(buf, sizeof(buf), fp)) {
+		sscanf(buf, "%d: %64[0-9A-Fa-f]:%X %64[0-9A-Fa-f]:%X %X %lX:%lX %X:%lX %lX %d %d %ld %512s\n",
+			&d, local_addr, &local_port, rem_addr, &rem_port, &state,
+			&txq, &rxq, &timer_run, &time_len, &retr, &uid, &timeout, &_inode, more);
+		if (_inode == inode) {
 #if DEBUG
-                        log_msg(__LINE__, "socket (UDP) inode match");
+			log_msg(__LINE__, "socket (UDP) inode match");
 #endif
-                        sscanf(local_addr, "%X", &(fdinfo->socket.src_addr.s_addr));
-                        sscanf(rem_addr, "%X", &(fdinfo->socket.dst_addr.s_addr));
-                        fdinfo->socket.src_port = local_port;
-                        fdinfo->socket.dst_port = rem_port;
-                        fdinfo->net = NET_UDP;
-                        log_msg(__LINE__, "setting net UDP");
-                }
-        }
+			sscanf(local_addr, "%X", &(fdinfo->socket.src_addr.s_addr));
+			sscanf(rem_addr, "%X", &(fdinfo->socket.dst_addr.s_addr));
+			fdinfo->socket.src_port = local_port;
+			fdinfo->socket.dst_port = rem_port;
+			fdinfo->net = NET_UDP;
+			log_msg(__LINE__, "setting net UDP");
+		}
+	}
 
 	fclose(fp);
 }
@@ -272,18 +272,18 @@ int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
 	char *p, tmp_path[512], none[16];
 	int fdcount, pos;
 	unsigned int perms;
- 	
-        for (fdcount = 0, dp = opendir(dpath); dp != NULL;) {
-                dptr = readdir(dp);
-                if (dptr == NULL) 
-                        break;
+	
+	for (fdcount = 0, dp = opendir(dpath); dp != NULL;) {
+		dptr = readdir(dp);
+		if (dptr == NULL) 
+			break;
 		if (dptr->d_name[0] == '.')
 			continue;
 		snprintf(tmp, sizeof(tmp), "%s/%s", dpath, dptr->d_name); // i.e /proc/pid/fd/3
 		if( readlink(tmp, (*fdinfo)[fdcount].path, MAX_PATH) == -1 ) {
-                    log_msg(__LINE__, "readlink %s", strerror(errno));
-                    exit(-1);
-                }
+			log_msg(__LINE__, "readlink %s", strerror(errno));
+			exit(-1);
+		}
 		if (strstr((*fdinfo)[fdcount].path, "socket")) {
 			p = strchr((*fdinfo)[fdcount].path, ':') + 2;
 			if (p == NULL) {
@@ -315,22 +315,22 @@ int get_fd_links(memdesc_t *memdesc, fd_info_t **fdinfo)
 
 int get_map_count(pid_t pid)
 {
-        FILE *pd;
-        char cmd[256], buf[256];
-        int lc;
-  	      
-        snprintf(cmd, sizeof(cmd), "/usr/bin/wc -l /proc/%d/maps", pid);
+	FILE *pd;
+	char cmd[256], buf[256];
+	int lc;
+
+	snprintf(cmd, sizeof(cmd), "/usr/bin/wc -l /proc/%d/maps", pid);
 	if ((pd = popen(cmd, "r")) == NULL) {
-            	log_msg(__LINE__, "popen %s", strerror(errno));
+		log_msg(__LINE__, "popen %s", strerror(errno));
 		return -1;
-        }
-        if( fgets(buf, sizeof(buf), pd) == NULL ) {
-            log_msg(__LINE__, "fgets %s", strerror(errno));
-            exit(-1);
-        }
-        lc = atoi(buf);
-        pclose(pd);
-        return lc;
+	}
+	if( fgets(buf, sizeof(buf), pd) == NULL ) {
+		log_msg(__LINE__, "fgets %s", strerror(errno));
+		exit(-1);
+	}
+	lc = atoi(buf);
+	pclose(pd);
+	return lc;
 }
 
 char * get_executable_path(int pid)
@@ -341,9 +341,9 @@ char * get_executable_path(int pid)
 	
 	memset(ret, 0, MAX_PATH); // for null termination padding
 	if( readlink(path, ret, MAX_PATH) == -1) {
-            log_msg(__LINE__, "readlink %s", strerror(errno));
-            exit(-1);
-        }
+		log_msg(__LINE__, "readlink %s", strerror(errno));
+		exit(-1);
+	}
 	free(path);
 	/* Now is our new path also a symbolic link? */
 	int rval = readlink(ret, ret2, MAX_PATH);
@@ -355,18 +355,18 @@ char * get_executable_path(int pid)
  */
 ElfW(Addr) get_original_ep(int pid)
 {
-        struct stat st;
-        char *path = xfmtstrdup("/proc/%d/exe", pid);
-        int fd = xopen(path, O_RDONLY);
-        xfree(path);
-        xfstat(fd, &st);
-        uint8_t *mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-        if (mem == MAP_FAILED) {
-                log_msg(__LINE__, "mmap");
-                return -1;
-        }
-        ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
-        return ehdr->e_entry;
+	struct stat st;
+	char *path = xfmtstrdup("/proc/%d/exe", pid);
+	int fd = xopen(path, O_RDONLY);
+	xfree(path);
+	xfstat(fd, &st);
+	uint8_t *mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (mem == MAP_FAILED) {
+		log_msg(__LINE__, "mmap");
+		return -1;
+	}
+	ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
+	return ehdr->e_entry;
 }
 
 #define MAX_BLOB_SIZE 0x400000
@@ -386,7 +386,7 @@ ssize_t snapshot_procfs(memdesc_t *memdesc, uint8_t **zlib_blob)
 		srand(tv.tv_usec);
 		rval = rand() & 0x7fff;
 		// XXX in future check to make sure this
-	 	// file doesn't already exist with do while
+		// file doesn't already exist with do while
 		// loop
 		asprintf(&tmp_path, "%s/.proc_snapshot.%d.tgz", ECFS_RAMDISK_DIR, rval);
 	} else {
@@ -450,5 +450,3 @@ ssize_t snapshot_procfs(memdesc_t *memdesc, uint8_t **zlib_blob)
 
 	return st.st_size;
 }
-
-	

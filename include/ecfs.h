@@ -89,7 +89,7 @@
 #define NET_UDP 2
 
 #define HUGE_ALLOC(size)  \
-      mmap(0, (size), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0)
+	  mmap(0, (size), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0)
 
 #define MAX_LIB_NAME 255
 #define MAX_LIB_PATH 512
@@ -131,19 +131,19 @@
  */
 #if __x86_64__
 struct user_fxsr_struct {
-         unsigned short  cwd;
-         unsigned short  swd;
-         unsigned short  twd;
-         unsigned short  fop;
-         long    fip;
-         long    fcs;
-         long    foo;
-         long    fos;
-         long    mxcsr;
-         long    reserved;
-         long    st_space[32];   /* 8*16 bytes for each FP-reg = 128 bytes */
-         long    xmm_space[32];  /* 8*16 bytes for each XMM-reg = 128 bytes */
-         long    padding[56];
+	unsigned short  cwd;
+	unsigned short  swd;
+	unsigned short  twd;
+	unsigned short  fop;
+	long    fip;
+	long    fcs;
+	long    foo;
+	long    fos;
+	long    mxcsr;
+	long    reserved;
+	long    st_space[32];   /* 8*16 bytes for each FP-reg = 128 bytes */
+	long    xmm_space[32];  /* 8*16 bytes for each XMM-reg = 128 bytes */
+	long    padding[56];
 };
 typedef struct user_fxsr_struct elf_fpxregset_t;
 #endif
@@ -154,7 +154,7 @@ typedef struct elf_stats {
 #define ELF_LOCSYM (1 << 3) // local symtab exists?
 #define ELF_HEURISTICS (1 << 4) // were detection heuristics used by ecfs?
 #define ELF_STRIPPED_SHDRS (1 << 8)
-        unsigned int personality; // if (personality & ELF_STATIC)
+		unsigned int personality; // if (personality & ELF_STATIC)
 } elf_stat_t;
 
 struct opts {
@@ -196,17 +196,17 @@ typedef struct fdinfo {
 
 struct section_meta {
 	ElfW(Addr) bssVaddr, dynVaddr, relVaddr, relaVaddr, ehframeVaddr,
-	    textVaddr, o_textVaddr, dataVaddr, o_dataVaddr, gotVaddr, noteVaddr,
-	    hashVaddr, initVaddr, finiVaddr, pltVaddr, dsymVaddr, dstrVaddr,
-	    interpVaddr, tlsVaddr, plt_relaVaddr, plt_relVaddr, ctorVaddr, dtorVaddr;
+		textVaddr, o_textVaddr, dataVaddr, o_dataVaddr, gotVaddr, noteVaddr,
+		hashVaddr, initVaddr, finiVaddr, pltVaddr, dsymVaddr, dstrVaddr,
+		interpVaddr, tlsVaddr, plt_relaVaddr, plt_relVaddr, ctorVaddr, dtorVaddr;
 
 	ElfW(Off) bssOff, dynOff, relOff, relaOff, noteOff, ehframeOff,
-	    textOffset, dataOffset, gotOff, hashOff, initOff, finiOff, pltOff,
-	    dsymOff, dstrOff, interpOff, tlsOff, plt_relaOff, plt_relOff, ctorOff, dtorOff;
+		textOffset, dataOffset, gotOff, hashOff, initOff, finiOff, pltOff,
+		dsymOff, dstrOff, interpOff, tlsOff, plt_relaOff, plt_relOff, ctorOff, dtorOff;
 	
 	ElfW(Word) bssSiz, dynSiz, hashSiz, ehframeSiz, textfSize, textSize,
-	    dataSize, strSiz, pltSiz, interpSiz, tlsSiz, noteSiz, dsymSiz,
-	    dstrSiz, plt_relaSiz, plt_relSiz, ctorSiz, dtorSiz;
+		dataSize, strSiz, pltSiz, interpSiz, tlsSiz, noteSiz, dsymSiz,
+		dstrSiz, plt_relaSiz, plt_relSiz, ctorSiz, dtorSiz;
 };
 
 struct elf_thread_core_info {
@@ -216,7 +216,7 @@ struct elf_thread_core_info {
 	elf_fpregset_t *fpu;
 	elf_fpxregset_t *xfpu;
 	siginfo_t *siginfo;
-	 ElfW(Nhdr) * notes;
+	ElfW(Nhdr) * notes;
 };
 
 typedef struct ecfs_file_fmt {
@@ -298,25 +298,25 @@ struct coredump_params {
 
 typedef struct elfdesc {
 	uint8_t *mem;
-	 ElfW(Ehdr) * ehdr;
-	 ElfW(Phdr) * phdr;
-	 ElfW(Shdr) * shdr;
-	 ElfW(Nhdr) * nhdr;
-	 ElfW(Dyn)  *dyn;
-	 ElfW(Addr) textVaddr;
-	 ElfW(Addr) dataVaddr;
-	 ElfW(Addr) dynVaddr;
-	 ElfW(Addr) ehframe_Vaddr;
-	 ElfW(Addr) noteVaddr;
-	 ElfW(Addr) bssVaddr;
-	 ElfW(Addr) interpVaddr;
-	 ElfW(Off) textOffset;
-	 ElfW(Off) dataOffset;
-	 ElfW(Off) ehframeOffset;
-	 ElfW(Off) dynOffset;
-	 ElfW(Off) bssOffset;
-	 ElfW(Off) interpOffset;
-	 ElfW(Off) noteOffset;
+	ElfW(Ehdr) * ehdr;
+	ElfW(Phdr) * phdr;
+	ElfW(Shdr) * shdr;
+	ElfW(Nhdr) * nhdr;
+	ElfW(Dyn)  *dyn;
+	ElfW(Addr) textVaddr;
+	ElfW(Addr) dataVaddr;
+	ElfW(Addr) dynVaddr;
+	ElfW(Addr) ehframe_Vaddr;
+	ElfW(Addr) noteVaddr;
+	ElfW(Addr) bssVaddr;
+	ElfW(Addr) interpVaddr;
+	ElfW(Off) textOffset;
+	ElfW(Off) dataOffset;
+	ElfW(Off) ehframeOffset;
+	ElfW(Off) dynOffset;
+	ElfW(Off) bssOffset;
+	ElfW(Off) interpOffset;
+	ElfW(Off) noteOffset;
 	char *StringTable;
 	char *path;
 	size_t size;
@@ -457,9 +457,9 @@ typedef struct list {
 } list_t;
 
 typedef struct symentry {
-        ElfW(Addr) value;
-        size_t size;
-        size_t count; //# of sym entries
+	ElfW(Addr) value;
+	size_t size;
+	size_t count; //# of sym entries
 	char *name;  //symname
 	char *library; //libname
 	
@@ -488,13 +488,13 @@ struct needed_libs {
  */
 
 struct {
-        ssize_t hash_size;
-        ssize_t rela_size;
-        ssize_t init_size;
-        ssize_t fini_size;
-        ssize_t got_size;
-        ssize_t ehframe_size;
-        ssize_t plt_rela_size;
+	ssize_t hash_size;
+	ssize_t rela_size;
+	ssize_t init_size;
+	ssize_t fini_size;
+	ssize_t got_size;
+	ssize_t ehframe_size;
+	ssize_t plt_rela_size;
 	ssize_t plt_size;
 	ssize_t ctors_size;
 	ssize_t dtors_size;
@@ -506,7 +506,7 @@ struct {
 	unsigned long dtors_vaddr;
 	unsigned long text_vaddr;  // for .text section of orig executable
 	unsigned long data_vaddr; // for .data section of orig executable
-        int eh_frame_offset_workaround;
+	int eh_frame_offset_workaround;
 	int stripped; // means section headers are stripped
 } global_hacks;
 

@@ -47,44 +47,44 @@ static ElfW(Addr) lookup_data_base(memdesc_t *memdesc, struct nt_file_struct *fm
 	int i;
 	char *p;
 
-        for (i = 0; i < fmaps->fcount; i++) {
-                p = strrchr(fmaps->files[i].path, '/') + 1;
-                if (!strcmp(memdesc->exe_comm, p)) {
-			p = strrchr(fmaps->files[i + 1].path, '/') + 1;
-			if (!strcmp(memdesc->exe_comm, p))
-				return fmaps->files[i + 1].addr;
-        	}
+	for (i = 0; i < fmaps->fcount; i++) {
+		p = strrchr(fmaps->files[i].path, '/') + 1;
+		if (!strcmp(memdesc->exe_comm, p)) {
+		p = strrchr(fmaps->files[i + 1].path, '/') + 1;
+		if (!strcmp(memdesc->exe_comm, p))
+			return fmaps->files[i + 1].addr;
+		}
 	}
-        return 0;
+	return 0;
 }
 
 static ElfW(Addr) lookup_text_size(memdesc_t *memdesc, struct nt_file_struct *fmaps)
 {
-        int i;
-        char *p;
+	int i;
+	char *p;
 
-        for (i = 0; i < fmaps->fcount; i++) {
-                p = strrchr(fmaps->files[i].path, '/') + 1;
-                if (!strcmp(memdesc->exe_comm, p))
-                        return fmaps->files[i].size;
-        }
-        return 0;
+	for (i = 0; i < fmaps->fcount; i++) {
+		p = strrchr(fmaps->files[i].path, '/') + 1;
+		if (!strcmp(memdesc->exe_comm, p))
+			return fmaps->files[i].size;
+	}
+	return 0;
 }
 
 static ElfW(Addr) lookup_data_size(memdesc_t *memdesc, struct nt_file_struct *fmaps)
 {
-        int i;
-        char *p;
+	int i;
+	char *p;
 
-        for (i = 0; i < fmaps->fcount; i++) {
-                p = strrchr(fmaps->files[i].path, '/') + 1;
-                if (!strcmp(memdesc->exe_comm, p)) {
-                        p = strrchr(fmaps->files[i + 1].path, '/') + 1;
-                        if (!strcmp(memdesc->exe_comm, p))
-                                return fmaps->files[i + 1].size;
-                }
-        }
-        return 0;
+	for (i = 0; i < fmaps->fcount; i++) {
+		p = strrchr(fmaps->files[i].path, '/') + 1;
+		if (!strcmp(memdesc->exe_comm, p)) {
+			p = strrchr(fmaps->files[i + 1].path, '/') + 1;
+			if (!strcmp(memdesc->exe_comm, p))
+				return fmaps->files[i + 1].size;
+		}
+	}
+	return 0;
 }
 
 int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *notedesc)
@@ -141,18 +141,17 @@ int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *notedes
 				printf("Found PT_LOAD segments\n");
 #endif
 				if(!(!phdr[i].p_offset)) {
-                                        elfdesc->dataVaddr = lookup_data_base(memdesc, notedesc->nt_files);
-                                        elfdesc->dataSize = lookup_data_size(memdesc, notedesc->nt_files);
-                                        elfdesc->bssSize = phdr[i].p_memsz - phdr[i].p_filesz;
-                                        elfdesc->o_datafsize = phdr[i].p_filesz;
-                                        if (elfdesc->pie == 0)
-                                                elfdesc->bssVaddr = phdr[i].p_vaddr + phdr[i].p_filesz;
+					elfdesc->dataVaddr = lookup_data_base(memdesc, notedesc->nt_files);
+					elfdesc->dataSize = lookup_data_size(memdesc, notedesc->nt_files);
+					elfdesc->bssSize = phdr[i].p_memsz - phdr[i].p_filesz;
+					elfdesc->o_datafsize = phdr[i].p_filesz;
+					if (elfdesc->pie == 0)
+						elfdesc->bssVaddr = phdr[i].p_vaddr + phdr[i].p_filesz;
 
-                                } else {
-                                        /* text segment */
-                                        elfdesc->textVaddr = text_base;
-                                        elfdesc->textSize = lookup_text_size(memdesc, notedesc->nt_files);
-
+				} else {
+					/* text segment */
+					elfdesc->textVaddr = text_base;
+					elfdesc->textSize = lookup_text_size(memdesc, notedesc->nt_files);
 				}
 				break;
 			case PT_DYNAMIC:
@@ -208,21 +207,21 @@ int extract_dyntag_info(handle_t *handle)
 	}
 	dyn = elfdesc->dyn;
 	for (j = 0; dyn[j].d_tag != DT_NULL; j++) {
-        	switch(dyn[j].d_tag) {
+		switch(dyn[j].d_tag) {
 			case DT_REL:
-                        	smeta.relVaddr = dyn[j].d_un.d_val;
-                                smeta.relOff = elfdesc->textOffset + smeta.relVaddr - elfdesc->textVaddr;
+				smeta.relVaddr = dyn[j].d_un.d_val;
+				smeta.relOff = elfdesc->textOffset + smeta.relVaddr - elfdesc->textVaddr;
 #if DEBUG
 				log_msg(__LINE__, "DYNSEGMENT: relVaddr: %lx relOff: %lx", smeta.relVaddr, smeta.relOff);
 #endif
-                        	break;
-                        case DT_RELA:
-                        	smeta.relaVaddr = dyn[j].d_un.d_val;
-                                smeta.relaOff = elfdesc->textOffset + smeta.relaVaddr - elfdesc->textVaddr; 
+				break;
+			case DT_RELA:
+				smeta.relaVaddr = dyn[j].d_un.d_val;
+				smeta.relaOff = elfdesc->textOffset + smeta.relaVaddr - elfdesc->textVaddr; 
 #if DEBUG
 				log_msg(__LINE__, "DYNSEGMENT: %lx relaOffset: %lx", smeta.relaVaddr, smeta.relaOff);
 #endif
-                        	break;
+				break;
 			case DT_JMPREL:
 				smeta.plt_relaVaddr = dyn[j].d_un.d_val;
 				smeta.plt_relaOff = elfdesc->textOffset + smeta.plt_relaVaddr - elfdesc->textVaddr;
@@ -231,57 +230,56 @@ int extract_dyntag_info(handle_t *handle)
 				log_msg(__LINE__, "DYNSEGMENT: plt_relaVaddr: %lx plt_relaOffset: %lx", smeta.plt_relaVaddr, smeta.plt_relaOff);
 #endif
 				break;
-                        case DT_PLTGOT:
-                        	smeta.gotVaddr = dyn[j].d_un.d_val;
-                                smeta.gotOff = dyn[j].d_un.d_val - elfdesc->dataVaddr;
-                                smeta.gotOff += (ElfW(Off))dataOffset;
+			case DT_PLTGOT:
+				smeta.gotVaddr = dyn[j].d_un.d_val;
+				smeta.gotOff = dyn[j].d_un.d_val - elfdesc->dataVaddr;
+				smeta.gotOff += (ElfW(Off))dataOffset;
 #if DEBUG
 				log_msg(__LINE__, "DYNSEGMENT: gotVaddr: %lx gotOffset: %lx", smeta.gotVaddr, smeta.gotOff);
 #endif
-                                break;
-                        case DT_GNU_HASH:
-                                smeta.hashVaddr = dyn[j].d_un.d_val;
-                                smeta.hashOff = elfdesc->textOffset + smeta.hashVaddr - elfdesc->textVaddr;
+				break;
+			case DT_GNU_HASH:
+				smeta.hashVaddr = dyn[j].d_un.d_val;
+				smeta.hashOff = elfdesc->textOffset + smeta.hashVaddr - elfdesc->textVaddr;
 #if DEBUG
 				log_msg(__LINE__, "DYNSEGMENT: hashVaddr: %lx hashOff: %lx", smeta.hashVaddr, smeta.hashOff);
 #endif
-                                break;
-                        case DT_INIT: 
-                                smeta.initVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
-                                smeta.initOff = elfdesc->textOffset + smeta.initVaddr - elfdesc->textVaddr;
+				break;
+			case DT_INIT: 
+					smeta.initVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
+					smeta.initOff = elfdesc->textOffset + smeta.initVaddr - elfdesc->textVaddr;
 #if DEBUG
 				log_msg(__LINE__, "DYNSEGMENT: initVaddr: %lx initOff: %lx", smeta.initVaddr, smeta.initOff);
 #endif
-                                break;
-                        case DT_FINI:
-                                smeta.finiVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
-                                smeta.finiOff = elfdesc->textOffset + smeta.finiVaddr - elfdesc->textVaddr;
+				break;
+			case DT_FINI:
+					smeta.finiVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
+					smeta.finiOff = elfdesc->textOffset + smeta.finiVaddr - elfdesc->textVaddr;
 #if DEBUG
 				log_msg(__LINE__, "DYNSEGMENT: finiVaddr: %lx finiOff: %lx", smeta.finiVaddr, smeta.finiOff);
 #endif
-                                break;
-                        case DT_STRSZ:
-                                smeta.strSiz = dyn[j].d_un.d_val;
-                                break;  
-                        case DT_PLTRELSZ:
-                                smeta.pltSiz = dyn[j].d_un.d_val;
-                                break;
-                        case DT_SYMTAB:
-                                smeta.dsymVaddr = dyn[j].d_un.d_ptr;
-                                smeta.dsymOff = elfdesc->textOffset + smeta.dsymVaddr - elfdesc->textVaddr;
+				break;
+			case DT_STRSZ:
+				smeta.strSiz = dyn[j].d_un.d_val;
+				break;  
+			case DT_PLTRELSZ:
+				smeta.pltSiz = dyn[j].d_un.d_val;
+				break;
+			case DT_SYMTAB:
+				smeta.dsymVaddr = dyn[j].d_un.d_ptr;
+				smeta.dsymOff = elfdesc->textOffset + smeta.dsymVaddr - elfdesc->textVaddr;
 #if DEBUG
 				log_msg(__LINE__, "DYNSEGMENT: .dynsym addr: %lx offset: %lx", smeta.dsymVaddr, smeta.dsymOff);
 #endif
 				break;
-                        case DT_STRTAB:
-                                smeta.dstrVaddr = dyn[j].d_un.d_ptr;
-                                smeta.dstrOff = elfdesc->textOffset + smeta.dstrVaddr - elfdesc->textVaddr;
+			case DT_STRTAB:
+					smeta.dstrVaddr = dyn[j].d_un.d_ptr;
+					smeta.dstrOff = elfdesc->textOffset + smeta.dstrVaddr - elfdesc->textVaddr;
 #if DEBUG
 				log_msg(__LINE__, "DYNSEGMENT: .dynstr addr: %lx  offset: %lx (%lx + (%lx - %lx)", smeta.dstrVaddr, smeta.dstrOff,
 				elfdesc->textOffset, smeta.dstrVaddr, elfdesc->textVaddr); 
 #endif
-                                break;
-
+			break;
 		}
 	}
 	memcpy((void *)&handle->smeta, (void *)&smeta, sizeof(struct section_meta));
@@ -351,7 +349,7 @@ void xref_phdrs_for_offsets(memdesc_t *memdesc, elfdesc_t *elfdesc)
 			elfdesc->bssOffset = phdr[i].p_offset + elfdesc->bssVaddr - elfdesc->dataVaddr;
 #if DEBUG
 			log_msg(__LINE__, "bssOffset: %lx "
-			       "dataOffset: %lx\n", elfdesc->bssOffset, elfdesc->dataOffset);
+					"dataOffset: %lx\n", elfdesc->bssOffset, elfdesc->dataOffset);
 #endif
 		}
 	}

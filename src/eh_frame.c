@@ -38,25 +38,25 @@ static int get_func_data(Dwarf_Debug dbg, Dwarf_Fde fde, int fdenum, struct fde_
 static struct fde_func_data * parse_frame_data(Dwarf_Debug dbg)
 {
 	Dwarf_Error error;
-    	Dwarf_Signed cie_element_count = 0;
-    	Dwarf_Signed fde_element_count = 0;
+	Dwarf_Signed cie_element_count = 0;
+	Dwarf_Signed fde_element_count = 0;
 	Dwarf_Cie *cie_data = 0;
-    	Dwarf_Fde *fde_data = 0;
-    	int res = DW_DLV_ERROR;
+	Dwarf_Fde *fde_data = 0;
+	int res = DW_DLV_ERROR;
 	Dwarf_Signed fdenum = 0;
 	struct fde_func_data func_data = { 0 };
 	struct fde_func_data *fndata;
 
 	res = dwarf_get_fde_list_eh(dbg, &cie_data, &cie_element_count, &fde_data, &fde_element_count, &error);
-    	if(res == DW_DLV_NO_ENTRY) {
-   		log_msg(__LINE__, "eh_frame parsing: No frame data present");
-        	return NULL;
-    	}
+	if(res == DW_DLV_NO_ENTRY) {
+		log_msg(__LINE__, "eh_frame parsing: No frame data present");
+		return NULL;
+	}
 
-    	if(res == DW_DLV_ERROR) {
-        	log_msg(__LINE__, "eh_frame parsing: Error reading frame data");
-        	return NULL;
-    	}
+	if(res == DW_DLV_ERROR) {
+		log_msg(__LINE__, "eh_frame parsing: Error reading frame data");
+		return NULL;
+	}
 	
 	
 	fndata = malloc(sizeof(struct fde_func_data) * fde_element_count);
@@ -67,13 +67,13 @@ static struct fde_func_data * parse_frame_data(Dwarf_Debug dbg)
 	
 	for(fdenum = 0; fdenum < fde_element_count; ++fdenum) {
 		Dwarf_Cie cie = 0;
-        	res = dwarf_get_cie_of_fde(fde_data[fdenum], &cie, &error);
-        	if(res != DW_DLV_OK) {
-            		fprintf(stderr, "eh_frame parsing: Error accessing fdenum %" DW_PR_DSd
-                	" to get its cie\n",fdenum);
-            		return NULL;
-        	}
-        	get_func_data(dbg, fde_data[fdenum], fdenum, &func_data);
+		res = dwarf_get_cie_of_fde(fde_data[fdenum], &cie, &error);
+		if(res != DW_DLV_OK) {
+			fprintf(stderr, "eh_frame parsing: Error accessing fdenum %" DW_PR_DSd
+			" to get its cie\n",fdenum);
+			return NULL;
+		}
+		get_func_data(dbg, fde_data[fdenum], fdenum, &func_data);
 		fndata[fdenum].addr = func_data.addr;
 		fndata[fdenum].size = func_data.size;
 	}
@@ -126,10 +126,10 @@ int get_all_functions(const char *filepath, struct fde_func_data **funcs)
 	Dwarf_Error error;
 	Dwarf_Ptr errarg = 0;
 	Dwarf_Handler errhand = 0;
-        Dwarf_Signed cie_element_count = 0;
-        Dwarf_Signed fde_element_count = 0;
-        Dwarf_Cie *cie_data = 0;
-        Dwarf_Fde *fde_data = 0;
+	Dwarf_Signed cie_element_count = 0;
+	Dwarf_Signed fde_element_count = 0;
+	Dwarf_Cie *cie_data = 0;
+	Dwarf_Fde *fde_data = 0;
 
 	if ((fd = open(filepath, O_RDONLY)) < 0) {
 		log_msg(__LINE__, "open %s", strerror(errno));
@@ -141,32 +141,28 @@ int get_all_functions(const char *filepath, struct fde_func_data **funcs)
 		return -1;
 	}
 
-    	regtabrulecount = 1999;
-    	dwarf_set_frame_undefined_value(dbg, UNDEF_VAL);
-    	dwarf_set_frame_rule_initial_value(dbg, UNDEF_VAL);
-    	dwarf_set_frame_same_value(dbg, SAME_VAL);
-    	dwarf_set_frame_cfa_value(dbg, CFA_VAL);
-    	dwarf_set_frame_rule_table_size(dbg, regtabrulecount);
+		regtabrulecount = 1999;
+		dwarf_set_frame_undefined_value(dbg, UNDEF_VAL);
+		dwarf_set_frame_rule_initial_value(dbg, UNDEF_VAL);
+		dwarf_set_frame_same_value(dbg, SAME_VAL);
+		dwarf_set_frame_cfa_value(dbg, CFA_VAL);
+		dwarf_set_frame_rule_table_size(dbg, regtabrulecount);
 	
 	res = dwarf_get_fde_list_eh(dbg, &cie_data, &cie_element_count, &fde_data, &fde_element_count, &error);
-        if(res == DW_DLV_NO_ENTRY) {
-                log_msg(__LINE__, "eh_frame parsing err1: No frame data present");
-                return -1;
-        }
-	
+	if(res == DW_DLV_NO_ENTRY) {
+		log_msg(__LINE__, "eh_frame parsing err1: No frame data present");
+		return -1;
+	}
+
 	if ((*funcs = parse_frame_data(dbg)) == NULL) {
 		log_msg(__LINE__, "eh_frame parsing err2: parse_frame_data() failed");
 		return -1;
 	}
 	res = dwarf_finish(dbg, &error);
 	if(res != DW_DLV_OK) 
-        	log_msg(__LINE__, "eh_frame parsing err3: dwarf_finish failed");
+		log_msg(__LINE__, "eh_frame parsing err3: dwarf_finish failed");
 
 	close(fd);
-    	
+
 	return fde_element_count;
 }
-
-
-	
-	

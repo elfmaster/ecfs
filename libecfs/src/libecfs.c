@@ -50,10 +50,10 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 			ecfs->strtab = (char *)&mem[shdr[i].sh_offset];
 		else
 		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".dynsym")) 
-                        ecfs->dynsym = (ElfW(Sym) *)&mem[shdr[i].sh_offset];
+			ecfs->dynsym = (ElfW(Sym) *)&mem[shdr[i].sh_offset];
 		else
-                if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".symtab"))
-                        ecfs->symtab = (ElfW(Sym) *)&mem[shdr[i].sh_offset];
+		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".symtab"))
+			ecfs->symtab = (ElfW(Sym) *)&mem[shdr[i].sh_offset];
 	}
 	
 	
@@ -68,16 +68,15 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 			ecfs->dyn = (ElfW(Dyn) *)&mem[shdr[i].sh_offset];
 		} else
 		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], "._DATA")) {
-                        ecfs->dataVaddr = shdr[i].sh_addr;
-                        ecfs->dataSize = shdr[i].sh_size;
-                        ecfs->dataOff = shdr[i].sh_offset;
-                } else
+			ecfs->dataVaddr = shdr[i].sh_addr;
+			ecfs->dataSize = shdr[i].sh_size;
+			ecfs->dataOff = shdr[i].sh_offset;
+		} else
 		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], "._TEXT")) {
-                        ecfs->textVaddr = shdr[i].sh_addr;
-                        ecfs->textSize = shdr[i].sh_size;
-                        ecfs->textOff = shdr[i].sh_offset;
-                }
-
+			ecfs->textVaddr = shdr[i].sh_addr;
+			ecfs->textSize = shdr[i].sh_size;
+			ecfs->textOff = shdr[i].sh_offset;
+		}
 	}
 	/*
 	 * Get dynamic relocation sections
@@ -94,12 +93,12 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 	 * Get plt relocation sections
 	 */
 	for (i = 0; i < ehdr->e_shnum; i++) {
-                if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".rela.plt")) {
-                        ecfs->plt_rela = (ElfW(Rela) *)&mem[shdr[i].sh_offset];
-                        ecfs->plt_rela_count = shdr[i].sh_size / shdr[i].sh_entsize;
-                        break;
-                }
-        }
+		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".rela.plt")) {
+			ecfs->plt_rela = (ElfW(Rela) *)&mem[shdr[i].sh_offset];
+			ecfs->plt_rela_count = shdr[i].sh_size / shdr[i].sh_entsize;
+			break;
+		}
+	}
 	
 	/*
 	 * set the pltgot pointer
@@ -116,11 +115,11 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 	 */
 	for (i = 0; i < ehdr->e_shnum; i++) {
 		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".plt")) {
-                        ecfs->pltVaddr = shdr[i].sh_addr;
-                	ecfs->pltSize = shdr[i].sh_size;
-		 	break;
-                }
-        }
+			ecfs->pltVaddr = shdr[i].sh_addr;
+			ecfs->pltSize = shdr[i].sh_size;
+			break;
+		}
+	}
 
 	/*
 	 * Get .personality info
@@ -165,9 +164,9 @@ int get_fd_info(ecfs_elf_t *desc, struct fdinfo **fdinfo)
 int get_prstatus_structs(ecfs_elf_t *desc, struct elf_prstatus **prstatus)
 {
 	char *StringTable = desc->shstrtab;
-        ElfW(Shdr) *shdr = desc->shdr;
-        int i;
-        for (i = 0; i < desc->ehdr->e_shnum; i++) {
+	ElfW(Shdr) *shdr = desc->shdr;
+	int i;
+	for (i = 0; i < desc->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".prstatus")) {
 			*prstatus = (struct elf_prstatus *)heapAlloc(shdr[i].sh_size);
 			memcpy(*prstatus, &desc->mem[shdr[i].sh_offset], shdr[i].sh_size);
@@ -192,19 +191,19 @@ int get_thread_count(ecfs_elf_t *desc)
 		
 char * get_exe_path(ecfs_elf_t *desc)
 {
-        char *StringTable = desc->shstrtab;
-        ElfW(Shdr) *shdr = desc->shdr;
+	char *StringTable = desc->shstrtab;
+	ElfW(Shdr) *shdr = desc->shdr;
 	int i;
 	char *ret;
 
-        for (i = 0; i < desc->ehdr->e_shnum; i++) {
-                if (!strcmp(&StringTable[shdr[i].sh_name], ".exepath")) {
+	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+		if (!strcmp(&StringTable[shdr[i].sh_name], ".exepath")) {
 			ret = (char *)heapAlloc(shdr[i].sh_size);
 			strcpy(ret, (char *)&desc->mem[shdr[i].sh_offset]);
 			return ret;	
-        	}
+		}
 	}
-        return NULL;
+	return NULL;
 }
 
 
@@ -219,7 +218,7 @@ int get_dynamic_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
 	for (i = 0; i < ehdr->e_shnum; i++) {
 		if (shdr[i].sh_type == SHT_DYNSYM) {
 			symcount = shdr[i].sh_size / sizeof(ElfW(Sym));
-                        size_t alloc_len = symcount * sizeof(ecfs_sym_t);
+			size_t alloc_len = symcount * sizeof(ecfs_sym_t);
 			*syms = (ecfs_sym_t *)heapAlloc(alloc_len);
 			for (j = 0; j < symcount; j++) {
 				(*syms)[j].strtab = desc->dynstr;
@@ -361,34 +360,34 @@ ssize_t get_section_pointer(ecfs_elf_t *desc, const char *name, uint8_t **ptr)
  */
 ssize_t get_section_size(ecfs_elf_t *desc, const char *name)
 {
-        char *StringTable = desc->shstrtab;
-        ElfW(Shdr) *shdr = desc->shdr;
-        ssize_t len;
-        int i;
+	char *StringTable = desc->shstrtab;
+	ElfW(Shdr) *shdr = desc->shdr;
+	ssize_t len;
+	int i;
 
-        for (i = 0; i < desc->ehdr->e_shnum; i++) {
-                if (!strcmp(&StringTable[shdr[i].sh_name], name)) {
-                        len = shdr[i].sh_size;
-                        return len;
-                }
-        }
-        return -1;
+	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+		if (!strcmp(&StringTable[shdr[i].sh_name], name)) {
+			len = shdr[i].sh_size;
+			return len;
+		}
+	}
+	return -1;
 }
 
 unsigned long get_section_va(ecfs_elf_t *desc, const char *name)
 {
-        char *StringTable = desc->shstrtab;
-        ElfW(Shdr) *shdr = desc->shdr;
-        int i;
+	char *StringTable = desc->shstrtab;
+	ElfW(Shdr) *shdr = desc->shdr;
+	int i;
 	unsigned long addr;
 
-        for (i = 0; i < desc->ehdr->e_shnum; i++) {
-                if (!strcmp(&StringTable[shdr[i].sh_name], name)) {
-                        addr = shdr[i].sh_addr;
-                        return addr;
-                }
-        }
-        return 0;
+	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+		if (!strcmp(&StringTable[shdr[i].sh_name], name)) {
+			addr = shdr[i].sh_addr;
+			return addr;
+		}
+	}
+	return 0;
 }
 
 
@@ -425,19 +424,19 @@ unsigned long get_plt_size(ecfs_elf_t *desc)
 
 int get_auxiliary_vector32(ecfs_elf_t *desc, Elf32_auxv_t **auxv)
 {
-        ElfW(Ehdr) *ehdr = desc->ehdr;
-        ElfW(Shdr) *shdr = desc->shdr;
-        char *shstrtab = (char *)&desc->mem[shdr[ehdr->e_shstrndx].sh_offset];
-        int i, ac = 0;
+	ElfW(Ehdr) *ehdr = desc->ehdr;
+	ElfW(Shdr) *shdr = desc->shdr;
+	char *shstrtab = (char *)&desc->mem[shdr[ehdr->e_shstrndx].sh_offset];
+	int i, ac = 0;
 
-        for (i = 0; i < ehdr->e_shnum; i++) {
-                if (!strcmp(&shstrtab[shdr[i].sh_name], ".auxvector")) {
-                        ac = shdr[i].sh_size / sizeof(**auxv);
-                        *auxv = (Elf32_auxv_t *)&desc->mem[shdr[i].sh_offset];
-                        break;
-                }
-        }
-        return ac;
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (!strcmp(&shstrtab[shdr[i].sh_name], ".auxvector")) {
+			ac = shdr[i].sh_size / sizeof(**auxv);
+			*auxv = (Elf32_auxv_t *)&desc->mem[shdr[i].sh_offset];
+			break;
+		}
+	}
+	return ac;
 }
 
 int get_auxiliary_vector64(ecfs_elf_t *desc, Elf64_auxv_t **auxv)
@@ -481,10 +480,10 @@ int get_shlib_mapping_names(ecfs_elf_t *desc, char ***shlvec)
 /*
  * This function fills in this struct:
    typedef struct pltgotinfo {
-        unsigned long got_site; // address of where the GOT entry exists
-        unsigned long got_entry_va; // address that is in the GOT entry (the pointer address)
-        unsigned long plt_entry_va; // the PLT address that the GOT entry should point to if not yet resolved
-        unsigned long shl_entry_va; // the shared library address the GOT should point to if it has been resolved
+		unsigned long got_site; // address of where the GOT entry exists
+		unsigned long got_entry_va; // address that is in the GOT entry (the pointer address)
+		unsigned long plt_entry_va; // the PLT address that the GOT entry should point to if not yet resolved
+		unsigned long shl_entry_va; // the shared library address the GOT should point to if it has been resolved
 } pltgot_info_t;
 */
 ssize_t get_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo)
@@ -494,7 +493,7 @@ ssize_t get_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo)
 	ElfW(Sym) *symtab = desc->dynsym;
 	ElfW(Sym) *sym;
 	ElfW(Addr) pltVaddr;
- 	size_t pltSize;
+	size_t pltSize;
 	
 	if ((pltVaddr = get_plt_va(desc)) == 0)
 		return -1;
@@ -570,6 +569,3 @@ char * get_section_name_by_addr(ecfs_elf_t *desc, unsigned long addr)
 			return &shstrtab[shdr[i].sh_name];
 	return NULL;
 }
-
-	
-	

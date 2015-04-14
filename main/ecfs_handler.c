@@ -29,13 +29,12 @@
 
 static void log_msg(unsigned int lineno, char *fmt, ...)
 {
-        char buf[512];
-        va_list va;
-        va_start (va, fmt);
-        vsnprintf(buf, sizeof(buf), fmt, va);
-        va_end(va);
-        syslog(LOG_MAKEPRI(LOG_USER, LOG_WARNING), "%s [line: %i]", buf, lineno);
-
+	char buf[512];
+	va_list va;
+	va_start (va, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, va);
+	va_end(va);
+	syslog(LOG_MAKEPRI(LOG_USER, LOG_WARNING), "%s [line: %i]", buf, lineno);
 }
 
 static void load_ecfs_worker(char **argv, char **envp, const char *ecfs_worker_path)
@@ -109,38 +108,38 @@ int main(int argc, char **argv, char **envp)
 	char *exepath;
 	char *ecfs_worker;
 
-  	if (argc < 2) {
-                fprintf(stdout, "Usage: %s [-peo]\n", argv[0]);
-                fprintf(stdout, "- To be used with /proc/sys/kernel/core_pattern\n");
-                fprintf(stdout, "[-p]   pid of process (Supplied by %%p format arg in core_pattern)\n");
-                fprintf(stdout, "[-e]   executable path (Supplied by %%e format arg in core_pattern)\n");
-                fprintf(stdout, "[-o]   output ecfs file\n\n");
+	if (argc < 2) {
+		fprintf(stdout, "Usage: %s [-peo]\n", argv[0]);
+		fprintf(stdout, "- To be used with /proc/sys/kernel/core_pattern\n");
+		fprintf(stdout, "[-p]   pid of process (Supplied by %%p format arg in core_pattern)\n");
+		fprintf(stdout, "[-e]   executable path (Supplied by %%e format arg in core_pattern)\n");
+		fprintf(stdout, "[-o]   output ecfs file\n\n");
 		fprintf(stdout, "[-t]	Write complete text image of all shlibs (vs. the default 4096 bytes)\n");
 		fprintf(stdout, "[-h]	Turn on heuristics for detecting .so injection attacks\n");
-                exit(0);
-        }
-        while ((c = getopt(argc, argv, "th:o:p:e:")) != -1) {
-                switch(c) {
-                        case 'o':
-                                outfile = strdup(optarg);
-                                break;
-                        case 'e':
-                                exename = strdup(optarg);
-                                break;
-                        case 'p':
-                                pid = atoi(optarg);
-                                break;
-                        case 'h':
-                                heuristics = 1;
-                                break;
-                        case 't':
-                                text_all = 1;
-                                break;
-                        default:
-                                fprintf(stderr, "Unknown option\n");
-                                exit(0);
-                }
-        }
+		exit(0);
+	}
+	while ((c = getopt(argc, argv, "th:o:p:e:")) != -1) {
+		switch(c) {
+			case 'o':
+				outfile = strdup(optarg);
+				break;
+			case 'e':
+				exename = strdup(optarg);
+				break;
+			case 'p':
+				pid = atoi(optarg);
+				break;
+			case 'h':
+				heuristics = 1;
+				break;
+			case 't':
+				text_all = 1;
+				break;
+			default:
+				fprintf(stderr, "Unknown option\n");
+				exit(0);
+		}
+	}
 	
 	if (pid == 0 || exename == NULL || outfile == NULL) {
 		log_msg(__LINE__, "invalid command line args being used - pid: %d exename: %p outfile: %p", pid, exename, outfile);
@@ -174,9 +173,3 @@ int main(int argc, char **argv, char **envp)
 	umount(ECFS_RAMDISK_DIR);
 	exit(0);
 }
-
-
-
-
-
-

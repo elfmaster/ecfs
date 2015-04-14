@@ -63,7 +63,7 @@ ssize_t get_segment_from_pmem(unsigned long vaddr, memdesc_t *memdesc, uint8_t *
 	 * stopped (SIGSTOP) unless we are running this program
 	 * in debugging mode, in which case we deliver a sigstop
 	 * just incase.	
- 	 */
+	 */
 	int i;
 	size_t len;
 	ssize_t ret;
@@ -94,16 +94,16 @@ ssize_t get_segment_from_pmem(unsigned long vaddr, memdesc_t *memdesc, uint8_t *
 
 int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
 {
-        ElfW(Ehdr) *ehdr;
-        ElfW(Phdr) *phdr;
+	ElfW(Ehdr) *ehdr;
+	ElfW(Phdr) *phdr;
 	ElfW(Addr) textVaddr;
 	ElfW(Off) textOffset = 0;
-        ElfW(Off) dataOffset = 0;
-        //size_t textSize;
-        uint8_t *mem;
-        struct stat st;
-        int in, out, i = 0;
-        int data_index;
+	ElfW(Off) dataOffset = 0;
+	//size_t textSize;
+	uint8_t *mem;
+	struct stat st;
+	int in, out, i = 0;
+	int data_index;
 
 	in = xopen(path, O_RDWR);
 	xfstat(in, &st);
@@ -116,22 +116,22 @@ int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
 	 */
 	char *tmp_dir = opts.use_ramdisk ? ECFS_RAMDISK_DIR : ECFS_CORE_DIR;
 	char *tmp = xfmtstrdup("%s/.tmp_merged_core", tmp_dir);
-        do {
-                if (access(tmp, F_OK) == 0) {
-                        free(tmp);
-                        tmp = xfmtstrdup("%s/.tmp_merged_core.%d", tmp_dir, ++i);
-                } else
-                        break;
+	do {
+		if (access(tmp, F_OK) == 0) {
+			free(tmp);
+			tmp = xfmtstrdup("%s/.tmp_merged_core.%d", tmp_dir, ++i);
+		} else
+			break;
 
-        } while(1);
-        out = xopen(tmp, O_RDWR|O_CREAT);
+	} while(1);
+	out = xopen(tmp, O_RDWR|O_CREAT);
 
-        /*
-         * Earlier on we read the text segment from /proc/$pid/mem
-         * into a heap allocated buffer memdesc->textseg 
-         */
-        uint8_t *textseg = memdesc->textseg;
-        ssize_t tlen = (ssize_t)memdesc->text.size;
+	/*
+	 * Earlier on we read the text segment from /proc/$pid/mem
+	 * into a heap allocated buffer memdesc->textseg 
+	 */
+	uint8_t *textseg = memdesc->textseg;
+	ssize_t tlen = (ssize_t)memdesc->text.size;
 	/*
 	 * Get textVaddr as it pertains to the mappings
 	 */
@@ -141,32 +141,32 @@ int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
 		return -1;
 	}
 
-        /*
-         * Get textVaddr as it pertains to the mappings
-         */
-        textVaddr = memdesc->text.base;
-        if (textVaddr == 0) {
-            log_msg(__LINE__, "(From merge_texts_into_core function) Could not find text address");
-            return -1;
-        }
+	/*
+	 * Get textVaddr as it pertains to the mappings
+	 */
+	textVaddr = memdesc->text.base;
+	if (textVaddr == 0) {
+		log_msg(__LINE__, "(From merge_texts_into_core function) Could not find text address");
+		return -1;
+	}
 
-        mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, in, 0);
-        if (mem == MAP_FAILED) {
-            log_msg(__LINE__, "mmap %s", strerror(errno));
-            return -1;
-        }
-        ehdr = (ElfW(Ehdr) *)mem;
-        phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
-        int found_text;
+	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, in, 0);
+	if (mem == MAP_FAILED) {
+		log_msg(__LINE__, "mmap %s", strerror(errno));
+		return -1;
+	}
+	ehdr = (ElfW(Ehdr) *)mem;
+	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
+	int found_text;
 
-        for (found_text = 0, i = 0; i < ehdr->e_phnum; i++) {
-        	if (phdr[i].p_vaddr <= textVaddr && phdr[i].p_vaddr + phdr[i].p_memsz > textVaddr) {
-      
+	for (found_text = 0, i = 0; i < ehdr->e_phnum; i++) {
+		if (phdr[i].p_vaddr <= textVaddr && phdr[i].p_vaddr + phdr[i].p_memsz > textVaddr) {
+	  
 #if DEBUG
 			log_msg(__LINE__, "readjusting executable text segment: %lx\n", phdr[i].p_vaddr);
 #endif
 			textOffset = phdr[i].p_offset;
-                	dataOffset = phdr[i + 1].p_offset;	// data segment is always i + 1 after text
+			dataOffset = phdr[i + 1].p_offset;	// data segment is always i + 1 after text
 			textVaddr = phdr[i].p_vaddr;
 			phdr[i].p_filesz = phdr[i].p_memsz; // make filesz same as memsz
 			found_text++;
@@ -207,53 +207,53 @@ int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
 		log_msg(__LINE__, "rename %s", strerror(errno));
 		return -1;
 	}
-  	chmod(path, S_IRWXU|S_IRWXG|S_IROTH|S_IWOTH|S_IXOTH);
+	chmod(path, S_IRWXU|S_IRWXG|S_IROTH|S_IWOTH|S_IXOTH);
 	return 0;
 }
 
 static int merge_text_image(const char *path, unsigned long text_addr, uint8_t *text_image, ssize_t text_len)
 {
-        ElfW(Ehdr) *ehdr;
-        ElfW(Phdr) *phdr;
-        ElfW(Off) textOffset; // offset of text segment in question
-        ElfW(Off) nextOffset; // offset of phdr after the text segment in question
-        size_t textSize;
-        uint8_t *mem;
-        struct stat st;
-        int in, out, i = 0;
+	ElfW(Ehdr) *ehdr;
+	ElfW(Phdr) *phdr;
+	ElfW(Off) textOffset; // offset of text segment in question
+	ElfW(Off) nextOffset; // offset of phdr after the text segment in question
+	size_t textSize;
+	uint8_t *mem;
+	struct stat st;
+	int in, out, i = 0;
 	ssize_t tlen = text_len;
 	
 	log_msg(__LINE__, "xopen path: %s", path);
-        in = xopen(path, O_RDONLY);
-        xfstat(in, &st);
+	in = xopen(path, O_RDONLY);
+	xfstat(in, &st);
 	
-        /*
-         * tmp will point to the new temporary file that contains
-         * our corefile with a merged in program text segment and
-         * with updated p_filesz, and updated p_offsets for phdr's 
-         * that follow it.
-         */
+	/*
+	 * tmp will point to the new temporary file that contains
+	 * our corefile with a merged in program text segment and
+	 * with updated p_filesz, and updated p_offsets for phdr's 
+	 * that follow it.
+	 */
 	char *tmp_dir = opts.use_ramdisk ? ECFS_RAMDISK_DIR : ECFS_CORE_DIR;
-        char *tmp = xfmtstrdup("%s/.tmp_merging_shlibs", tmp_dir);
-        do {
-                if (access(tmp, F_OK) == 0) {
-                        free(tmp);
-                        tmp = xfmtstrdup("%s/.tmp_merging_shlibs.%d", tmp_dir, ++i);
-                } else
-                        break;
+	char *tmp = xfmtstrdup("%s/.tmp_merging_shlibs", tmp_dir);
+	do {
+		if (access(tmp, F_OK) == 0) {
+			free(tmp);
+			tmp = xfmtstrdup("%s/.tmp_merging_shlibs.%d", tmp_dir, ++i);
+		} else
+			break;
 
-        } while(1);
-        out = xopen(tmp, O_RDWR|O_CREAT);
-        //fchmod(out, S_IRWXU|S_IRWXG|S_IROTH|S_IWOTH|S_IXOTH);
+	} while(1);
+	out = xopen(tmp, O_RDWR|O_CREAT);
+	//fchmod(out, S_IRWXU|S_IRWXG|S_IROTH|S_IWOTH|S_IXOTH);
 
 	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, in, 0);
-        if (mem == MAP_FAILED) {
-                log_msg(__LINE__, "mmap %s", strerror(errno));
-                return -1;
-        }
-        ehdr = (ElfW(Ehdr) *)mem;
-        phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
-        int found_text = 0;
+	if (mem == MAP_FAILED) {
+		log_msg(__LINE__, "mmap %s", strerror(errno));
+		return -1;
+	}
+	ehdr = (ElfW(Ehdr) *)mem;
+	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
+	int found_text = 0;
 	
 	/*
 	 * XXX
@@ -264,66 +264,65 @@ static int merge_text_image(const char *path, unsigned long text_addr, uint8_t *
 	 */
 	for (i = 0; i < ehdr->e_phnum; i++) {
 		if (text_addr == phdr[i].p_vaddr) {
-		 	textOffset = phdr[i].p_offset;
-                        nextOffset = phdr[i + 1].p_offset;   // data segment usually always i + 1 after text
-                        textSize = phdr[i].p_memsz;         // get memsz of text
+			textOffset = phdr[i].p_offset;
+			nextOffset = phdr[i + 1].p_offset;  // data segment usually always i + 1 after text
+			textSize = phdr[i].p_memsz;         // get memsz of text
 			phdr[i].p_filesz = phdr[i].p_memsz; // make filesz same as memsz
 			found_text++;
 			continue;
 
-                }
-                if (found_text && phdr[i].p_type == PT_LOAD) {
+		}
+		if (found_text && phdr[i].p_type == PT_LOAD) {
 #if DEBUG
 			log_msg(__LINE__, "re-adjusting offset for phdr(0x%lx) from %lx to %lx\n", 
 				phdr[i].p_vaddr, phdr[i].p_offset, phdr[i].p_offset + (tlen - 4096));
 #endif
-                        phdr[i].p_offset += (tlen - 4096); // we must push the other segments forward to make room for whole text image
-                }
-        }
-        if (found_text == 0) {
-                log_msg(__LINE__, "Failed to merge texts into core");
-                return -1;
-        }
-        if (write(out, mem, textOffset) < 0) {
-                log_msg(__LINE__, "[FAILURE] write(): %s", strerror(errno));
-                return -1;
-        }
-        if (write(out, text_image, tlen) < 0) {
-                log_msg(__LINE__, "[FAILURE] write(): %s", strerror(errno));
-                return -1;
-        }
+				phdr[i].p_offset += (tlen - 4096); // we must push the other segments forward to make room for whole text image
+			}
+		}
+		if (found_text == 0) {
+			log_msg(__LINE__, "Failed to merge texts into core");
+			return -1;
+		}
+		if (write(out, mem, textOffset) < 0) {
+			log_msg(__LINE__, "[FAILURE] write(): %s", strerror(errno));
+			return -1;
+		}
+		if (write(out, text_image, tlen) < 0) {
+			log_msg(__LINE__, "[FAILURE] write(): %s", strerror(errno));
+			return -1;
+		}
 	/*
 	 * Take special care to free text_image 
 	 * we likely have alot of memory mappings taking up	
- 	 * memory if we are dealing with a large process and
+	 * memory if we are dealing with a large process and
 	 * must free up these mappings as soon as we are done
 	 * with them. otherwise resource hogging will happen.	
- 	 */
+	 */
 	if (munmap(text_image, tlen) < 0) {
 		log_msg(__LINE__, "[FAILURE] munmap(): %s", strerror(errno));
 		return -1;
 	}
 
-        if (write(out, &mem[nextOffset], st.st_size - nextOffset) < 0) {
-                log_msg(__LINE__, "[FAILURE] write(): %s", strerror(errno));
-                return -1;
-        }
+	if (write(out, &mem[nextOffset], st.st_size - nextOffset) < 0) {
+		log_msg(__LINE__, "[FAILURE] write(): %s", strerror(errno));
+		return -1;
+	}
 
-        fsync(out);
-        close(out);
-        close(in);
+	fsync(out);
+	close(out);
+	close(in);
 	munmap(mem, st.st_size);
 
 #if DEBUG
 	log_msg(__LINE__, "merge_text_image(): renaming %s back to %s", tmp, path);
 #endif
-        if (rename(tmp, path) < 0) {
-                log_msg(__LINE__, "rename %s", strerror(errno));
-                return -1;
-        }
+	if (rename(tmp, path) < 0) {
+		log_msg(__LINE__, "rename %s", strerror(errno));
+		return -1;
+	}
 	chmod(path, S_IRWXU|S_IRWXG|S_IROTH|S_IWOTH|S_IXOTH); 
-        return 0;
-
+	return 0;
 }
 
 void create_shlib_text_mappings(memdesc_t *memdesc)
@@ -361,8 +360,8 @@ int merge_shlib_texts_into_core(const char *corefile, memdesc_t *memdesc)
 		if (!(maps[i].p_flags & PF_X))
 			continue;
 		/* If we got here we have an executable
-	 	 * segment of a shared library.
-	 	 */
+		 * segment of a shared library.
+		 */
 #if DEBUG
 		log_msg(__LINE__, "call merge_text_image(%s, %lx, %p, %u)", corefile, maps[i].base, maps[i].text_image, maps[i].text_len);
 #endif
@@ -372,5 +371,5 @@ int merge_shlib_texts_into_core(const char *corefile, memdesc_t *memdesc)
 			continue;
 		}
 	}
-        return ret;
+	return ret;
 }

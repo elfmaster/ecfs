@@ -112,15 +112,15 @@ static char * get_real_lib_path(char *name)
 	 */
 
 	snprintf(tmp, 512, "/usr/lib/x86_64-linux-gnu/%s", name);
-        if (access(tmp, F_OK) == 0) {
-                ret = readlink(tmp, real, 512);
-                if (ret > 0) {
-                        ptr = get_real_lib_path(real);
-                        return xstrdup(ptr);
-                }
-                else
-                        return xstrdup(tmp);
-        }
+	if (access(tmp, F_OK) == 0) {
+		ret = readlink(tmp, real, 512);
+		if (ret > 0) {
+			ptr = get_real_lib_path(real);
+			return xstrdup(ptr);
+		}
+		else
+			return xstrdup(tmp);
+	}
 
 	snprintf(tmp, 512, "/lib/x86_64-linux-gnu/%s", name);
 	if (access(tmp, F_OK) == 0) {
@@ -136,9 +136,9 @@ static char * get_real_lib_path(char *name)
 	snprintf(tmp, 512, "/usr/lib/%s", name);
 	if (access(tmp, F_OK) == 0) {
 		ret = readlink(tmp, real, 512);
-        	if (ret > 0) {
+		if (ret > 0) {
 			ptr = get_real_lib_path(real);
-                	return xstrdup(ptr);
+			return xstrdup(ptr);
 		}
 		else
 			return xstrdup(tmp);
@@ -156,16 +156,16 @@ static char * get_real_lib_path(char *name)
 			return xstrdup(tmp);
 	}
 	
- 	snprintf(tmp, 512, "/usr/lib/x86_64-linux-gnu/gio/modules/%s", name);
-        if (access(tmp, F_OK) == 0) {
-                ret = readlink(tmp, real, 512);
-                if (ret > 0) {
-                        ptr = get_real_lib_path(real);
-                        return xstrdup(ptr);
-                }
-                else
-                        return xstrdup(tmp);
-        }
+	snprintf(tmp, 512, "/usr/lib/x86_64-linux-gnu/gio/modules/%s", name);
+	if (access(tmp, F_OK) == 0) {
+		ret = readlink(tmp, real, 512);
+		if (ret > 0) {
+			ptr = get_real_lib_path(real);
+			return xstrdup(ptr);
+		}
+		else
+			return xstrdup(tmp);
+	}
 
 	/*
 	 * If we get here then lets try directly from ld.so.cache
@@ -254,21 +254,21 @@ static int cmp_till_dot(const char *lib1, const char *lib2)
 			break;
 		}
 	}
-        for (i = 0, p = s2; p[i] != '\0'; i++) {
-                if (p[i] == '.' && p[i + 1] == 's' && p[i + 2] == 'o') {
-                        p[i] = '\0';
-                        break;
-                }
-        }
+	for (i = 0, p = s2; p[i] != '\0'; i++) {
+		if (p[i] == '.' && p[i + 1] == 's' && p[i + 2] == 'o') {
+			p[i] = '\0';
+			break;
+		}
+	}
 	
 	return strcmp(s1, s2);
 }
 
 static int qsort_cmp_by_str(const void *a, const void *b)
 { 
-    struct needed_libs *ia = (struct needed_libs *)a;
-    struct needed_libs *ib = (struct needed_libs *)b;
-    return strcmp(ia->libpath, ib->libpath);
+	struct needed_libs *ia = (struct needed_libs *)a;
+	struct needed_libs *ib = (struct needed_libs *)b;
+	return strcmp(ia->libpath, ib->libpath);
 } 
 
 /*
@@ -396,7 +396,7 @@ int get_dlopen_libs(const char *exe_path, struct dlopen_libs *dl_libs, int index
 	/*
 	 * For now (until we have integrated a disassembler in)
 	 * I am not going to check each individual dlopen call.	
- 	 * instead just check .rodata to see if any strings for 
+	 * instead just check .rodata to see if any strings for 
 	 * shared libraries exist. This combined with the knowledge
 	 * that dlopen is used at all in the program, is decent
 	 * enough hueristic.
@@ -452,7 +452,7 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 	int i, j, c;
 	
 	/*
- 	 * Get all dependencies from executable and its shared libraries
+	 * Get all dependencies from executable and its shared libraries
 	 * DT_NEEDED entries. Also get any shared library paths found in
 	 * the .rodata section of binaries that are calling dlopen()
 	 */
@@ -466,7 +466,7 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 		for (j = 0; j < needed_count; j++) {
 			if (lm_files->libs[i].path[0] == '\0') { // empty string, no paths.
 				break;
-                        }
+			}
 			if (needed_libs[j].libpath == NULL) {
 				/* Compare by name since full path couldn't be found */
 				if (!cmp_till_dot(needed_libs[j].libname, lm_files->libs[i].name)) {
@@ -500,12 +500,5 @@ void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elf
 		}
 		else
 			valid = 0;
-				
 	}
-				
-
 }
-
-
-
-	

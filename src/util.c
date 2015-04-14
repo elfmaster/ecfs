@@ -49,24 +49,24 @@ void * heapAlloc(size_t len)
 
 char * xstrdup(const char *s)
 {
-        char *p = strdup(s);
-        if (p == NULL) {
-                perror("strdup");
-                exit(-1);
-        }
-        return p;
+	char *p = strdup(s);
+	if (p == NULL) {
+		perror("strdup");
+		exit(-1);
+	}
+	return p;
 }
-        
+		
 char * xfmtstrdup(char *fmt, ...)
 {
-        char *s, buf[512];
-        va_list va;
-        
-        va_start (va, fmt);
-        vsnprintf (buf, sizeof(buf), fmt, va);
-        s = (char *)(uintptr_t)xstrdup(buf);
-        
-        return s;
+	char *s, buf[512];
+	va_list va;
+	
+	va_start (va, fmt);
+	vsnprintf (buf, sizeof(buf), fmt, va);
+	s = (char *)(uintptr_t)xstrdup(buf);
+	
+	return s;
 }
 
 int xopen(const char *path, int flags)
@@ -113,15 +113,15 @@ void xfree(void *p)
 void ecfs_print(char *fmt, ...)
 {
 	FILE *fp;
-        va_list va;
+	va_list va;
 	
 	va_start (va, fmt);
 	if ((fp = fopen(LOGFILE, "w")) == NULL) {
 		perror("fopen");
 		exit(-1);
 	}
-        vfprintf (fp, fmt, va);
- 	fflush (fp);
+	vfprintf (fp, fmt, va);
+	fflush (fp);
 	va_end(va);
 	fclose(fp);
 }
@@ -129,19 +129,19 @@ void ecfs_print(char *fmt, ...)
 int octal2decimal(int n)
 {
 	int decimal=0, i=0, rem;
-    	while (n != 0) {
-        	rem = n%10;
-        	n/=10;
-        	decimal += rem*pow(8,i);
-        	++i;
-    	}
-    	return decimal;
+	while (n != 0) {
+		rem = n%10;
+		n/=10;
+		decimal += rem*pow(8,i);
+		++i;
+	}
+	return decimal;
 }
 void log_msg(unsigned int lineno, char *fmt, ...)
 {
-        char buf[512];
+	char buf[512];
 	va_list va;
-        va_start (va, fmt);
+	va_start (va, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, va);
 	va_end(va);
 	syslog(LOG_MAKEPRI(LOG_USER, LOG_WARNING), "%s [line: %i]", buf, lineno);
@@ -150,14 +150,14 @@ void log_msg(unsigned int lineno, char *fmt, ...)
 
 void xsystem(char *str, ...)
 {
-  	char string[512];
-        va_list va;
-	
-        va_start (va, str);
-        vsnprintf (string, 512, str, va);
-        va_end (va);
+	char string[512];
+	va_list va;
 
-        system (string);
+	va_start (va, str);
+	vsnprintf (string, 512, str, va);
+	va_end (va);
+
+	system (string);
 }
 
 void exit_failure(int code)
@@ -168,19 +168,19 @@ void exit_failure(int code)
 
 int inquire_meminfo(void)
 {
-        FILE *fp;
-        unsigned int kbytes, gbytes;
+	FILE *fp;
+	unsigned int kbytes, gbytes;
 	char s1[32], s2[32];
 	
-        fp = fopen("/proc/meminfo", "r");
-        if (fp == NULL) {       
-                log_msg(__LINE__, "fopen: %s", strerror(errno));
-                return -1;
-        }
-        fscanf(fp, "%s %u %s", s1, &kbytes, s2);
-        fclose(fp);
-        if (kbytes < 1048576)
-                return 0;
+	fp = fopen("/proc/meminfo", "r");
+	if (fp == NULL) {       
+		log_msg(__LINE__, "fopen: %s", strerror(errno));
+		return -1;
+	}
+	fscanf(fp, "%s %u %s", s1, &kbytes, s2);
+	fclose(fp);
+	if (kbytes < 1048576)
+		return 0;
 	gbytes = kbytes / 1024 / 1024;
 	return gbytes;
 }

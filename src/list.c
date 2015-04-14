@@ -68,7 +68,7 @@ int insert_item_end(list_t **list, void *data, size_t sz)
 	node_t *tmp = NULL;
 	
 	new->data = (void *)heapAlloc(sz);
-        memcpy((void *)new->data, (void *)data, sz);
+	memcpy((void *)new->data, (void *)data, sz);
 
 	if ((*list)->head == NULL) {
 		(*list)->head = new;

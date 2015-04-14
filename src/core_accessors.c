@@ -121,26 +121,26 @@ void get_text_phdr_size_with_hint(elfdesc_t *elfdesc, unsigned long hint)
 
 ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int type)
 {
-        int i, j;
-        mappings_t *maps = memdesc->maps;
+	int i, j;
+	mappings_t *maps = memdesc->maps;
 	ElfW(Phdr) *phdr = elfdesc->phdr;
 
-        switch(type) {
-                case HEAP:
-                        for (i = 0; i < memdesc->mapcount; i++) {
-                                if (maps[i].heap) {
+	switch(type) {
+		case HEAP:
+			for (i = 0; i < memdesc->mapcount; i++) {
+				if (maps[i].heap) {
 					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
 						if (phdr[j].p_vaddr == maps[i].base)
 							return phdr[j].p_offset;
 					}
 				}
 			}
-                        break;
-                case STACK:
-                         for (i = 0; i < memdesc->mapcount; i++) {
-                                if (maps[i].stack) {
+			break;
+		case STACK:
+			for (i = 0; i < memdesc->mapcount; i++) {
+				if (maps[i].stack) {
 					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
-					       /*
+					   /*
 						* For some reason the kernel seems to dump the
 						* stack segment 1 page lower than one shows up
 						* in the maps file. So we have to check for
@@ -149,35 +149,35 @@ ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int typ
 						*/
 
 						if (maps[i].base >= phdr[j].p_vaddr && maps[i].base < (phdr[j].p_vaddr + phdr[j].p_memsz))
-                                                        return phdr[j].p_offset;
-                                        }
-                                }
-                        }
-                        break;
-                case VDSO:
-                         for (i = 0; i < memdesc->mapcount; i++) {
-                                if (maps[i].vdso) {
+							return phdr[j].p_offset;
+					}
+				}
+			}
+			break;
+		case VDSO:
+			for (i = 0; i < memdesc->mapcount; i++) {
+				if (maps[i].vdso) {
 					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
-                                                if (phdr[j].p_vaddr == maps[i].base)
-                                                        return phdr[j].p_offset;
-                                        }
-                                }
-                       	}
-                        break;
-                case VSYSCALL:
-                         for (i = 0; i < memdesc->mapcount; i++) {
-                                if (maps[i].vsyscall) {
+						if (phdr[j].p_vaddr == maps[i].base)
+							return phdr[j].p_offset;
+					}
+				}
+			}
+			break;
+		case VSYSCALL:
+			for (i = 0; i < memdesc->mapcount; i++) {
+				if (maps[i].vsyscall) {
 					for (j = 0; j < elfdesc->ehdr->e_phnum; j++) {
-                                                if (phdr[j].p_vaddr == maps[i].base)
-                                                        return phdr[j].p_offset;
-                                        }
-                                } 
-                        }
-                        break;
-                default:
+						if (phdr[j].p_vaddr == maps[i].base)
+							return phdr[j].p_offset;
+						}
+					} 
+				}
+			break;
+		default:
 			/*
-	 		 * if type is unknown then it gets treated as an index
-		 	 * into maps array.
+			 * if type is unknown then it gets treated as an index
+			 * into maps array.
 			 */
 #if DEBUG
 			log_msg(__LINE__, "get_internal_sh_offset is treating 'type' as index into map array");
@@ -192,30 +192,31 @@ ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int typ
 			for (j = 0; j < elfdesc->ehdr->e_phnum; j++) 
 				if (phdr[j].p_vaddr == maps[type].base)
 					return phdr[j].p_offset;
-                       	break;
-        }
-        return 0;
+						break;
+	}
+	return 0;
 }
 static ssize_t get_original_shdr_addr(int pid, const char *name)
 {
 	struct stat st;
-        int i;
-        char *path = xfmtstrdup("/proc/%d/exe", pid);
-        int fd = xopen(path, O_RDONLY);
-        xfree(path);
-        xfstat(fd, &st);
-        uint8_t *mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-        if (mem == MAP_FAILED) {
-                log_msg(__LINE__, "mmap %s", strerror(errno));
-                return 0;
-        }
-        ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
-        ElfW(Shdr) *shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
-        if (ehdr->e_shstrndx == 0 || ehdr->e_shnum == 0)
-                return 0;
-        char *StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
-        for (i = 0; i < ehdr->e_shnum; i++)
-                if (!strcmp(&StringTable[shdr[i].sh_name], name))
+	int i;
+	char *path = xfmtstrdup("/proc/%d/exe", pid);
+	int fd = xopen(path, O_RDONLY);
+	xfree(path);
+	xfstat(fd, &st);
+	uint8_t *mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (mem == MAP_FAILED) {
+		log_msg(__LINE__, "mmap %s", strerror(errno));
+		return 0;
+	}
+	ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
+	ElfW(Shdr) *shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
+	if (ehdr->e_shstrndx == 0 || ehdr->e_shnum == 0)
+		return 0;
+	
+	char *StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
+	for (i = 0; i < ehdr->e_shnum; i++)
+		if (!strcmp(&StringTable[shdr[i].sh_name], name))
 			return shdr[i].sh_addr;
 	return 0;
 }
@@ -233,7 +234,7 @@ static void pull_unknown_shdr_addrs(int pid, memdesc_t *memdesc)
 	 * .data reflects original .data section and ._DATA reflects
 	 * the entire text segment. In this case we are getting the
 	 * vaddr of the original .data section.	
- 	 */
+	 */
 	global_hacks.data_vaddr = get_original_shdr_addr(pid, ".data");
 	/*
 	 * Get plt location since its not marked in dynamic segment
@@ -284,16 +285,16 @@ static ssize_t get_original_shdr_size(int pid, const char *name)
 {
 	struct stat st;
 	int i;
-        char *path = xfmtstrdup("/proc/%d/exe", pid);
-        int fd = xopen(path, O_RDONLY);
-        xfree(path);
-        xfstat(fd, &st);
-        uint8_t *mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-        if (mem == MAP_FAILED) {
-                log_msg(__LINE__, "mmap %s", strerror(errno));
-                return -1;
-        }
-        ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
+	char *path = xfmtstrdup("/proc/%d/exe", pid);
+	int fd = xopen(path, O_RDONLY);
+	xfree(path);
+	xfstat(fd, &st);
+	uint8_t *mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (mem == MAP_FAILED) {
+		log_msg(__LINE__, "mmap %s", strerror(errno));
+		return -1;
+	}
+	ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
 	ElfW(Shdr) *shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
 	if (ehdr->e_shstrndx == 0 || ehdr->e_shnum == 0)
 		return -1;
