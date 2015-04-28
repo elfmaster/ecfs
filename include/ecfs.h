@@ -479,6 +479,17 @@ struct needed_libs {
 };
 
 /*
+ * These structs are used to store information about memory mappings
+ * that contain ELF objects.
+ */
+struct elfmap {
+	ElfW(Addr) addr;
+	ElfW(Off) offset;
+	size_t size;
+	int prot;
+};
+
+/*
  * XXX smoothly transition these globals in somewhere else
  * these were added for another after the fact strangeness
  * to account for the fact that /proc/$pid disappears as soon

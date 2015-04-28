@@ -104,6 +104,44 @@ elfdesc_t * reload_core_file(elfdesc_t *old)
 	return new;
 }
 
+static int is_elf_mapping(uint8_t *mem)
+{	
+	ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)mem;
+
+	if (memcmp(mem, "\x7f\x45\x4c\x46", 4) != 0)
+		return -1;
+	return ehdr->e_type;
+}
+
+ssize_t check_segment_for_elf_object(elfdesc_t *elfdesc, struct elfmap **elfmaps)
+{
+	ElfW(Phdr) *phdr = elfdesc->phdr;
+	uint8_t *mem = elfdesc->mem;
+	int ret, i;
+	ssize_t c;
+
+	*elfmaps = (struct elfmap *)heapAlloc(sizeof(struct elfmap));
+	for (c = 0, i = 0; i < elfdesc->ehdr->e_phnum; i++) {
+		if (phdr[i].p_filesz == 0)
+			continue;
+		ret = is_elf_mapping(&mem[phdr[i].p_offset]);
+		if (ret < 0)
+			continue;
+		(*elfmaps)[c].addr = phdr[i].p_vaddr;
+		(*elfmaps)[c].offset = phdr[i].p_offset;
+		(*elfmaps)[c].size = phdr[i].p_filesz;		
+		(*elfmaps)[c].prot = phdr[i].p_flags;
+		c++;
+		*elfmaps = realloc(*elfmaps, sizeof(struct elfmap) * (c + 1));
+		if (*elfmaps == NULL) {
+			log_msg(__LINE__, "realloc() failed: %s", strerror(errno));
+			return -1;
+		}
+	}
+	return c;
+
+}
+
 void get_text_phdr_size_with_hint(elfdesc_t *elfdesc, unsigned long hint)
 {
 	ElfW(Phdr) *phdr = elfdesc->phdr;
