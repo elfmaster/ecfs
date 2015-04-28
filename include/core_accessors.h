@@ -68,4 +68,11 @@ ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int typ
  */
 void fill_global_hacks(int pid, memdesc_t *memdesc);
 
+/*
+ * This checks the core file for segments that contain ELF objects
+ * mapped in such as ET_REL, ET_EXEC, and ET_DYN (Another way to
+ * detect object injection.
+ */
+ssize_t check_segments_for_elf_objects(elfdesc_t *elfdesc, struct elfmap **elfmaps);
+
 #endif

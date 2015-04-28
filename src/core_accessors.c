@@ -113,7 +113,7 @@ static int is_elf_mapping(uint8_t *mem)
 	return ehdr->e_type;
 }
 
-ssize_t check_segment_for_elf_object(elfdesc_t *elfdesc, struct elfmap **elfmaps)
+ssize_t check_segments_for_elf_objects(elfdesc_t *elfdesc, struct elfmap **elfmaps)
 {
 	ElfW(Phdr) *phdr = elfdesc->phdr;
 	uint8_t *mem = elfdesc->mem;

@@ -423,6 +423,13 @@ typedef struct memdesc {
 	ssize_t fdinfo_size;
 } memdesc_t;
 
+struct elfmap {
+        ElfW(Addr) addr;
+        ElfW(Off) offset;
+        size_t size;
+        int prot;
+};
+
 typedef struct handle { 
 	char arglist[ELF_PRARGSZ];
 	char cmdline[CMDLINE_LEN];
@@ -430,6 +437,7 @@ typedef struct handle {
 	elfdesc_t *elfdesc;
 	memdesc_t *memdesc;
 	notedesc_t *notedesc;
+	struct elfmap *elfmaps;
 	struct nt_file_struct *nt_files;
 	struct section_meta smeta;
 	uint8_t *procfs_tarball;
@@ -482,12 +490,6 @@ struct needed_libs {
  * These structs are used to store information about memory mappings
  * that contain ELF objects.
  */
-struct elfmap {
-	ElfW(Addr) addr;
-	ElfW(Off) offset;
-	size_t size;
-	int prot;
-};
 
 /*
  * XXX smoothly transition these globals in somewhere else
