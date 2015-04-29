@@ -641,9 +641,8 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	 * section headers for the shared libraries. libc.so.text,
 	 * libc.so.data, .libc.so.relro, etc. (approx 3 mappings/sections for each lib)
 	 */
-	int data_count;
 	char *str = NULL;
-		for (data_count = 0, i = 0; i < notedesc->lm_files->libcount; i++) {
+		for (i = 0; i < notedesc->lm_files->libcount; i++) {
 			shdr[scount].sh_type = notedesc->lm_files->libs[i].injected ? SHT_INJECTED : SHT_SHLIB;
 			shdr[scount].sh_offset = notedesc->lm_files->libs[i].offset;
 			shdr[scount].sh_addr = notedesc->lm_files->libs[i].addr;
@@ -660,7 +659,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 				str = xfmtstrdup("%s.text", notedesc->lm_files->libs[i].name);
 				break;
 			case PF_R|PF_W:
-				str = xfmtstrdup("%s.data.%d", notedesc->lm_files->libs[i].name, data_count++);
+				str = xfmtstrdup("%s.data", notedesc->lm_files->libs[i].name);
 				break;
 			case PF_R:
 				str = xfmtstrdup("%s.relro", notedesc->lm_files->libs[i].name);

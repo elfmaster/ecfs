@@ -122,7 +122,7 @@ ssize_t check_segments_for_elf_objects(elfdesc_t *elfdesc, struct elfmap **elfma
 
 	*elfmaps = (struct elfmap *)heapAlloc(sizeof(struct elfmap));
 	for (c = 0, i = 0; i < elfdesc->ehdr->e_phnum; i++) {
-		if (phdr[i].p_filesz == 0)
+		if (phdr[i].p_filesz == 0 || !(phdr[i].p_flags & PF_X))
 			continue;
 		ret = is_elf_mapping(&mem[phdr[i].p_offset]);
 		if (ret < 0)
