@@ -500,8 +500,8 @@ int main(int argc, char **argv)
 	/*
 	 * Get ELF object mappings
 	 */
-	ssize_t elfobj_count = check_segments_for_elf_objects(elfdesc, &handle->elfmaps);
-	if (elfobj_count < 0) 
+	handle->elfmap_count = check_segments_for_elf_objects(elfdesc, &handle->elfmaps);
+	if (handle->elfmap_count < 0) 
 		log_msg(__LINE__, "check_segments_for_elf_objects() has failed");
 
 	/*

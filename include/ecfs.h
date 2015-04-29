@@ -428,6 +428,7 @@ struct elfmap {
         ElfW(Off) offset;
         size_t size;
         int prot;
+	int type;
 };
 
 typedef struct handle { 
@@ -442,6 +443,7 @@ typedef struct handle {
 	struct section_meta smeta;
 	uint8_t *procfs_tarball;
 	ssize_t procfs_size;
+	ssize_t elfmap_count;
 } handle_t;
 
 typedef struct descriptor {

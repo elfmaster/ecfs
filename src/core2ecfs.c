@@ -183,12 +183,14 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
 
 static int build_section_headers(int fd, const char *outfile, handle_t *handle, ecfs_file_t *ecfs_file)
 {
+	struct elfmap *elfmaps = handle->elfmaps;
 	elfdesc_t *elfdesc = handle->elfdesc;
 	memdesc_t *memdesc = handle->memdesc;
 	notedesc_t *notedesc = handle->notedesc;
 	struct section_meta *smeta = &handle->smeta;
 	ElfW(Shdr) *shdr = heapAlloc(sizeof(ElfW(Shdr)) * MAX_SHDR_COUNT);
 	char *StringTable = (char *)heapAlloc(MAX_SHDR_COUNT * 64);
+	ssize_t elfmap_count = handle->elfmap_count;
 	struct stat st;
 	unsigned int stoffset = 0;
 	int scount = 0, dynsym_index;
@@ -635,13 +637,60 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	stoffset += strlen(".heap") + 1;
 	scount++;
 	
+	/*
+	 * Write out misc. ELF objects (That are not shared libraries)
+	 * into sections that denote that some type of ELF object is
+	 * mapped into a memory segment.
+	 */
+	char *str = NULL;
+	int none_count = 0;
+	int unknown_count = 0;
+	int exec_count = 0;
+	int rel_count = 0;
+	for (i = 0; i < elfmap_count; i++) {
+		if (elfmaps[i].type == ET_DYN)
+			continue;	
+		shdr[scount].sh_type = SHT_PROGBITS;
+		shdr[scount].sh_addr = elfmaps[i].addr;
+		shdr[scount].sh_offset = elfmaps[i].offset;
+		shdr[scount].sh_size = elfmaps[i].size;
+		
+		shdr[scount].sh_flags |= ((elfmaps[i].prot & PF_X) ? SHF_EXECINSTR : 0);
+		shdr[scount].sh_flags |= ((elfmaps[i].prot & PF_W) ? SHF_WRITE : 0);
+		shdr[scount].sh_flags |= SHF_ALLOC;
+		
+		shdr[scount].sh_info = 0;
+		shdr[scount].sh_link = 0;
+		shdr[scount].sh_entsize = 0;
+		shdr[scount].sh_addralign = 8;
+		shdr[scount].sh_name = stoffset;
+		
+		switch(elfmaps[i].type) {
+			case ET_EXEC:
+				str = xfmtstrdup(".elf.exec.%d", exec_count++);
+				break;
+			case ET_REL:
+				str = xfmtstrdup(".elf.rel.%d", rel_count++);
+				break;
+			case ET_NONE:
+				str = xfmtstrdup(".elf.none.%d", none_count++);
+				break;
+			default:
+				str = xfmtstrdup(".elf.unknown.%d", unknown_count++);
+				break;
+		}
+		strcpy(&StringTable[stoffset], str);
+		stoffset += strlen(str) + 1;
+		scount += 1;
+		xfree(str);	
+	}
+
 	if (dynamic) {
 	/*
 	 * This next part is a loop that writes out all of the
 	 * section headers for the shared libraries. libc.so.text,
 	 * libc.so.data, .libc.so.relro, etc. (approx 3 mappings/sections for each lib)
 	 */
-	char *str = NULL;
 		for (i = 0; i < notedesc->lm_files->libcount; i++) {
 			shdr[scount].sh_type = notedesc->lm_files->libs[i].injected ? SHT_INJECTED : SHT_SHLIB;
 			shdr[scount].sh_offset = notedesc->lm_files->libs[i].offset;

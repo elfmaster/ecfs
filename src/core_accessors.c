@@ -131,6 +131,7 @@ ssize_t check_segments_for_elf_objects(elfdesc_t *elfdesc, struct elfmap **elfma
 		(*elfmaps)[c].offset = phdr[i].p_offset;
 		(*elfmaps)[c].size = phdr[i].p_filesz;		
 		(*elfmaps)[c].prot = phdr[i].p_flags;
+		(*elfmaps)[c].type = ret;
 		c++;
 		*elfmaps = realloc(*elfmaps, sizeof(struct elfmap) * (c + 1));
 		if (*elfmaps == NULL) {
