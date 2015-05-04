@@ -647,9 +647,11 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	int unknown_count = 0;
 	int exec_count = 0;
 	int rel_count = 0;
+	int dyn_count = 0;
 	for (i = 0; i < elfmap_count; i++) {
-		
-		shdr[scount].sh_type = SHT_PROGBITS;
+		if (elfmaps[i].addr == elfdesc->textVaddr) // don't create a section for main exe. This is what ._TEXT is for
+			continue;
+		shdr[scount].sh_type = SHT_INJECTED;
 		shdr[scount].sh_addr = elfmaps[i].addr;
 		shdr[scount].sh_offset = elfmaps[i].offset;
 		shdr[scount].sh_size = elfmaps[i].size;
@@ -670,6 +672,9 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 				break;
 			case ET_REL:
 				str = xfmtstrdup(".elf.rel.%d", rel_count++);
+				break;
+			case ET_DYN:
+				str = xfmtstrdup(".elf.dyn.%d", dyn_count++);
 				break;
 			case ET_NONE:
 				str = xfmtstrdup(".elf.none.%d", none_count++);

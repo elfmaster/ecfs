@@ -113,8 +113,10 @@ static int is_elf_mapping(uint8_t *mem)
 	return ehdr->e_type;
 }
 
-ssize_t check_segments_for_elf_objects(elfdesc_t *elfdesc, struct lib_mappings *lm, struct elfmap **elfmaps)
+ssize_t check_segments_for_elf_objects(handle_t *handle, struct lib_mappings *lm, struct elfmap **elfmaps)
 {
+	elfdesc_t *elfdesc = handle->elfdesc;
+	memdesc_t *memdesc = handle->memdesc;
 	ElfW(Phdr) *phdr = elfdesc->phdr;
 	uint8_t *mem = elfdesc->mem;
 	int ret, i, j, already_accounted = 0;
@@ -128,6 +130,17 @@ ssize_t check_segments_for_elf_objects(elfdesc_t *elfdesc, struct lib_mappings *
 		if (ret < 0)
 			continue;
 		if (ret == ET_DYN) {
+			/*
+			 * Is this dynamic object the program itself? Such as with a PIE
+			 * compiled program like sshd.
+			 */
+			if (phdr[i].p_vaddr == elfdesc->textVaddr)
+				continue;
+			/*
+			 * Is this the VDSO?
+			 */
+			if (phdr[i].p_vaddr == memdesc->vdso.base)
+				continue;
 			already_accounted = 0;
 			/*
 			 * If this program header is a shared library we only
