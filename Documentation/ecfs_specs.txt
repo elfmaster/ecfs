@@ -62,6 +62,17 @@ is a side project of ecfs and is still in early prototype stages.
 See https://github.com/elfmaster/ecfs_exec
 
 
+-= KCORE-ECFS
+
+The /proc/kcore file that is available in Linux is a core dump of
+the running kernel. There is a side-project that I have been working
+on for some time that includes special software to create an ecfs-snapshot
+out of /proc/kcore. The output file is fully instrumented with a symbol
+table and section headers. It includes code and data from the text, data,
+.bss, slab, vmalloc, and all of the kernel modules that are loaded. 
+The kcore-ecfs snapshot utility will not be made available to the public
+right away, but at some point down the line should make an appearance.
+
 
 -= ECFS custom sections
 
