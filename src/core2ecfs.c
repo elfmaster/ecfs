@@ -648,8 +648,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	int exec_count = 0;
 	int rel_count = 0;
 	for (i = 0; i < elfmap_count; i++) {
-		if (elfmaps[i].type == ET_DYN)
-			continue;	
+		
 		shdr[scount].sh_type = SHT_PROGBITS;
 		shdr[scount].sh_addr = elfmaps[i].addr;
 		shdr[scount].sh_offset = elfmaps[i].offset;

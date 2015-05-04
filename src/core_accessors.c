@@ -113,13 +113,13 @@ static int is_elf_mapping(uint8_t *mem)
 	return ehdr->e_type;
 }
 
-ssize_t check_segments_for_elf_objects(elfdesc_t *elfdesc, struct elfmap **elfmaps)
+ssize_t check_segments_for_elf_objects(elfdesc_t *elfdesc, struct lib_mappings *lm, struct elfmap **elfmaps)
 {
 	ElfW(Phdr) *phdr = elfdesc->phdr;
 	uint8_t *mem = elfdesc->mem;
-	int ret, i;
+	int ret, i, j, already_accounted = 0;
 	ssize_t c;
-
+	
 	*elfmaps = (struct elfmap *)heapAlloc(sizeof(struct elfmap));
 	for (c = 0, i = 0; i < elfdesc->ehdr->e_phnum; i++) {
 		if (phdr[i].p_filesz == 0 || !(phdr[i].p_flags & PF_X))
@@ -127,6 +127,25 @@ ssize_t check_segments_for_elf_objects(elfdesc_t *elfdesc, struct elfmap **elfma
 		ret = is_elf_mapping(&mem[phdr[i].p_offset]);
 		if (ret < 0)
 			continue;
+		if (ret == ET_DYN) {
+			already_accounted = 0;
+			/*
+			 * If this program header is a shared library we only
+			 * add it as a mapped ELF object if its not already stored
+			 * in 'struct lib_mappings'. This would happen with shared libraries
+			 * that were loaded but don't have the ".so" string in their name.
+			 * such as with Saruman executable injection technique which dlopens()
+			 * a PIE binary.
+			 */
+			for (j = 0; j < lm->libcount; j++) {
+				if (lm->libs[j].addr == phdr[i].p_vaddr) {
+					already_accounted++;
+					break;
+				}
+			}
+			if (already_accounted)
+				continue;	
+		}
 		(*elfmaps)[c].addr = phdr[i].p_vaddr;
 		(*elfmaps)[c].offset = phdr[i].p_offset;
 		(*elfmaps)[c].size = phdr[i].p_filesz;		

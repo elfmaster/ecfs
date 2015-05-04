@@ -500,7 +500,7 @@ int main(int argc, char **argv)
 	/*
 	 * Get ELF object mappings
 	 */
-	handle->elfmap_count = check_segments_for_elf_objects(elfdesc, &handle->elfmaps);
+	handle->elfmap_count = check_segments_for_elf_objects(elfdesc, notedesc->lm_files, &handle->elfmaps);
 	if (handle->elfmap_count < 0) 
 		log_msg(__LINE__, "check_segments_for_elf_objects() has failed");
 
