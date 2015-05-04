@@ -43,6 +43,7 @@ struct {
 	int auxv;
 	int personality;
 	int procfs;
+	int copy_section;
 	int all;
 } opts = {0};
 
@@ -85,12 +86,13 @@ static void print_registers(elf_gregset_t *reg)
 
 int main(int argc, char **argv)
 {
-	int i, ret;
+	int i, ret, fd;
 	ecfs_elf_t *desc;
 	struct fdinfo *fdinfo;
 	struct elf_prstatus *prstatus;
 	ecfs_sym_t *dsyms, *lsyms;
-	char *path;
+	char *path, *section_name, *objcmd, *outfile;
+	uint8_t *ptr;
 	siginfo_t siginfo;
 	Elf64_auxv_t *auxv;
 	int c;
@@ -108,9 +110,11 @@ usage:
 		printf("-A	print Auxiliary vector\n");
 		printf("-P	print personality info\n");
 		printf("-e	print ecfs specific (auiliary vector, process state, sockets, pipes, fd's, etc.)\n"); 
-		printf("\n\n-[Secondary use to view raw data from a section]\n");
+		printf("\n\n-[View raw data from a section]\n");
 		printf("-R <ecfscore> <section>\n\n");
-		printf("\n\n-[Extract /proc/$pid from .procfs.tgz section into directory]\n");
+		printf("\n\n-[Copy an ELF section into a file (Similar to objcopy)]\n");
+		printf("-O <ecfscore> .section <outfile>\n");
+		printf("\n\n-[Extract and decompress /proc/$pid from .procfs.tgz section into directory]\n");
 		printf("-X <ecfscore> <output_dir>\n\n");
 		printf("Examples:\n");
 		printf("%s -e <ecfscore>\n", argv[0]);
@@ -118,12 +122,13 @@ usage:
 		printf("%s -R <ecfscore> .stack\n", argv[0]);
 		printf("%s -R <ecfscore> .bss\n", argv[0]);
 		printf("%s -eR <ecfscore> .heap\n", argv[0]);
+		printf("%s -O <ecfscore> .vdso vdso_elf.so\n", argv[0]);
 		printf("%s -X <ecfscore> procfs_dir\n", argv[0]);
 		printf("\n");
 		exit(-1);
 	}
 	
-	while ((c = getopt(argc, argv, "XRAPSslphega")) != -1) {
+	while ((c = getopt(argc, argv, "OXRAPSslphega")) != -1) {
 		switch(c) {
 			case 'S':
 				opts.shdrs++;
@@ -168,6 +173,13 @@ usage:
 					exit(0);
 				}
 				opts.procfs++;
+				break;
+			case 'O':
+				if (argc < 5) {
+					printf("-O requires that you specify both a target section and output file\n");
+					exit(0);
+				}
+				opts.copy_section++;
 				break;
 			default:
 				goto usage;
@@ -384,10 +396,10 @@ usage:
 		}
 		printf("\n");
 	}
-	
+
 	if (opts.procfs) {
-		uint8_t *ptr;
-		char *objcmd, *tarcmd;
+		printf("\n[+] Extracting .procfs.tgz into %s\n", argv[3]);
+		char *tarcmd;
 		ssize_t section_size = get_section_pointer(desc, ".procfs.tgz", &ptr);
 		if (section_size < 0) {
 			printf("[!] Cannot locate section .procfs.tgz\n");
@@ -405,8 +417,31 @@ usage:
 		asprintf(&tarcmd, "tar -xf %s/.ptest.tgz", argv[3]);
 		system(tarcmd);
 	}
-
-
+	
+	if (opts.copy_section) {
+		printf("\n[+] Copying section data from '%s' into output file '%s'\n", argv[3], argv[4]);
+		section_name = argv[3];
+		outfile = argv[4];
+		ssize_t section_size = get_section_pointer(desc, section_name, &ptr);
+		if (section_size < 0) {
+			printf("[!] Cannot locate section %s\n", section_name);
+			goto done;
+		}
+		fd = open(outfile, O_WRONLY|O_CREAT|O_TRUNC, S_IRWXU|S_IRWXG);
+		if (fd < 0) {
+			fprintf(stderr, "Unable to open %s: %s\n", outfile, strerror(errno));
+			goto done;
+		}
+		if (write(fd, (char *)ptr, section_size) != section_size) {
+			perror("write");
+			goto done;
+		}
+		close(fd);
+	}
+					 		
+				
+				
 done:
+	printf("\n");
 	unload_ecfs_file(desc);
 }
