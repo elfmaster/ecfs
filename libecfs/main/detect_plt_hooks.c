@@ -13,7 +13,7 @@ int main(int argc, char **argv)
 	char *progname;
 	int i;
 	char *libname;
-	long evil_addr;
+	long evil_addr = 0;
 	
 	if (argc < 2) {
 		printf("Usage: %s <ecfs_file>\n", argv[0]);
@@ -28,16 +28,18 @@ int main(int argc, char **argv)
 	for (i = 0; i < desc->ehdr->e_shnum; i++) {
 		if (desc->shdr[i].sh_type == SHT_INJECTED) {
 			libname = strdup(&desc->shstrtab[desc->shdr[i].sh_name]);
-			printf("[!] Found malicously injected shared library: %s\n", libname);
+			printf("[!] Found malicously injected ET_DYN (Dynamic ELF): %s - base: %lx\n", libname, desc->shdr[i].sh_addr);
 		}
 	}
 	pltgot_info_t *pltgot;
 	int ret = get_pltgot_info(desc, &pltgot);
 	for (i = 0; i < ret; i++) {
 		if (pltgot[i].got_entry_va != pltgot[i].shl_entry_va && pltgot[i].got_entry_va != pltgot[i].plt_entry_va)
-			printf("[!] Found PLT/GOT hook, function 'name' is pointing at %lx instead of %lx\n", 
+			printf("[!] Found PLT/GOT hook: A function is pointing at %lx instead of %lx\n", 
 				pltgot[i].got_entry_va, evil_addr = pltgot[i].shl_entry_va);
 	}
+	if (evil_addr == 0)
+		goto done;
 	ret = get_dynamic_symbols(desc, &dsyms);
 	for (i = 0; i < ret; i++) {
 		if (dsyms[i].symval == evil_addr) {
@@ -45,6 +47,7 @@ int main(int argc, char **argv)
 			break;
 		}
 	}
+done:
 	return 0;
 }
 
