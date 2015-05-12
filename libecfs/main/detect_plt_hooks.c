@@ -32,22 +32,22 @@ int main(int argc, char **argv)
 		}
 	}
 	pltgot_info_t *pltgot;
-	int ret = get_pltgot_info(desc, &pltgot);
-	for (i = 0; i < ret; i++) {
-		if (pltgot[i].got_entry_va != pltgot[i].shl_entry_va && pltgot[i].got_entry_va != pltgot[i].plt_entry_va)
+	int gotcount = get_pltgot_info(desc, &pltgot);
+	for (i = 0; i < gotcount; i++) {
+		if (pltgot[i].got_entry_va != 
+		pltgot[i].shl_entry_va && 
+		pltgot[i].got_entry_va != pltgot[i].plt_entry_va && pltgot[i].shl_entry_va != 0) {
 			printf("[!] Found PLT/GOT hook: A function is pointing at %lx instead of %lx\n", 
 				pltgot[i].got_entry_va, evil_addr = pltgot[i].shl_entry_va);
-	}
-	if (evil_addr == 0)
-		goto done;
-	ret = get_dynamic_symbols(desc, &dsyms);
-	for (i = 0; i < ret; i++) {
-		if (dsyms[i].symval == evil_addr) {
-			printf("[!] %lx corresponds to hijacked function: %s\n", dsyms[i].symval, &dsyms[i].strtab[dsyms[i].nameoffset]);
-			break;
+			int symcount = get_dynamic_symbols(desc, &dsyms);
+			for (i = 0; i < symcount; i++) {
+				if (dsyms[i].symval == evil_addr) {
+					printf("[!] %lx corresponds to hijacked function: %s\n", dsyms[i].symval, &dsyms[i].strtab[dsyms[i].nameoffset]);
+				break;
+				}
+			}
 		}
 	}
-done:
 	return 0;
 }
 
