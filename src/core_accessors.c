@@ -126,7 +126,12 @@ char * get_envp_strval(handle_t *handle, const char *envname)
 	uint64_t stack_offset;
 	char *retval = NULL;
 	int i;
-
+	
+	/*
+	 * Get stack offset and then find which program header
+	 * it corresponds to. From there we can locate the environment
+	 * variable ascii data. e.g. LD_PRELOAD=<strval>\0LD_BIND_NOW=1\0
+	 */
 	stack_offset = get_internal_sh_offset(elfdesc, memdesc, STACK);
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
 		if (phdr[i].p_offset == stack_offset) {
@@ -145,8 +150,6 @@ char * get_envp_strval(handle_t *handle, const char *envname)
 			for (i = 0; i < STACK_CHUNK_SIZE; i++) {
 				if (!strncmp(&stack_ptr[i], envname, envlen)) {
 					p = &stack_ptr[i + envlen];
-					if (*p == '"')
-						p++;
 					retval = (char *)heapAlloc(currsize);
 					for (c = 0; *p != '\0'; p++) {
 						if (c > currsize - 1) 
@@ -159,6 +162,42 @@ char * get_envp_strval(handle_t *handle, const char *envname)
 		}	
 	}
 	return retval;
+}
+
+int mark_preloaded_libs(handle_t *handle, struct lib_mappings *lm)
+{
+        elfdesc_t *elfdesc = handle->elfdesc;
+        memdesc_t *memdesc = handle->memdesc;
+        ElfW(Phdr) *phdr = elfdesc->phdr;
+        uint8_t *mem = elfdesc->mem;
+	char *value, **preloaded;
+	int len, i, c;
+
+	if ((value = get_envp_strval(handle, "LD_PRELOAD")) == NULL) {
+		log_msg(__LINE__, "get_envp_strval() failed");
+		return -1;
+	}
+	
+	int index_count = 1;
+	preloaded = (char **)heapAlloc(index_count * sizeof(char *));
+	
+	len = strlen(value);
+	for (i = 0; i < len; i++) {
+		if (value[i] == '\0')
+			break;	
+		if (value[i] == 0x20) {
+			preloaded[index_count - 1][c] = '\0';
+			index_count += 1;
+			c = 0;
+			preloaded = realloc(preloaded, index_count * sizeof(char *));
+			continue;
+		}
+		preloaded[index_count - 1][c++] = value[i];
+	}	
+	for (i = 0; i < index_count; i++) {
+		printf("preloaded_libs: %s\n", preloaded[i]);
+	}
+	return 0;		
 }
 
 ssize_t check_segments_for_elf_objects(handle_t *handle, struct lib_mappings *lm, struct elfmap **elfmaps)
