@@ -116,7 +116,7 @@ static int is_elf_mapping(uint8_t *mem)
 #define STACK_CHUNK_SIZE 8192
 #define MAX_PRELOADS 64
 
-ssize_t detect_preloaded_libs(handle_t *handle, struct lib_mappings *lm, struct elfmap **elfmaps)
+char * get_envp_strval(handle_t *handle, const char *envname)
 {
 	elfdesc_t *elfdesc = handle->elfdesc;
         memdesc_t *memdesc = handle->memdesc;
@@ -124,6 +124,7 @@ ssize_t detect_preloaded_libs(handle_t *handle, struct lib_mappings *lm, struct 
         uint8_t *mem = elfdesc->mem;
 	uint8_t *stack_ptr;
 	uint64_t stack_offset;
+	char *retval = NULL;
 	int i;
 
 	stack_offset = get_internal_sh_offset(elfdesc, memdesc, STACK);
@@ -132,9 +133,9 @@ ssize_t detect_preloaded_libs(handle_t *handle, struct lib_mappings *lm, struct 
 			/*
 		         * XXX change to 'char **preloaded' and use realloc's on sizeof(char *) * N
 			 */
-			char *preloaded[MAX_PRELOADS], *p;
-			int prld_index, c;
-			const int ldplen = strlen("LD_PRELOAD=");
+			char *p;
+			size_t c, currsize = MAX_PATH;
+			const int envlen = strlen(envname) + 1; // + 1 to account for '='
 			/*
 			 * The environment variable strings are going to be right
 			 * after the auxiliary vector. Somewhere in the first 8192
@@ -142,31 +143,22 @@ ssize_t detect_preloaded_libs(handle_t *handle, struct lib_mappings *lm, struct 
 		         */
 			stack_ptr = (uint8_t *)&mem[phdr[i].p_offset + phdr[i].p_memsz - (STACK_CHUNK_SIZE)];			
 			for (i = 0; i < STACK_CHUNK_SIZE; i++) {
-				if (!strncmp(&stack_ptr[i], "LD_PRELOAD=", ldplen)) {
-					p = &stack_ptr[i + ldplen];
+				if (!strncmp(&stack_ptr[i], envname, envlen)) {
+					p = &stack_ptr[i + envlen];
 					if (*p == '"')
 						p++;
-					preloaded[prld_index] = (char *)heapAlloc(MAX_PATH);
-					for (prld_index = 0, c = 0; *p != '\0' && *p != '"';) {
-						preloaded[prld_index][c++] = *p; 
-						/*
-						 * if there's a space instead of a null byte
-						 * then multiple shared libs are given.
-						 */
-						if((*p + 1) == 0x20) {
-							preloaded[prld_index][c] = '\0';
-							preloaded[++prld_index] = (char *)heapAlloc(MAX_PATH);
-							c = 0;
-							continue;
-						} 
+					retval = (char *)heapAlloc(currsize);
+					for (c = 0; *p != '\0'; p++) {
+						if (c > currsize - 1) 
+							retval = realloc(retval, currsize += currsize);
+						retval[c++] = *p;
 					}
-					done:
-					preloaded[prld_index][c] = '\0';
+					retval[c] = '\0';
 				}
 			}
 		}	
 	}
-
+	return retval;
 }
 
 ssize_t check_segments_for_elf_objects(handle_t *handle, struct lib_mappings *lm, struct elfmap **elfmaps)
