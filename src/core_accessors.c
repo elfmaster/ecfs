@@ -173,12 +173,13 @@ char * get_envp_strval(handle_t *handle, const char *envname)
 	stack_offset = get_internal_sh_offset(elfdesc, memdesc, STACK);
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
 		if (phdr[i].p_offset == stack_offset) {
+			log_msg(__LINE__, "YO: found stack");
 			/*
 		         * XXX change to 'char **preloaded' and use realloc's on sizeof(char *) * N
 			 */
 			char *p;
 			size_t c, currsize = MAX_PATH;
-			const int envlen = strlen(envname) + 1; // + 1 to account for '='
+			const int envlen = strlen(envname); // + 1 to account for '='
 			/*
 			 * The environment variable strings are going to be right
 			 * after the auxiliary vector. Somewhere in the first 8192
@@ -186,15 +187,26 @@ char * get_envp_strval(handle_t *handle, const char *envname)
 		         */
 			stack_ptr = (uint8_t *)&mem[phdr[i].p_offset + phdr[i].p_memsz - (STACK_CHUNK_SIZE)];			
 			for (i = 0; i < STACK_CHUNK_SIZE; i++) {
+				log_msg(__LINE__, "envlen %d: %s", envlen, &stack_ptr[i]);
 				if (!strncmp(&stack_ptr[i], envname, envlen)) {
-					p = &stack_ptr[i + envlen];
+					log_msg(__LINE__, "Found LD_PRELOAD");
+					p = &stack_ptr[i + envlen + 1];
+					log_msg(__LINE__, "preloaded lib: %s", p);
 					retval = (char *)heapAlloc(currsize);
+					log_msg(__LINE__, "currsize: %d and retval: %p\n", currsize, retval);
 					for (c = 0; *p != '\0'; p++) {
-						if (c > currsize - 1) 
+						if (c > currsize - 1) {
+							log_msg(__LINE__, "realloc(%p, %d)", currsize + currsize);
 							retval = realloc(retval, currsize += currsize);
+						}
+						log_msg(__LINE__, "retval[%d] = %c", c, *p);
 						retval[c++] = *p;
+						log_msg(__LINE__, "set retval");
 					}
+					log_msg(__LINE__, "retval[%d] = 0", c);
 					retval[c] = '\0';
+					log_msg(__LINE__, "it was set :)");
+					return retval;
 				}
 			}
 		}	
@@ -209,16 +221,17 @@ int mark_preloaded_libs(handle_t *handle, struct lib_mappings *lm)
         ElfW(Phdr) *phdr = elfdesc->phdr;
         uint8_t *mem = elfdesc->mem;
 	char *value, **preloaded;
-	int len, i, c;
+	int len, i, j, c;
 
 	if ((value = get_envp_strval(handle, "LD_PRELOAD")) == NULL) {
 		log_msg(__LINE__, "get_envp_strval() failed");
 		return -1;
 	}
 	
+	log_msg(__LINE__, "got value: %s", value);
 	int index_count = 1;
 	preloaded = (char **)heapAlloc(index_count * sizeof(char *));
-	
+	log_msg(__LINE__, "allocated preloaded");
 	len = strlen(value);
 	for (i = 0; i < len; i++) {
 		if (value[i] == '\0')
@@ -233,7 +246,15 @@ int mark_preloaded_libs(handle_t *handle, struct lib_mappings *lm)
 		preloaded[index_count - 1][c++] = value[i];
 	}	
 	for (i = 0; i < index_count; i++) {
-		printf("preloaded_libs: %s\n", preloaded[i]);
+		for (j = 0; j < lm->libcount; j++) {
+			log_msg(__LINE__, "preloaded: %s", preloaded[i]);
+			if (!strcmp(preloaded[i], lm->libs[j].path)) {
+#if DEBUG
+				log_msg(__LINE__, "found preloaded lib: %s\n", preloaded);
+#endif
+				lm->libs[j].preloaded++;
+			}
+		}
 	}
 	xfree(value);
 	return 0;		
@@ -393,6 +414,7 @@ ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int typ
 	}
 	return 0;
 }
+
 static ssize_t get_original_shdr_addr(int pid, const char *name)
 {
 	struct stat st;

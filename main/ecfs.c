@@ -503,7 +503,13 @@ int main(int argc, char **argv)
 	handle->elfmap_count = check_segments_for_elf_objects(handle, notedesc->lm_files, &handle->elfmaps);
 	if (handle->elfmap_count < 0) 
 		log_msg(__LINE__, "check_segments_for_elf_objects() has failed");
-
+	
+	/*
+	 * Mark preloaded libraries (LD_PRELOAD)
+	 */
+	ret = mark_preloaded_libs(handle, notedesc->lm_files);
+	if (ret < 0) 
+		log_msg(__LINE__, "mark_preloaded_libs() failed");
 	/*
 	 * Convert the core file into an actual ECFS file and write it
 	 * to disk.

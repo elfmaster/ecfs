@@ -264,6 +264,7 @@ struct lib_mappings {
 		size_t size;
 		uint32_t flags; // PF_W|PF_R etc.
 		int injected; // to signify that the file was an injected dll
+		int preloaded; // to signify that the file was a preloaded dll
 		char name[MAX_LIB_NAME + 1];
 		char path[MAX_LIB_PATH + 1];
 	} libs[4096];
