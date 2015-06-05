@@ -463,14 +463,14 @@ int get_shlib_mapping_names(ecfs_elf_t *desc, char ***shlvec)
 	ElfW(Shdr) *shdr = desc->shdr;
 	
 	for (count = 0, i = 0; i < desc->ehdr->e_shnum; i++) 
-		if (shdr[i].sh_type == SHT_SHLIB || shdr[i].sh_type == SHT_INJECTED)
+		if (shdr[i].sh_type == SHT_SHLIB || shdr[i].sh_type == SHT_INJECTED || shdr[i].sh_type == SHT_PRELOADED)
 			count++;
 	if (count == 0)
 		return 0;
 	
 	*shlvec = calloc(count + 1, sizeof(char *));
 	for (c = 0, i = 0; i < desc->ehdr->e_shnum; i++) {
-		if (shdr[i].sh_type == SHT_SHLIB || shdr[i].sh_type == SHT_INJECTED) 
+		if (shdr[i].sh_type == SHT_SHLIB || shdr[i].sh_type == SHT_INJECTED || shdr[i].sh_type == SHT_PRELOADED) 
 			*((*shlvec) + c++) = strdup(&shstrtab[shdr[i].sh_name]);
 	}	
 	return count;

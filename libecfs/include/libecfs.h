@@ -29,7 +29,7 @@
  * Custom shdr type
  */
 #define SHT_INJECTED 0x200000
-
+#define SHT_PRELOADED 0x300000
 /*
  * Socket protocol
  */
