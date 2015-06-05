@@ -187,25 +187,15 @@ char * get_envp_strval(handle_t *handle, const char *envname)
 		         */
 			stack_ptr = (uint8_t *)&mem[phdr[i].p_offset + phdr[i].p_memsz - (STACK_CHUNK_SIZE)];			
 			for (i = 0; i < STACK_CHUNK_SIZE; i++) {
-				log_msg(__LINE__, "envlen %d: %s", envlen, &stack_ptr[i]);
 				if (!strncmp(&stack_ptr[i], envname, envlen)) {
-					log_msg(__LINE__, "Found LD_PRELOAD");
 					p = &stack_ptr[i + envlen + 1];
-					log_msg(__LINE__, "preloaded lib: %s", p);
 					retval = (char *)heapAlloc(currsize);
-					log_msg(__LINE__, "currsize: %d and retval: %p\n", currsize, retval);
 					for (c = 0; *p != '\0'; p++) {
-						if (c > currsize - 1) {
-							log_msg(__LINE__, "realloc(%p, %d)", currsize + currsize);
+						if (c > currsize - 1) 
 							retval = realloc(retval, currsize += currsize);
-						}
-						log_msg(__LINE__, "retval[%d] = %c", c, *p);
 						retval[c++] = *p;
-						log_msg(__LINE__, "set retval");
 					}
-					log_msg(__LINE__, "retval[%d] = 0", c);
 					retval[c] = '\0';
-					log_msg(__LINE__, "it was set :)");
 					return retval;
 				}
 			}
@@ -220,40 +210,32 @@ int mark_preloaded_libs(handle_t *handle, struct lib_mappings *lm)
         memdesc_t *memdesc = handle->memdesc;
         ElfW(Phdr) *phdr = elfdesc->phdr;
         uint8_t *mem = elfdesc->mem;
-	char *value, **preloaded;
+	char *value, *base;
 	int len, i, j, c;
 
 	if ((value = get_envp_strval(handle, "LD_PRELOAD")) == NULL) {
 		log_msg(__LINE__, "get_envp_strval() failed");
 		return -1;
 	}
-	
-	log_msg(__LINE__, "got value: %s", value);
-	int index_count = 1;
-	preloaded = (char **)heapAlloc(index_count * sizeof(char *));
-	log_msg(__LINE__, "allocated preloaded");
-	len = strlen(value);
-	for (i = 0; i < len; i++) {
-		if (value[i] == '\0')
-			break;	
-		if (value[i] == 0x20) {
-			preloaded[index_count - 1][c] = '\0';
-			index_count += 1;
-			c = 0;
-			preloaded = realloc(preloaded, index_count * sizeof(char *));
-			continue;
-		}
-		preloaded[index_count - 1][c++] = value[i];
-	}	
-	for (i = 0; i < index_count; i++) {
-		for (j = 0; j < lm->libcount; j++) {
-			log_msg(__LINE__, "preloaded: %s", preloaded[i]);
-			if (!strcmp(preloaded[i], lm->libs[j].path)) {
-#if DEBUG
-				log_msg(__LINE__, "found preloaded lib: %s\n", preloaded);
-#endif
-				lm->libs[j].preloaded++;
-			}
+	/*
+	 * XXX 
+	 * we need to add code that properly handles multiple shared library
+	 * paths being passed to LD_PRELOAD. Currently we handle:
+	 * LD_PRELOAD=./some_lib.so
+	 * 
+	 * but we fail to handle
+	 * LD_PRELOAD=./some_lib.so /lib/x86_64/libvid.so.2 
+	 *
+	 */
+	for (j = 0; j < lm->libcount; j++) {
+		base = strrchr(value, '/');
+		if (base)
+			base += 1;
+		else
+			base = value;
+		if (!strcmp(base, lm->libs[j].name)) {
+			log_msg(__LINE__, "found preloaded lib: %s", lm->libs[j].path);
+			lm->libs[j].preloaded++;
 		}
 	}
 	xfree(value);

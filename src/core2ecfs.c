@@ -696,7 +696,14 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	 * libc.so.data, .libc.so.relro, etc. (approx 3 mappings/sections for each lib)
 	 */
 		for (i = 0; i < notedesc->lm_files->libcount; i++) {
-			shdr[scount].sh_type = notedesc->lm_files->libs[i].injected ? SHT_INJECTED : SHT_SHLIB;
+			if (notedesc->lm_files->libs[i].preloaded) 
+				shdr[scount].sh_type = SHT_PRELOADED;
+			else
+			if (notedesc->lm_files->libs[i].injected)
+				shdr[scount].sh_type = SHT_INJECTED;
+			else
+				shdr[scount].sh_type = SHT_SHLIB;
+			//shdr[scount].sh_type = notedesc->lm_files->libs[i].injected ? SHT_INJECTED : SHT_SHLIB;
 			shdr[scount].sh_offset = notedesc->lm_files->libs[i].offset;
 			shdr[scount].sh_addr = notedesc->lm_files->libs[i].addr;
 			shdr[scount].sh_flags = SHF_ALLOC;
