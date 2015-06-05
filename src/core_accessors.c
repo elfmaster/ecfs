@@ -116,38 +116,6 @@ static int is_elf_mapping(uint8_t *mem)
 #define STACK_CHUNK_SIZE 8192
 #define MAX_PRELOADS 64
 
-/*
- * This function locates the environment variable
- * ascii data on the stack and loads them into a
- * heap allocated buffer. We can then store this in
- * our custom .environ ELF section.
- * We want the ascii data after the auxv
- * [argc][argv0][argv1][argvN][envp0][envp1][envpN][auxv][ascii_data]
- */
-char * get_envp_ascii(handle_t *handle)
-{
-	elfdesc_t *elfdesc = handle->elfdesc;
-        memdesc_t *memdesc = handle->memdesc;
-        ElfW(Phdr) *phdr = elfdesc->phdr;
-        uint8_t *mem = elfdesc->mem;
-        uint8_t *stack_ptr;
-        uint64_t stack_offset;
-        char *retval = NULL;
-        int i;
-
-        /*
-         * Get stack offset and then find which program header
-         * it corresponds to. From there we can locate the environment
-         * variable ascii data. e.g. LD_PRELOAD=<strval>\0LD_BIND_NOW=1\0
-         */
-        stack_offset = get_internal_sh_offset(elfdesc, memdesc, STACK);
-        for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
-                if (phdr[i].p_offset == stack_offset) {
-		}
-	}
-}
-		
-
 
 /*
  * This function will locate a given environment variable
@@ -173,7 +141,6 @@ char * get_envp_strval(handle_t *handle, const char *envname)
 	stack_offset = get_internal_sh_offset(elfdesc, memdesc, STACK);
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
 		if (phdr[i].p_offset == stack_offset) {
-			log_msg(__LINE__, "YO: found stack");
 			/*
 		         * XXX change to 'char **preloaded' and use realloc's on sizeof(char *) * N
 			 */
