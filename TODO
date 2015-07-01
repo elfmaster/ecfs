@@ -1,0 +1,27 @@
+
+-- Difficult issues
+
+1. Fix heuristics.c so that code injection detection from 
+false positives. This detects shared libraries that were
+injected in some way other than dlopen() and LD_PRELOAD.
+probably with mmap() or __libc_dlopen_mode() or ptrace
+shellcode. 
+
+2. Currently in libecfs when retrieving the GOT info there
+are GOT entries that are filled with addresses other than
+what we guessed should be there by looking at the PLT and
+symbol table. Even if there is no shared library injection
+we get mismatched addresses in our GOT info code in libecfs
+this must be fixed. 
+
+3. Currently some injected objects (SHT_INJECTED) such as when
+an ET_REL has been found in the process. We create a section
+header that only covers the text of that object, and not the
+data segment. This is especially important for injected executables
+or shared objects, since often we want to extract these for
+analysis after the fact.
+
+-- Medium issues
+
+1. Add code to readecfs so that it builds section headers on extracted
+objects 'with readecfs -O' option. 

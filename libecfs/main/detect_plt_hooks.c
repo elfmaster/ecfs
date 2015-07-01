@@ -1,6 +1,6 @@
 /*
  * This program will detect when a shared library
- * has been injected, which one it is, and which
+ * has been injected, or preloaded, and detect when
  * functions have been hijacked.
  */
 
