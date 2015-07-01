@@ -29,6 +29,10 @@ int main(int argc, char **argv)
 		if (desc->shdr[i].sh_type == SHT_INJECTED) {
 			libname = strdup(&desc->shstrtab[desc->shdr[i].sh_name]);
 			printf("[!] Found malicously injected ET_DYN (Dynamic ELF): %s - base: %lx\n", libname, desc->shdr[i].sh_addr);
+		} else
+		if (desc->shdr[i].sh_type == SHT_PRELOADED) {
+			libname = strdup(&desc->shstrtab[desc->shdr[i].sh_name]);
+			printf("[!] Found a preloaded shared library (LD_PRELOAD): %s - base: %lx\n", libname, desc->shdr[i].sh_addr);
 		}
 	}
 	pltgot_info_t *pltgot;
