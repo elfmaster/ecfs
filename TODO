@@ -23,5 +23,8 @@ analysis after the fact.
 
 -- Medium issues
 
-1. Add code to readecfs so that it builds section headers on extracted
+4. Add code to readecfs so that it builds section headers on extracted
 objects 'with readecfs -O' option. 
+
+5. Enhance SHT_INJECTION so that when it detects ELF objects (in core_accessors.c)
+that it also marks the data segment as INJECTED.

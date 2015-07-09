@@ -209,6 +209,17 @@ int mark_preloaded_libs(handle_t *handle, struct lib_mappings *lm)
 	return 0;		
 }
 
+/*
+ * Detects ELF objects (possibly injected)
+ * that are not listed as known shared libraries.
+ * This is great for detecting shared libraries
+ * that are injected and stored in anonymous memory
+ * mappings.
+ * XXX must add code so that it grabs more than just
+ * the text segment, we should consider that the following
+ * segment might be a data segment and should include that
+ * in the section header table as well.
+ */
 ssize_t check_segments_for_elf_objects(handle_t *handle, struct lib_mappings *lm, struct elfmap **elfmaps)
 {
 	elfdesc_t *elfdesc = handle->elfdesc;
@@ -227,13 +238,13 @@ ssize_t check_segments_for_elf_objects(handle_t *handle, struct lib_mappings *lm
 			continue;
 		if (ret == ET_DYN) {
 			/*
-			 * Is this dynamic object the program itself? Such as with a PIE
-			 * compiled program like sshd.
+			 * Is this dynamic object the main program itself? Such as with a PIE
+			 * compiled program like sshd. If so we're not interested
 			 */
 			if (phdr[i].p_vaddr == elfdesc->textVaddr)
 				continue;
 			/*
-			 * Is this the VDSO?
+			 * Is this the VDSO? if so we don't want it
 			 */
 			if (phdr[i].p_vaddr == memdesc->vdso.base)
 				continue;
