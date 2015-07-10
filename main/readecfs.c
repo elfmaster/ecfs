@@ -47,6 +47,22 @@ struct {
 	int all;
 } opts = {0};
 
+static char * lookup_dsym(unsigned long addr, ecfs_elf_t *desc)
+{
+	int i, ret;
+	ecfs_sym_t *syms;
+	char *symname = "<unknown>";
+
+	ret = get_dynamic_symbols(desc, &syms);
+	for (i = 0; i < ret; i++)
+		if (syms[i].symval == addr) {
+			symname = strdup(&desc->dynstr[syms[i].nameoffset]);
+			break;
+		}
+	
+	return symname;
+}
+
 static void print_registers(elf_gregset_t *reg)
 {
 	struct user_regs_struct pt_reg;
@@ -292,10 +308,10 @@ usage:
 		if (!(desc->elfstats->personality & ELF_STATIC)) {
 			printf("- Printing out GOT/PLT characteristics (pltgot_info_t):\n");
 			ret = get_pltgot_info(desc, &pltgot);
-			printf("gotsite            gotvalue          gotshlib          pltval\n");
+			printf("gotsite            gotvalue          gotshlib          pltval              symbol\n");
 			for (i = 0; i < ret; i++) 
-				printf("0x%-16lx 0x%-16lx 0x%-16lx 0x%-16lx\n", pltgot[i].got_site, pltgot[i].got_entry_va, 
-				pltgot[i].shl_entry_va, pltgot[i].plt_entry_va);
+				printf("0x%-16lx 0x%-16lx 0x%-16lx 0x%-16lx %s\n", pltgot[i].got_site, pltgot[i].got_entry_va, 
+				pltgot[i].shl_entry_va, pltgot[i].plt_entry_va, lookup_dsym(pltgot[i].shl_entry_va, desc));
 			printf("\n");
 		}
 	}
