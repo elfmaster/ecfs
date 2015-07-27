@@ -37,3 +37,15 @@ name that is associated with each listed GOT entry.
 
 C.2. Fix libecfs bug where it adds a base to the pltVaddr resulting in an incorrect
 address
+
+
+-- Bugs of unknown difficulty
+
+D.1 When trying to create an ecfs-core from a UPX packed sshd process
+
+Jul 26 17:45:46 elfmaster kernel: [23122.882602] ecfs64[17306]: segfault at 328000 ip 000000000040865a sp 00007fff93be6cd0 error 4 in ecfs64[400000+2700
+0]
+
+check_segments_for_elf_objects() is the function that is segfaulting
+
+
