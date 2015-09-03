@@ -29,6 +29,7 @@ objects 'with readecfs -O' option.
 B.5. Enhance SHT_INJECTION so that when it detects ELF objects (in core_accessors.c)
 that it also marks the data segment as INJECTED.
 
+B.6. Add support for reconstruction .init_array and .fini_array sections
 
 -- Easy
 
