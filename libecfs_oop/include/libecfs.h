@@ -19,10 +19,16 @@
 #include <sys/procfs.h>         /* struct elf_prstatus */
 #include <sys/resource.h>
 #include <stdio.h>
-
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include "util.h"
+
+#include <iostream>
+#include <fstream>
+
+using namespace std;
+
 
 #define MAX_ARGS 256 // for .arglist
 /*
@@ -45,6 +51,60 @@ typedef struct elf_stats {
 	unsigned int personality; // if (personality & ELF_STATIC)
 } elf_stat_t;
 
+class Ecfs {
+	private:
+ 		uint8_t *mem;          /* raw memory pointer */
+    		char *shstrtab;        /* shdr string table */
+    		char *strtab;          /* .symtab string table */
+    		char *dynstr;          /* .dynstr string table */
+    		unsigned long *pltgot;  /* pointer to .plt.got */
+    		ElfW(Ehdr) * ehdr;     /* ELF Header pointer */
+    		ElfW(Phdr) * phdr;     /* Program header table pointer */
+    		ElfW(Shdr) * shdr;     /* Section header table pointer */
+    		ElfW(Nhdr) * nhdr;     /* ELF Notes section pointer */
+    		ElfW(Dyn)  *dyn;       /* Dynamic segment pointer */
+    		ElfW(Sym)  *symtab;    /* Pointer to array of symtab symbol structs */
+    		ElfW(Sym)  *dynsym;    /* Pointer to array of dynsym symbol structs */
+    		ElfW(Addr) textVaddr;  /* Text segment virtual address */
+    		ElfW(Addr) dataVaddr;  /* data segment virtual address */
+   		ElfW(Addr) dynVaddr;   /* dynamic segment virtual address */
+    		ElfW(Addr) pltVaddr;
+    		ElfW(Off) textOff;
+    		ElfW(Off) dataOff;
+    		ElfW(Off) dynOff;
+    		ElfW(Rela) *plt_rela;  /* points to .rela.plt section */
+    		ElfW(Rela) *dyn_rela;  /* points to .rela.dyn section */
+    		ssize_t plt_rela_count; /* number of .rela.plt entries */
+    		ssize_t dyn_rela_count; /* number of .rela.dyn entries */
+    		size_t filesize;       /* total file size              */
+    		size_t dataSize;       /* p_memsz of data segment      */
+    		size_t textSize;       /* p_memsz of text segment      */
+    		size_t dynSize;        /* p_memsz of dynamnic segment  */
+    		size_t pltSize; /* size of .plt section */
+    		int fd;                /* A copy of the file descriptor to the file */
+    		int pie;        /* is the process from a PIE executable? */
+    		elf_stat_t *elfstats;
+		ifstream ecfs_file;
+		char *filepath;
+	public:
+		/*
+		 * Constructor
+		 */
+		Ecfs(const char *path) {
+			filepath = xstrdup(path);
+			ecfs_file.open(path, ios::in|ios::binary);
+		}
+		void open(const char *path) {
+			filepath = xstrdup(path);
+			ecfs_file.open(path, ios::in|ios::binary);
+		}	
+		
+};
+
+		
+		
+				
+	
 typedef struct ecfs_elf {
 	uint8_t *mem;          /* raw memory pointer */
 	char *shstrtab;        /* shdr string table */

@@ -14,17 +14,17 @@ asan_CC = clang
 perf_CFLAGS = -g -O3 -fPIC -Wall -m${B}
 perf_LDFLAGS = -ldwarf -lelf
 perf_TGT = ${BINS}
-perf_CC = gcc
+perf_CC = g++
 
 prod_CFLAGS = -O3 -Wall -DNDEBUG -D_FORTIFY_SOURCE=2 -fPIC -m${B}
 prod_LDFLAGS = -ldwarf -lelf -pie
 prod_TGT = ${BINS}
-prod_CC = gcc
+prod_CC = g++
 
 shared_CFLAGS = -fPIC -m${B}
 shared_LDFLAGS = -shared -Wl,-soname,libecfsreader${B}.so.1 -lc -m${B}
 shared_TGT = ${BIN_DIR}/${V}/${B}/libecfsreader${B}.so.1
-shared_CC = gcc
+shared_CC = g++
 
 OBJ_DIR = build
 SRC_DIR = src

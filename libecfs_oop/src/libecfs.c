@@ -14,7 +14,7 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 	fd = xopen(path, O_RDONLY);
 	xfstat(fd, &st);
 	ecfs->filesize = st.st_size;
-	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
+	mem = (uint8_t *)mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
 	if (mem == MAP_FAILED) {
 		perror("mmap");
 		return NULL;
@@ -468,7 +468,7 @@ int get_shlib_mapping_names(ecfs_elf_t *desc, char ***shlvec)
 	if (count == 0)
 		return 0;
 	
-	*shlvec = calloc(count + 1, sizeof(char *));
+	*shlvec = (char **)calloc(count + 1, sizeof(char *));
 	for (c = 0, i = 0; i < desc->ehdr->e_shnum; i++) {
 		if (shdr[i].sh_type == SHT_SHLIB || shdr[i].sh_type == SHT_INJECTED || shdr[i].sh_type == SHT_PRELOADED) 
 			*((*shlvec) + c++) = strdup(&shstrtab[shdr[i].sh_name]);
@@ -532,7 +532,7 @@ unsigned long get_fault_location(ecfs_elf_t *desc)
  */
 int get_arg_list(ecfs_elf_t *desc, char ***argv)
 {
-	int i, argc, c;
+	unsigned int i, argc, c;
 	ElfW(Ehdr) *ehdr = desc->ehdr;
 	ElfW(Shdr) *shdr = desc->shdr;
 	uint8_t *mem = desc->mem;
@@ -542,7 +542,7 @@ int get_arg_list(ecfs_elf_t *desc, char ***argv)
 
 	for (i = 0; i < ehdr->e_shnum; i++) {
 		if (!strcmp(&shstrtab[shdr[i].sh_name], ".arglist")) {
-			*argv = heapAlloc(sizeof(char *) * MAX_ARGS);		
+			*argv = (char **)heapAlloc(sizeof(char *) * MAX_ARGS);		
 			p = (char *)&mem[shdr[i].sh_offset];
 			for (argc = 0, c = 0; c < shdr[i].sh_size; ) {
 				*((*argv) + argc++) = xstrdup(p);
