@@ -8,7 +8,12 @@ int main(int argc, char **argv)
 		exit(0);
 	}
 	int i, ret;
-	ecfs_elf_t *desc;
+	Ecfs ecfs(argv[1]);
+	std::vector<fdinfo> fdinfo = ecfs.get_fdinfo();
+	for (i = 0; i < fdinfo.size(); i++) {
+		printf("path: %s\n", fdinfo[i].path);
+	}
+	#if 0
 	struct fdinfo *fdinfo;
 	struct elf_prstatus *prstatus;
 	ecfs_sym_t *dsyms, *lsyms;
@@ -78,6 +83,6 @@ int main(int argc, char **argv)
 
 
 return 0;
-				
+	#endif			
 }	
 

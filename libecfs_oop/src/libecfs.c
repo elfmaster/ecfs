@@ -1,9 +1,16 @@
+
+/*
+ * libecfs.cpp
+ * This source code was directly transcribed from libecfs.c. Therefore because the original code was
+ * written in C, there is still a great deal of C code.
+ */
+
 #include "../include/libecfs.h"
 #include "../include/util.h"
 
-ecfs_elf_t * load_ecfs_file(const char *path)
-{
-	ecfs_elf_t *ecfs = (ecfs_elf_t *)heapAlloc(sizeof(ecfs_elf_t));
+int Ecfs::load(const char *path)
+{	
+	Ecfs *ecfs = this;
 	uint8_t *mem;
 	ElfW(Ehdr) *ehdr;
 	ElfW(Phdr) *phdr;
@@ -17,19 +24,19 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 	mem = (uint8_t *)mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
 	if (mem == MAP_FAILED) {
 		perror("mmap");
-		return NULL;
+		return -1;
 	}
 	
 	if (memcmp(mem, "\x7f\x45\x4c\x46", 4) != 0)
-		return NULL;
+		return -1;
 	
 	ehdr = (ElfW(Ehdr) *)mem;
 	
 	if (ehdr->e_type != ET_NONE && ehdr->e_type != ET_CORE) 
-		return NULL;
+		return -1;
 	
 	if (ehdr->e_shoff == 0 || ehdr->e_shnum == 0 || ehdr->e_shstrndx == SHN_UNDEF) 
-		return NULL;
+		return -1;
 	
 	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
 	shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
@@ -137,30 +144,38 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 	ecfs->phdr = phdr;
 	ecfs->shdr = shdr;
 	ecfs->mem = mem;
-	return ecfs;
+	
+	return 0;
 }	
 
-int unload_ecfs_file(ecfs_elf_t *desc)
+void Ecfs::unload(void)
 {
-	return munmap(desc->mem, desc->filesize);
+	munmap(this->mem, this->filesize);
 }
 
 
-int get_fd_info(ecfs_elf_t *desc, struct fdinfo **fdinfo)
+std::vector<fdinfo> Ecfs::get_fdinfo(void)
 {
+	Ecfs *desc = this;
 	char *StringTable = desc->shstrtab;
 	ElfW(Shdr) *shdr = desc->shdr;
-	int i;
+	struct fdinfo *fdinfo_ptr;
+	std::vector <fdinfo> fdinfo_vec;
+	size_t items;
+	int i, j;
+
 	for (i = 0; i < desc->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".fdinfo")) {
-			*fdinfo = (struct fdinfo *)heapAlloc(shdr[i].sh_size);
-			memcpy(*fdinfo, &desc->mem[shdr[i].sh_offset], shdr[i].sh_size);
-			return shdr[i].sh_size / sizeof(struct fdinfo);
+			fdinfo_ptr = (struct fdinfo *)alloca(shdr[i].sh_size);
+			memcpy(fdinfo_ptr, &desc->mem[shdr[i].sh_offset], shdr[i].sh_size);
+			items = shdr[i].sh_size / sizeof(struct fdinfo);
+			fdinfo_vec.assign(fdinfo_ptr, fdinfo_ptr + items);
 		}
 	}
-	return -1;
+	return fdinfo_vec;
 }
 
+#if 0
 int get_prstatus_structs(ecfs_elf_t *desc, struct elf_prstatus **prstatus)
 {
 	char *StringTable = desc->shstrtab;
@@ -569,3 +584,4 @@ char * get_section_name_by_addr(ecfs_elf_t *desc, unsigned long addr)
 			return &shstrtab[shdr[i].sh_name];
 	return NULL;
 }
+#endif

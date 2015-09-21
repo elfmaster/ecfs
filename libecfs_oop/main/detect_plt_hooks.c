@@ -8,6 +8,7 @@
 
 int main(int argc, char **argv)
 {
+	#if 0
 	ecfs_elf_t *desc;
 	ecfs_sym_t *dsyms;
 	char *progname;
@@ -52,6 +53,7 @@ int main(int argc, char **argv)
 			}
 		}
 	}
+#endif
 	return 0;
 }
 
