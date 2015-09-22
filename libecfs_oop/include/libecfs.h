@@ -63,6 +63,7 @@ typedef struct ecfs_sym {
         uint8_t binding;   /* symbol bind, i.e STB_GLOBAL, STB_LOCAL */
         char *strtab; /* pointer to the symbols associated string table */
         int nameoffset;    /* Offset of symbol name into symbol strtab */
+	char *name;  /* A pointer into the string table, to the symbol name */
 } ecfs_sym_t;
 
 
@@ -142,10 +143,11 @@ class Ecfs {
 		int get_thread_count(void);	// get number of threads in process
 		char * get_exe_path(void);	// get path to original executable that spawned the process
 		std::vector<ecfs_sym> get_dynamic_symbols(void);	// get a vector of the complete .dynsym symbol table
+		std::vector<ecfs_sym> get_local_symbols(void);
 		int get_siginfo(siginfo_t *);	// will fill siginfo_t with the signal struct
 		ssize_t get_stack_ptr(uint8_t **); // will set pointer at .stack section and return the size
 		ssize_t get_heap_ptr(uint8_t **); // will set pointer at .heap section and return the size
-
+		
 		
 };		
 		

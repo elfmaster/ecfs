@@ -262,6 +262,7 @@ vector <ecfs_sym> Ecfs::get_dynamic_symbols(void)
 				syms[j].type = ELF32_ST_TYPE(dynsym[j].st_info);
 				syms[j].binding = ELF32_ST_BIND(dynsym[j].st_info);
 				syms[j].nameoffset = dynsym[j].st_name;
+				syms[j].name = &syms[j].strtab[syms[j].nameoffset];
 			}
 			ecfs_sym_vec.assign(syms, &syms[symcount]);
 		}
@@ -326,35 +327,37 @@ ssize_t Ecfs::get_heap_ptr(uint8_t **ptr)
 	return -1;
 }
 
-#if 0
-int get_local_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
+vector <ecfs_sym> Ecfs::get_local_symbols(void)
 {
-	int i, j;
-	ElfW(Ehdr) *ehdr = desc->ehdr;
-	ElfW(Shdr) *shdr = desc->shdr;
-	ssize_t symcount;
-	ElfW(Sym) *locsym = desc->symtab;
+        int i, j;
+        ElfW(Ehdr) *ehdr = this->ehdr;
+        ElfW(Shdr) *shdr = this->shdr;
+        ssize_t symcount;
+        ElfW(Sym) *symtab = this->symtab;
+        vector <ecfs_sym> ecfs_sym_vec;
+        ecfs_sym_t *syms;
 
-	for (i = 0; i < ehdr->e_shnum; i++) {
-		if (shdr[i].sh_type == SHT_SYMTAB) {
-			symcount = shdr[i].sh_size / sizeof(ElfW(Sym));
-			size_t alloc_len = symcount * sizeof(ecfs_sym_t);
-			*syms = (ecfs_sym_t *)heapAlloc(alloc_len);
-			for (j = 0; j < symcount; j++) {
-				(*syms)[j].strtab = desc->dynstr;
-				(*syms)[j].symval = locsym[j].st_value;
-				(*syms)[j].size = locsym[j].st_size;
-				(*syms)[j].type = ELF32_ST_TYPE(locsym[j].st_info);
-				(*syms)[j].binding = ELF32_ST_BIND(locsym[j].st_info);
-				(*syms)[j].nameoffset = locsym[j].st_name;
-			}
-			return symcount;
-		}
-	}
-	return 0;
+        for (i = 0; i < ehdr->e_shnum; i++) {
+                if (shdr[i].sh_type == SHT_SYMTAB) {
+                        symcount = shdr[i].sh_size / sizeof(ElfW(Sym));
+                        size_t alloc_len = symcount * sizeof(ecfs_sym_t);
+                        syms = (ecfs_sym_t *)alloca(alloc_len);
+                        for (j = 0; j < symcount; j++) {
+                                syms[j].strtab = this->strtab;
+                                syms[j].symval = symtab[j].st_value;
+                                syms[j].size = symtab[j].st_size;
+                                syms[j].type = ELF32_ST_TYPE(symtab[j].st_info);
+                                syms[j].binding = ELF32_ST_BIND(symtab[j].st_info);
+                                syms[j].nameoffset = symtab[j].st_name;
+				syms[j].name = (char *)&this->strtab[symtab[j].st_name];
+                        }
+                        ecfs_sym_vec.assign(syms, &syms[symcount]);
+                }
+        }
+        return ecfs_sym_vec; // by value
 }
-						
 
+#if 0
 ssize_t get_ptr_for_va(ecfs_elf_t *desc, unsigned long vaddr, uint8_t **ptr)
 {
 	ElfW(Ehdr) *ehdr = desc->ehdr;

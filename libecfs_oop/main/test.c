@@ -10,6 +10,7 @@ int main(int argc, char **argv)
 	unsigned int i, ret;
 	Ecfs ecfs(argv[1]);
 	std::vector<ecfs_sym> dynsym;
+	std::vector<ecfs_sym> symtab;
 	std::vector<fdinfo> fdinfo = ecfs.get_fdinfo();
 	for (i = 0; i < fdinfo.size(); i++) {
 		printf("path: %s\n", fdinfo[i].path);
@@ -22,6 +23,10 @@ int main(int argc, char **argv)
 	for (i = 0; i < 5; i++) {
 		printf("dynsym st_value: %lx\n", dynsym[i].symval);
 	}
+	symtab = ecfs.get_local_symbols();
+	for (i = 0; i < symtab.size(); i++)
+		printf("symtab st_value: %lx\n", symtab[i].symval);
+
 	char *exepath = ecfs.get_exe_path();
 	printf("Executable path: %s\n", exepath);
 	
@@ -41,6 +46,7 @@ int main(int argc, char **argv)
 	printf("\n");
 	uint8_t *heapptr;
 	ssize_t heapsize = ecfs.get_heap_ptr(&heapptr);
+	printf("heapsize: %d bytes\n", heapsize);
 	for (i = 0; i < 32; i++)
 		printf("%02x", heapptr[i]);
 	printf("\n");
