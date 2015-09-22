@@ -144,7 +144,7 @@ class Ecfs {
 		std::vector<ecfs_sym> get_dynamic_symbols(void);	// get a vector of the complete .dynsym symbol table
 		int get_siginfo(siginfo_t *);	// will fill siginfo_t with the signal struct
 		ssize_t get_stack_ptr(uint8_t **); // will set pointer at .stack section and return the size
-		
+		ssize_t get_heap_ptr(uint8_t **); // will set pointer at .heap section and return the size
 
 		
 };		

@@ -297,15 +297,10 @@ ssize_t Ecfs::get_stack_ptr(uint8_t **ptr)
 {
 	char *StringTable = this->shstrtab;
 	ElfW(Shdr) *shdr = this->shdr;
-	int i, j;
-	uint8_t *p;
+	int i;
 	for (i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".stack")) {
 			*ptr = &this->mem[shdr[i].sh_offset];
-			p = *ptr;
-			printf("found .stack\n");
-			for (j = 0; j < shdr[i].sh_size; j++)
-				printf("%02x", p[j]);
 			return shdr[i].sh_size;
 		}
 	}
@@ -314,16 +309,15 @@ ssize_t Ecfs::get_stack_ptr(uint8_t **ptr)
 	return -1;
 }
 
-#if 0
-ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr)
+ssize_t Ecfs::get_heap_ptr(uint8_t **ptr)
 {
-	char *StringTable = desc->shstrtab;
-	ElfW(Shdr) *shdr = desc->shdr;
+	char *StringTable = this->shstrtab;
+	ElfW(Shdr) *shdr = this->shdr;
 	int i;
 
-	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+	for (i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".heap")) {
-			*ptr = &desc->mem[shdr[i].sh_offset];
+			*ptr = &this->mem[shdr[i].sh_offset];
 			return shdr[i].sh_size;
 		}
 	}
@@ -332,7 +326,7 @@ ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr)
 	return -1;
 }
 
-
+#if 0
 int get_local_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
 {
 	int i, j;

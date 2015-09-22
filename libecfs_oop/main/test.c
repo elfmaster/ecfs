@@ -19,7 +19,7 @@ int main(int argc, char **argv)
 		printf("pid: %d\n", prstatus[i].pr_pid);
 	}
 	dynsym = ecfs.get_dynamic_symbols();
-	for (i = 0; i < dynsym.size(); i++) {
+	for (i = 0; i < 5; i++) {
 		printf("dynsym st_value: %lx\n", dynsym[i].symval);
 	}
 	char *exepath = ecfs.get_exe_path();
@@ -38,7 +38,12 @@ int main(int argc, char **argv)
 	printf("stacksize: %d\n", stacksize);
 	for (i = 0; i < 32; i++)
 		printf("%02x", stackptr[i]);
-	
+	printf("\n");
+	uint8_t *heapptr;
+	ssize_t heapsize = ecfs.get_heap_ptr(&heapptr);
+	for (i = 0; i < 32; i++)
+		printf("%02x", heapptr[i]);
+	printf("\n");
 	#if 0
 	struct fdinfo *fdinfo;
 	struct elf_prstatus *prstatus;
