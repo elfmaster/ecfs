@@ -113,10 +113,11 @@ class Ecfs {
     		
 		elf_stat_t *elfstats;
 		char *filepath;
-		std::vector <pltgotinfo> pltgot_vector;
-		std::vector <fdinfo> fdinfo_vector;
-		std::vector <elf_prstatus> prstatus_vector;
 	public:
+                std::vector <pltgotinfo> pltgot_vector;
+                std::vector <fdinfo> fdinfo_vector;
+                std::vector <elf_prstatus> prstatus_vector;
+
 		/*
 		 * Constructor
 		 */
@@ -124,12 +125,13 @@ class Ecfs {
 			if (Ecfs::load(path) < 0) 
 				fprintf(stderr, "Unable to load ecfs-core file '%s' into Ecfs object\n", path);
 		}
-		int load (const char *);
+		int load (const char *); // invokes all other primary methods
 		void unload(void);
 		std::vector<fdinfo> get_fdinfo(void);
 		std::vector<elf_prstatus> get_prstatus(void);
-		
-};
+		int get_thread_count(void);
+		char * get_exe_path(void);
+};		
 		
 #define MAX_SYM_LEN 255
 

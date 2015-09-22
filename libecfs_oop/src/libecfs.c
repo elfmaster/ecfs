@@ -211,37 +211,37 @@ std::vector<elf_prstatus> Ecfs::get_prstatus(void)
 	return prstatus_vec;
 }
 
-#if 0
-int get_thread_count(ecfs_elf_t *desc)
+int Ecfs::get_thread_count(void)
 {
-	char *StringTable = desc->shstrtab;
-	ElfW(Shdr) *shdr = desc->shdr;
+	char *StringTable = this->shstrtab;
+	ElfW(Shdr) *shdr = this->shdr;
 	int i;
 
-	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+	for (i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".prstatus")) 
 			return shdr[i].sh_size / shdr[i].sh_entsize;
 	}
 	return -1;
 }
-		
-char * get_exe_path(ecfs_elf_t *desc)
+	
+char * Ecfs::get_exe_path(void)
 {
-	char *StringTable = desc->shstrtab;
-	ElfW(Shdr) *shdr = desc->shdr;
-	int i;
+	
+	char *StringTable = this->shstrtab;
+	ElfW(Shdr) *shdr = this->shdr;
 	char *ret;
-
-	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+	
+	for (int i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".exepath")) {
 			ret = (char *)heapAlloc(shdr[i].sh_size);
-			strcpy(ret, (char *)&desc->mem[shdr[i].sh_offset]);
+			strcpy(ret, (char *)&this->mem[shdr[i].sh_offset]);
 			return ret;	
 		}
 	}
 	return NULL;
 }
 
+#if 0
 
 int get_dynamic_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
 {

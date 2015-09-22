@@ -7,7 +7,7 @@ int main(int argc, char **argv)
 		printf("%s file\n", argv[0]);
 		exit(0);
 	}
-	int i, ret;
+	unsigned int i, ret;
 	Ecfs ecfs(argv[1]);
 	std::vector<fdinfo> fdinfo = ecfs.get_fdinfo();
 	for (i = 0; i < fdinfo.size(); i++) {
@@ -17,6 +17,8 @@ int main(int argc, char **argv)
 	for (i = 0; i < prstatus.size(); i++) {
 		printf("pid: %d\n", prstatus[i].pr_pid);
 	}
+	char *exepath = ecfs.get_exe_path();
+	printf("Executable path: %s\n", exepath);
 	#if 0
 	struct fdinfo *fdinfo;
 	struct elf_prstatus *prstatus;
