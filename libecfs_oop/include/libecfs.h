@@ -114,7 +114,8 @@ class Ecfs {
 		elf_stat_t *elfstats;
 		char *filepath;
 		std::vector <pltgotinfo> pltgot_vector;
-		
+		std::vector <fdinfo> fdinfo_vector;
+		std::vector <elf_prstatus> prstatus_vector;
 	public:
 		/*
 		 * Constructor
@@ -126,7 +127,7 @@ class Ecfs {
 		int load (const char *);
 		void unload(void);
 		std::vector<fdinfo> get_fdinfo(void);
-		
+		std::vector<elf_prstatus> get_prstatus(void);
 		
 };
 		

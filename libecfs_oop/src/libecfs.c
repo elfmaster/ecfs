@@ -160,37 +160,58 @@ std::vector<fdinfo> Ecfs::get_fdinfo(void)
 	char *StringTable = desc->shstrtab;
 	ElfW(Shdr) *shdr = desc->shdr;
 	struct fdinfo *fdinfo_ptr;
+	
+	/*
+	 * By default std::vector uses an allocator for the heap so we
+	 * can return the fdinfo_vec by reference, but we will go ahead
+	 * and do it by value
+	 */
 	std::vector <fdinfo> fdinfo_vec;
 	size_t items;
-	int i, j;
 
-	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+	for (int i = 0; i < desc->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".fdinfo")) {
 			fdinfo_ptr = (struct fdinfo *)alloca(shdr[i].sh_size);
 			memcpy(fdinfo_ptr, &desc->mem[shdr[i].sh_offset], shdr[i].sh_size);
 			items = shdr[i].sh_size / sizeof(struct fdinfo);
-			fdinfo_vec.assign(fdinfo_ptr, fdinfo_ptr + items);
+			fdinfo_vec.assign(fdinfo_ptr, &fdinfo_ptr[items]);
 		}
 	}
+    	/*
+       	 * In addition to returning a vector we assign the internal
+         * copy as well that can be used at any time until the Ecfs object is
+         * destructed.
+         */
+	this->fdinfo_vector = fdinfo_vec;
 	return fdinfo_vec;
 }
 
-#if 0
-int get_prstatus_structs(ecfs_elf_t *desc, struct elf_prstatus **prstatus)
+std::vector<elf_prstatus> Ecfs::get_prstatus(void)
 {
-	char *StringTable = desc->shstrtab;
-	ElfW(Shdr) *shdr = desc->shdr;
-	int i;
-	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+	char *StringTable = this->shstrtab;
+	ElfW(Shdr) *shdr = this->shdr;
+	struct elf_prstatus *prstatus;
+	std::vector <elf_prstatus> prstatus_vec;
+	size_t items;
+
+	for (int i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".prstatus")) {
-			*prstatus = (struct elf_prstatus *)heapAlloc(shdr[i].sh_size);
-			memcpy(*prstatus, &desc->mem[shdr[i].sh_offset], shdr[i].sh_size);
-			return shdr[i].sh_size / sizeof(struct elf_prstatus);
+			prstatus = (struct elf_prstatus *)alloca(shdr[i].sh_size);
+			memcpy(prstatus, &this->mem[shdr[i].sh_offset], shdr[i].sh_size);
+			items = shdr[i].sh_size / sizeof(struct elf_prstatus);
+			prstatus_vec.assign(prstatus, &prstatus[items]);
 		}
 	}
-	return -1;
+	/*
+	 * In addition to returning a vector we assign the internal
+	 * copy as well that can be used at any time until the Ecfs object is
+	 * destructed.
+	 */
+	this->prstatus_vector = prstatus_vec;
+	return prstatus_vec;
 }
 
+#if 0
 int get_thread_count(ecfs_elf_t *desc)
 {
 	char *StringTable = desc->shstrtab;

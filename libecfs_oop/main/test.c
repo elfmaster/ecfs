@@ -13,6 +13,10 @@ int main(int argc, char **argv)
 	for (i = 0; i < fdinfo.size(); i++) {
 		printf("path: %s\n", fdinfo[i].path);
 	}
+	std::vector<elf_prstatus> prstatus = ecfs.get_prstatus();
+	for (i = 0; i < prstatus.size(); i++) {
+		printf("pid: %d\n", prstatus[i].pr_pid);
+	}
 	#if 0
 	struct fdinfo *fdinfo;
 	struct elf_prstatus *prstatus;
