@@ -182,11 +182,11 @@ std::vector<fdinfo> Ecfs::get_fdinfo(void)
          * copy as well that can be used at any time until the Ecfs object is
          * destructed.
          */
-	this->fdinfo_vector = fdinfo_vec;
+	//this->fdinfo_vector = fdinfo_vec;
 	return fdinfo_vec;
 }
 
-std::vector<elf_prstatus> Ecfs::get_prstatus(void)
+std::vector<elf_prstatus>  Ecfs::get_prstatus(void)
 {
 	char *StringTable = this->shstrtab;
 	ElfW(Shdr) *shdr = this->shdr;
@@ -207,7 +207,7 @@ std::vector<elf_prstatus> Ecfs::get_prstatus(void)
 	 * copy as well that can be used at any time until the Ecfs object is
 	 * destructed.
 	 */
-	this->prstatus_vector = prstatus_vec;
+	//this->prstatus_vector = prstatus_vec;
 	return prstatus_vec;
 }
 
@@ -241,36 +241,34 @@ char * Ecfs::get_exe_path(void)
 	return NULL;
 }
 
-#if 0
-
-int get_dynamic_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
+vector <ecfs_sym> Ecfs::get_dynamic_symbols(void)
 {
 	int i, j;
-	ElfW(Ehdr) *ehdr = desc->ehdr;
-	ElfW(Shdr) *shdr = desc->shdr;
+	ElfW(Ehdr) *ehdr = this->ehdr;
+	ElfW(Shdr) *shdr = this->shdr;
 	ssize_t symcount;
-	ElfW(Sym) *dynsym = desc->dynsym;
-
+	ElfW(Sym) *dynsym = this->dynsym;
+	vector <ecfs_sym> ecfs_sym_vec;
+	ecfs_sym_t *syms;
 	for (i = 0; i < ehdr->e_shnum; i++) {
 		if (shdr[i].sh_type == SHT_DYNSYM) {
 			symcount = shdr[i].sh_size / sizeof(ElfW(Sym));
 			size_t alloc_len = symcount * sizeof(ecfs_sym_t);
-			*syms = (ecfs_sym_t *)heapAlloc(alloc_len);
+			syms = (ecfs_sym_t *)alloca(alloc_len);
 			for (j = 0; j < symcount; j++) {
-				(*syms)[j].strtab = desc->dynstr;
-				(*syms)[j].symval = dynsym[j].st_value;
-				(*syms)[j].size = dynsym[j].st_size;
-				(*syms)[j].type = ELF32_ST_TYPE(dynsym[j].st_info);
-				(*syms)[j].binding = ELF32_ST_BIND(dynsym[j].st_info);
-				(*syms)[j].nameoffset = dynsym[j].st_name;
+				syms[j].strtab = this->dynstr;
+				syms[j].symval = dynsym[j].st_value;
+				syms[j].size = dynsym[j].st_size;
+				syms[j].type = ELF32_ST_TYPE(dynsym[j].st_info);
+				syms[j].binding = ELF32_ST_BIND(dynsym[j].st_info);
+				syms[j].nameoffset = dynsym[j].st_name;
 			}
-			return symcount;
+			ecfs_sym_vec.assign(syms, &syms[symcount]);
 		}
 	}
-	return 0;
+	return ecfs_sym_vec; // by value
 }
-
-
+#if 0
 
 int get_siginfo(ecfs_elf_t *desc, siginfo_t *siginfo)
 {

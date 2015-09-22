@@ -56,6 +56,16 @@ typedef struct elf_stats {
 #define MAX_PATH 512
 #endif
 
+typedef struct ecfs_sym {
+        ElfW(Addr) symval; /* Symbol value (address/offset) */
+        size_t size;       /* size of object/function       */
+        uint8_t type;      /* symbol type, i.e STT_FUNC, STT_OBJECT */
+        uint8_t binding;   /* symbol bind, i.e STB_GLOBAL, STB_LOCAL */
+        char *strtab; /* pointer to the symbols associated string table */
+        int nameoffset;    /* Offset of symbol name into symbol strtab */
+} ecfs_sym_t;
+
+
 typedef struct fdinfo {
         int fd;
         char path[MAX_PATH];
@@ -126,24 +136,16 @@ class Ecfs {
 				fprintf(stderr, "Unable to load ecfs-core file '%s' into Ecfs object\n", path);
 		}
 		int load (const char *); // invokes all other primary methods
-		void unload(void);
-		std::vector<fdinfo> get_fdinfo(void);
-		std::vector<elf_prstatus> get_prstatus(void);
-		int get_thread_count(void);
-		char * get_exe_path(void);
+		void unload(void);	// free up all data structures of ecfs object
+		std::vector<fdinfo> get_fdinfo(void);	// get vector of fdinfo structs
+		std::vector<elf_prstatus> get_prstatus(void); // get vector of elf_prstatus structs
+		int get_thread_count(void);	// get number of threads in process
+		char * get_exe_path(void);	// get path to original executable that spawned the process
+		std::vector<ecfs_sym> get_dynamic_symbols(void);	// get a vector of the complete .dynsym symbol table
+		
 };		
 		
 #define MAX_SYM_LEN 255
-
-typedef struct ecfs_sym {
-	ElfW(Addr) symval; /* Symbol value (address/offset) */
-	size_t size;       /* size of object/function       */
-	uint8_t type;      /* symbol type, i.e STT_FUNC, STT_OBJECT */
-	uint8_t binding;   /* symbol bind, i.e STB_GLOBAL, STB_LOCAL */
-	char *strtab; /* pointer to the symbols associated string table */
-	int nameoffset;    /* Offset of symbol name into symbol strtab */
-} ecfs_sym_t;
-
 
 
 

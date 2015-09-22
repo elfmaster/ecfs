@@ -9,6 +9,7 @@ int main(int argc, char **argv)
 	}
 	unsigned int i, ret;
 	Ecfs ecfs(argv[1]);
+	std::vector<ecfs_sym> dynsym;
 	std::vector<fdinfo> fdinfo = ecfs.get_fdinfo();
 	for (i = 0; i < fdinfo.size(); i++) {
 		printf("path: %s\n", fdinfo[i].path);
@@ -16,6 +17,10 @@ int main(int argc, char **argv)
 	std::vector<elf_prstatus> prstatus = ecfs.get_prstatus();
 	for (i = 0; i < prstatus.size(); i++) {
 		printf("pid: %d\n", prstatus[i].pr_pid);
+	}
+	dynsym = ecfs.get_dynamic_symbols();
+	for (i = 0; i < dynsym.size(); i++) {
+		printf("dynsym st_value: %lx\n", dynsym[i].symval);
 	}
 	char *exepath = ecfs.get_exe_path();
 	printf("Executable path: %s\n", exepath);
