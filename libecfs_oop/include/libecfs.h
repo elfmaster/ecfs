@@ -142,6 +142,9 @@ class Ecfs {
 		int get_thread_count(void);	// get number of threads in process
 		char * get_exe_path(void);	// get path to original executable that spawned the process
 		std::vector<ecfs_sym> get_dynamic_symbols(void);	// get a vector of the complete .dynsym symbol table
+		int get_siginfo(siginfo_t *);
+		
+
 		
 };		
 		

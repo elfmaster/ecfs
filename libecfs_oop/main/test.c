@@ -24,6 +24,14 @@ int main(int argc, char **argv)
 	}
 	char *exepath = ecfs.get_exe_path();
 	printf("Executable path: %s\n", exepath);
+	
+	siginfo_t siginfo;
+	ret = ecfs.get_siginfo(&siginfo);
+	if (ret < 0) {
+		printf("get_siginfo failed\n");
+		exit(-1);
+	}
+	printf("siginfo: %d\n", siginfo.si_signo);
 	#if 0
 	struct fdinfo *fdinfo;
 	struct elf_prstatus *prstatus;

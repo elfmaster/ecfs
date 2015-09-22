@@ -268,17 +268,16 @@ vector <ecfs_sym> Ecfs::get_dynamic_symbols(void)
 	}
 	return ecfs_sym_vec; // by value
 }
-#if 0
 
-int get_siginfo(ecfs_elf_t *desc, siginfo_t *siginfo)
+int Ecfs::get_siginfo(siginfo_t *siginfo)
 {
-	char *StringTable = desc->shstrtab;
-	ElfW(Shdr) *shdr = desc->shdr;
+	char *StringTable = this->shstrtab;
+	ElfW(Shdr) *shdr = this->shdr;
 	int i;
 
-	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+	for (i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".siginfo")) {
-			memcpy(siginfo, &desc->mem[shdr[i].sh_offset], shdr[i].sh_size);
+			memcpy(siginfo, &this->mem[shdr[i].sh_offset], shdr[i].sh_size);
 			return 0;
 		}
 	}
@@ -286,6 +285,7 @@ int get_siginfo(ecfs_elf_t *desc, siginfo_t *siginfo)
 	return -1;
 }
 
+#if 0
 ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr)
 {
 	char *StringTable = desc->shstrtab;
