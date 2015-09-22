@@ -357,17 +357,27 @@ vector <ecfs_sym> Ecfs::get_local_symbols(void)
         return ecfs_sym_vec; // by value
 }
 
-#if 0
-ssize_t get_ptr_for_va(ecfs_elf_t *desc, unsigned long vaddr, uint8_t **ptr)
+/*
+ * Example of using get_ptr_for_va() to zero out part of a segment
+ * starting at an arbitrary address within the segment.
+ *
+ * uint8_t *ptr;
+ * ssize_t bytes_left_in_segment = ecfs.get_ptr_for_va(0x4000ff, &ptr);
+ * if (ptr) 
+ * 	for (int i = 0; i < bytes_left_in_segment; i++) 
+ * 		ptr[i] = 0;
+ * 
+ */
+ssize_t Ecfs::get_ptr_for_va(unsigned long vaddr, uint8_t **ptr)
 {
-	ElfW(Ehdr) *ehdr = desc->ehdr;
-	ElfW(Phdr) *phdr = desc->phdr;
+	ElfW(Ehdr) *ehdr = this->ehdr;
+	ElfW(Phdr) *phdr = this->phdr;
 	ssize_t len;
 	int i;
 	
 	for (i = 0; i < ehdr->e_phnum; i++) {
 		if (vaddr >= phdr[i].p_vaddr && vaddr < phdr[i].p_vaddr + phdr[i].p_memsz) {
-			*ptr = (uint8_t *)&desc->mem[phdr[i].p_offset + (vaddr - phdr[i].p_vaddr)];
+			*ptr = (uint8_t *)&this->mem[phdr[i].p_offset + (vaddr - phdr[i].p_vaddr)];
 			len = phdr[i].p_vaddr + phdr[i].p_memsz - vaddr;
 			return len;
 		}
@@ -378,18 +388,21 @@ ssize_t get_ptr_for_va(ecfs_elf_t *desc, unsigned long vaddr, uint8_t **ptr)
 }
 
 /*
- * i.e. len = get_section_pointer(desc, ".bss", &ptr);
+ * i.e. len = ecfs.get_section_pointer(desc, ".bss", &ptr);
+ * while (i < len) 
+ * 	printf("%02x\n", ptr[i++]);
+ *
  */
-ssize_t get_section_pointer(ecfs_elf_t *desc, const char *name, uint8_t **ptr)
+ssize_t Ecfs::get_section_pointer(const char *name, uint8_t **ptr)
 {
-	char *StringTable = desc->shstrtab;
-	ElfW(Shdr) *shdr = desc->shdr;
+	char *StringTable = this->shstrtab;
+	ElfW(Shdr) *shdr = this->shdr;
 	ssize_t len;
 	int i;
 
-	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+	for (i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], name)) {
-			*ptr = (uint8_t *)&desc->mem[shdr[i].sh_offset];
+			*ptr = (uint8_t *)&this->mem[shdr[i].sh_offset];
 			len = shdr[i].sh_size;
 			return len;
 		}		
@@ -401,14 +414,14 @@ ssize_t get_section_pointer(ecfs_elf_t *desc, const char *name, uint8_t **ptr)
 /*
  * i.e len = get_section_size(desc, ".bss");
  */
-ssize_t get_section_size(ecfs_elf_t *desc, const char *name)
+ssize_t Ecfs::get_section_size(const char *name)
 {
-	char *StringTable = desc->shstrtab;
-	ElfW(Shdr) *shdr = desc->shdr;
+	char *StringTable = this->shstrtab;
+	ElfW(Shdr) *shdr = this->shdr;
 	ssize_t len;
 	int i;
 
-	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+	for (i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], name)) {
 			len = shdr[i].sh_size;
 			return len;
@@ -417,14 +430,14 @@ ssize_t get_section_size(ecfs_elf_t *desc, const char *name)
 	return -1;
 }
 
-unsigned long get_section_va(ecfs_elf_t *desc, const char *name)
+unsigned long Ecfs::get_section_va(const char *name)
 {
-	char *StringTable = desc->shstrtab;
-	ElfW(Shdr) *shdr = desc->shdr;
+	char *StringTable = this->shstrtab;
+	ElfW(Shdr) *shdr = this->shdr;
 	int i;
 	unsigned long addr;
 
-	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+	for (i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], name)) {
 			addr = shdr[i].sh_addr;
 			return addr;
@@ -435,36 +448,36 @@ unsigned long get_section_va(ecfs_elf_t *desc, const char *name)
 
 
 
-unsigned long get_text_va(ecfs_elf_t *desc)
+unsigned long Ecfs::get_text_va(void)
 {
-	return desc->textVaddr;
+	return this->textVaddr;
 }
 
-unsigned long get_data_va(ecfs_elf_t *desc)
+unsigned long Ecfs::get_data_va(void)
 {
-	return desc->dataVaddr;
+	return this->dataVaddr;
 }
 
-size_t get_text_size(ecfs_elf_t *desc)
+size_t Ecfs::get_text_size(void) 
 {
-	return desc->textSize;
+	return this->textSize;
 }
 
-size_t get_data_size(ecfs_elf_t *desc)
+size_t Ecfs::get_data_size(void)
 {
-	return desc->dataSize;
+	return this->dataSize;
 }
 
-unsigned long get_plt_va(ecfs_elf_t *desc)
+unsigned long Ecfs::get_plt_va(void)
 {
-	return desc->pltVaddr;
+	return this->pltVaddr;
 }
 
-unsigned long get_plt_size(ecfs_elf_t *desc)
+unsigned long Ecfs::get_plt_size(void)
 {
-	return desc->pltSize;
+	return this->pltSize;
 }
-
+#if 0
 int get_auxiliary_vector32(ecfs_elf_t *desc, Elf32_auxv_t **auxv)
 {
 	ElfW(Ehdr) *ehdr = desc->ehdr;

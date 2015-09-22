@@ -88,6 +88,11 @@ typedef struct pltgotinfo {
         unsigned long shl_entry_va; // the shared library address the GOT should point to if it has been resolved
 } pltgotinfo_t;
 
+/******************
+ * Main ECFS class that is used for loading and parsing ECFS files
+ ****
+ ****************<elfmaster>******************************
+ */
 
 class Ecfs {
 	private:
@@ -125,6 +130,9 @@ class Ecfs {
 		elf_stat_t *elfstats;
 		char *filepath;
 	public:
+		/*
+		 * To maintain an internal copy of the vectors for various structure arrays
+		 */
                 std::vector <pltgotinfo> pltgot_vector;
                 std::vector <fdinfo> fdinfo_vector;
                 std::vector <elf_prstatus> prstatus_vector;
@@ -136,8 +144,10 @@ class Ecfs {
 			if (Ecfs::load(path) < 0) 
 				fprintf(stderr, "Unable to load ecfs-core file '%s' into Ecfs object\n", path);
 		}
+		
 		int load (const char *); // invokes all other primary methods
 		void unload(void);	// free up all data structures of ecfs object
+		
 		std::vector<fdinfo> get_fdinfo(void);	// get vector of fdinfo structs
 		std::vector<elf_prstatus> get_prstatus(void); // get vector of elf_prstatus structs
 		int get_thread_count(void);	// get number of threads in process
@@ -147,7 +157,18 @@ class Ecfs {
 		int get_siginfo(siginfo_t *);	// will fill siginfo_t with the signal struct
 		ssize_t get_stack_ptr(uint8_t **); // will set pointer at .stack section and return the size
 		ssize_t get_heap_ptr(uint8_t **); // will set pointer at .heap section and return the size
+		ssize_t get_ptr_for_va(unsigned long, uint8_t **); // will set ptr to the segment address specified, and return the size of bytes left
+		ssize_t get_section_pointer(const char *, uint8_t **); // set ptr to a given ELF section within a binary and return section size
+		ssize_t get_section_size(const char *); // return the size of a section by name
+		unsigned long get_section_va(const char *); // return the vaddr of a section by name
+		unsigned long get_text_va(void);	// get vaddr of text segment
+		unsigned long get_data_va(void);	// get vaddr of data segment
+		size_t get_text_size(void); 		// get size of text segment
+		size_t get_data_size(void);		// get size of data segment
+		unsigned long get_plt_va(void);		// get vaddr of the .plt
+		unsigned long get_plt_size(void);	// get size of the .plt 
 		
+
 		
 };		
 		
