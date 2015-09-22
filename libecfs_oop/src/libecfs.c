@@ -285,16 +285,27 @@ int Ecfs::get_siginfo(siginfo_t *siginfo)
 	return -1;
 }
 
-#if 0
-ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr)
+/*
+ * This function takes a pointer passed by reference 
+ * and assigns it to point at the given section. It also
+ * returns the size of that section. This is a nice way to
+ * do it so that the user can get both the section pointer
+ * and size all in one. On failure -1 is returned
+ * or *ptr = NULL
+ */
+ssize_t Ecfs::get_stack_ptr(uint8_t **ptr)
 {
-	char *StringTable = desc->shstrtab;
-	ElfW(Shdr) *shdr = desc->shdr;
-	int i;
-
-	for (i = 0; i < desc->ehdr->e_shnum; i++) {
+	char *StringTable = this->shstrtab;
+	ElfW(Shdr) *shdr = this->shdr;
+	int i, j;
+	uint8_t *p;
+	for (i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".stack")) {
-			*ptr = &desc->mem[shdr[i].sh_offset];
+			*ptr = &this->mem[shdr[i].sh_offset];
+			p = *ptr;
+			printf("found .stack\n");
+			for (j = 0; j < shdr[i].sh_size; j++)
+				printf("%02x", p[j]);
 			return shdr[i].sh_size;
 		}
 	}
@@ -303,6 +314,7 @@ ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr)
 	return -1;
 }
 
+#if 0
 ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr)
 {
 	char *StringTable = desc->shstrtab;

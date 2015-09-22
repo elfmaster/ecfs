@@ -32,6 +32,13 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 	printf("siginfo: %d\n", siginfo.si_signo);
+	
+	uint8_t *stackptr;
+	ssize_t stacksize = ecfs.get_stack_ptr(&stackptr);
+	printf("stacksize: %d\n", stacksize);
+	for (i = 0; i < 32; i++)
+		printf("%02x", stackptr[i]);
+	
 	#if 0
 	struct fdinfo *fdinfo;
 	struct elf_prstatus *prstatus;
