@@ -1,6 +1,43 @@
 #include <stdio.h>
 #include "../include/libecfs.h"
 #include "../src/libecfs.hpp"
+static void print_registers(struct user_regs_struct *reg)
+{
+        struct user_regs_struct pt_reg;
+        memcpy(&pt_reg, reg, sizeof(struct user_regs_struct));
+
+#ifdef __x86_64__
+        printf("r15:\t%llx\n"
+                        "r14:\t%llx\n"
+                        "r13:\t%llx\n" 
+                        "r12:\t%llx\n"
+                        "rbp:\t%llx\n"
+                        "rbx:\t%llx\n"   
+                        "r11:\t%llx\n"
+                        "r10:\t%llx\n"
+                        "r9: \t%llx\n"
+                        "r8: \t%llx\n"
+                        "rax:\t%llx\n"
+                        "rcx:\t%llx\n"
+                        "rdx:\t%llx\n"
+                        "rsi:\t%llx\n"
+                        "rdi:\t%llx\n"
+                        "rip:\t%llx\n"
+                        "rsp:\t%llx\n"
+                        "cs: \t%llx\n"
+                        "ss: \t%llx\n"
+                        "ds: \t%llx\n"
+                        "es: \t%llx\n"
+                        "fs: \t%llx\n" 
+                        "gs: \t%llx\n"
+                        "eflags: %llx\n", 
+        pt_reg.r15, pt_reg.r14, pt_reg.r13, pt_reg.r12, pt_reg.rbp, pt_reg.rbx, pt_reg.r11,
+        pt_reg.r10, pt_reg.r9, pt_reg.r8, pt_reg.rax, pt_reg.rcx, pt_reg.rdx, pt_reg.rsi, pt_reg.rdi,
+        pt_reg.rip, pt_reg.rsp, pt_reg.cs, pt_reg.ss, pt_reg.ds, pt_reg.es, pt_reg.fs, pt_reg.gs, pt_reg.eflags);
+#endif
+/* must add 32bit support */
+}
+
 
 int main(int argc, char **argv)
 {
@@ -17,6 +54,15 @@ int main(int argc, char **argv)
 	}
 	for (i = 0; i < fdinfo_vector.size(); i++)
 		printf("%s\n", fdinfo_vector[i].path);
+	vector <prstatus> prstatus_vector;
+	if (ecfs.get_prstatus(prstatus_vector) < 0)
+		printf("Getting prstatus failed\n");
+	
+	for (i = 0; i < prstatus_vector.size(); i++) {
+		printf("pid: %d\n", prstatus_vector[i].pr_pid);
+		print_registers(&prstatus_vector[i].pr_reg);
+	}
+
 #if 0
 	std::vector<ecfs_sym> dynsym;
 	std::vector<ecfs_sym> symtab;

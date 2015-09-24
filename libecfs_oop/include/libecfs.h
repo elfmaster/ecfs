@@ -1,6 +1,7 @@
 #ifndef _LIBECFS_H
 #define _LIBECFS_H
 
+
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -58,6 +59,40 @@ typedef struct elf_stats {
 #ifndef MAX_PATH
 #define MAX_PATH 512
 #endif
+
+/*
+ ********** linux system headers *****************
+ * XXX must make sure we have ones that work for both 32bit and 64bit
+ *
+ */
+typedef struct elf_timeval {    /* Time value with microsecond resolution    */
+  long tv_sec;                  /* Seconds                                   */
+  long tv_usec;                 /* Microseconds                              */
+} elf_timeval;
+
+typedef struct elf_siginfo_ {    /* Information about signal (unused)         */
+  int32_t si_signo;             /* Signal number                             */
+  int32_t si_code;              /* Extra code                                */
+  int32_t si_errno;             /* Errno                                     */
+} elf_siginfo_t;
+
+typedef struct prstatus {       /* Information about thread; includes CPU reg*/
+  elf_siginfo_t    pr_info;       /* Info associated with signal               */
+  uint16_t       pr_cursig;     /* Current signal                            */
+  unsigned long  pr_sigpend;    /* Set of pending signals                    */
+  unsigned long  pr_sighold;    /* Set of held signals                       */
+  pid_t          pr_pid;        /* Process ID                                */
+  pid_t          pr_ppid;       /* Parent's process ID                       */
+  pid_t          pr_pgrp;       /* Group ID                                  */
+  pid_t          pr_sid;        /* Session ID                                */
+  elf_timeval    pr_utime;      /* User time                                 */
+  elf_timeval    pr_stime;      /* System time                               */
+  elf_timeval    pr_cutime;     /* Cumulative user time                      */
+  elf_timeval    pr_cstime;     /* Cumulative system time                    */
+  user_regs_struct pr_reg;      /* CPU registers                             */
+  uint32_t       pr_fpvalid;    /* True if math co-processor being used      */
+} prstatus;
+
 
 /*
  * This particular struct is created by libecfs and is not stored
@@ -222,7 +257,7 @@ class Ecfs {
 		 */
                 std::vector <pltgotinfo> pltgot_vector;
                 std::vector <fdinfo> fdinfo_vector;
-                std::vector <elf_prstatus> prstatus_vector;
+                std::vector <prstatus> prstatus_vector;
 
 		/*
 		 * Constructor
@@ -236,7 +271,7 @@ class Ecfs {
 		void unload(void);	// free up all data structures of ecfs object
 		
 		int get_fdinfo(std::vector<fdinfo>&);	// get vector of fdinfo structs
-		std::vector<elf_prstatus> get_prstatus(void); // get vector of elf_prstatus structs
+		int get_prstatus(std::vector<prstatus>&); // get vector of elf_prstatus structs
 		int get_thread_count(void);	// get number of threads in process
 		char * get_exe_path(void);	// get path to original executable that spawned the process
 		std::vector<ecfs_sym> get_dynamic_symbols(void);	// get a vector of the complete .dynsym symbol table
