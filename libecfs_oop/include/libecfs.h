@@ -65,6 +65,30 @@ typedef struct elf_stats {
  * XXX must make sure we have ones that work for both 32bit and 64bit
  *
  */
+
+/* We need this to differentiate user_regs_struct on 64bit systems
+ */
+typedef struct user_regs_struct_32
+{
+  int32_t ebx;
+  int32_t ecx;
+  int32_t edx;
+  int32_t esi;
+  int32_t edi;
+  int32_t ebp;
+  int32_t eax;
+  int32_t xds;
+  int32_t xes;
+  int32_t xfs;
+  int32_t xgs;
+  int32_t orig_eax;
+  int32_t eip;
+  int32_t xcs;
+  int32_t eflags;
+  int32_t esp;
+  int32_t xss;
+} user_regs_struct_32;
+
 typedef struct elf_timeval {    /* Time value with microsecond resolution    */
   long tv_sec;                  /* Seconds                                   */
   long tv_usec;                 /* Microseconds                              */
@@ -76,7 +100,11 @@ typedef struct elf_siginfo_ {    /* Information about signal (unused)         */
   int32_t si_errno;             /* Errno                                     */
 } elf_siginfo_t;
 
-typedef struct prstatus {       /* Information about thread; includes CPU reg*/
+/*
+ * XXX This struct is exactly the same on 32bit and 64bit systems
+ * except for the user_regs_struct
+ */
+typedef struct prstatus_64 {       /* Information about thread; includes CPU reg*/
   elf_siginfo_t    pr_info;       /* Info associated with signal               */
   uint16_t       pr_cursig;     /* Current signal                            */
   unsigned long  pr_sigpend;    /* Set of pending signals                    */
@@ -91,7 +119,25 @@ typedef struct prstatus {       /* Information about thread; includes CPU reg*/
   elf_timeval    pr_cstime;     /* Cumulative system time                    */
   user_regs_struct pr_reg;      /* CPU registers                             */
   uint32_t       pr_fpvalid;    /* True if math co-processor being used      */
-} prstatus;
+} prstatus_64;
+
+
+typedef struct prstatus_32 {       /* Information about thread; includes CPU reg*/
+  elf_siginfo_t    pr_info;       /* Info associated with signal               */
+  uint16_t       pr_cursig;     /* Current signal                            */
+  unsigned long  pr_sigpend;    /* Set of pending signals                    */
+  unsigned long  pr_sighold;    /* Set of held signals                       */
+  pid_t          pr_pid;        /* Process ID                                */
+  pid_t          pr_ppid;       /* Parent's process ID                       */
+  pid_t          pr_pgrp;       /* Group ID                                  */
+  pid_t          pr_sid;        /* Session ID                                */
+  elf_timeval    pr_utime;      /* User time                                 */
+  elf_timeval    pr_stime;      /* System time                               */
+  elf_timeval    pr_cutime;     /* Cumulative user time                      */
+  elf_timeval    pr_cstime;     /* Cumulative system time                    */
+  user_regs_struct_32 pr_reg;      /* CPU registers                             */
+  uint32_t       pr_fpvalid;    /* True if math co-processor being used      */
+} prstatus_32;
 
 
 /*
@@ -147,6 +193,7 @@ typedef struct fdinfo_32 {
 
 
 struct ecfs_type32 {
+	typedef prstatus_32 prstatus;
 	typedef fdinfo_32_t fdinfo;
 	typedef Elf32_Ehdr Ehdr;
         typedef Elf32_Shdr Shdr;
@@ -164,6 +211,7 @@ struct ecfs_type32 {
 	// add prpsinfo
 };
 struct ecfs_type64 {
+	typedef prstatus_64 prstatus;
 	typedef fdinfo_64_t fdinfo;
 	typedef Elf64_Ehdr Ehdr;
         typedef Elf64_Shdr Shdr;
@@ -213,6 +261,7 @@ class Ecfs {
 		 * Non ELF types
 		 */
 		typedef typename ecfs_type::fdinfo fdinfo;	
+		typedef typename ecfs_type::prstatus prstatus;
 		/*
 		 * Private members for encapsulation
 		 */

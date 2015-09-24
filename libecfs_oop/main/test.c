@@ -54,7 +54,7 @@ int main(int argc, char **argv)
 	}
 	for (i = 0; i < fdinfo_vector.size(); i++)
 		printf("%s\n", fdinfo_vector[i].path);
-	vector <prstatus> prstatus_vector;
+	vector <prstatus_64> prstatus_vector;
 	if (ecfs.get_prstatus(prstatus_vector) < 0)
 		printf("Getting prstatus failed\n");
 	
