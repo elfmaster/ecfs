@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "../include/libecfs.h"
+#include "../src/libecfs.hpp"
 
 int main(int argc, char **argv)
 {
@@ -8,7 +9,9 @@ int main(int argc, char **argv)
 		exit(0);
 	}
 	unsigned int i, ret;
-	Ecfs ecfs(argv[1]);
+	printf("Creating ecfs object on %s\n", argv[1]);
+	Ecfs <ecfs_type64>ecfs(argv[1]);
+#if 0
 	std::vector<ecfs_sym> dynsym;
 	std::vector<ecfs_sym> symtab;
 	std::vector<fdinfo> fdinfo = ecfs.get_fdinfo();
@@ -50,7 +53,6 @@ int main(int argc, char **argv)
 	for (i = 0; i < 32; i++)
 		printf("%02x", heapptr[i]);
 	printf("\n");
-	#if 0
 	struct fdinfo *fdinfo;
 	struct elf_prstatus *prstatus;
 	ecfs_sym_t *dsyms, *lsyms;

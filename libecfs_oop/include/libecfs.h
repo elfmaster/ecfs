@@ -1,3 +1,6 @@
+#ifndef _LIBECFS_H
+#define _LIBECFS_H
+
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -56,8 +59,13 @@ typedef struct elf_stats {
 #define MAX_PATH 512
 #endif
 
+/*
+ * This particular struct is created by libecfs and is not stored
+ * within the ecfs file itself. Therefore we DONT need both a 64bit
+ * and 32bit version of this struct.
+ */
 typedef struct ecfs_sym {
-        ElfW(Addr) symval; /* Symbol value (address/offset) */
+        long symval; /* Symbol value (address/offset) */
         size_t size;       /* size of object/function       */
         uint8_t type;      /* symbol type, i.e STT_FUNC, STT_OBJECT */
         uint8_t binding;   /* symbol bind, i.e STB_GLOBAL, STB_LOCAL */
@@ -67,20 +75,78 @@ typedef struct ecfs_sym {
 } ecfs_sym_t;
 
 
-typedef struct fdinfo {
-        int fd;
-        char path[MAX_PATH];
-        loff_t pos;
-        unsigned int perms;
+/*
+ * This struct is stored within ecfs files. A 32bit ecfs file
+ * is going to have an fdinfo that is of 32bit values whereas
+ * a 64bit ecfs file will have one that is of 64bit values.
+ */
+typedef struct fdinfo_64 {
+        int fd;				// always 32bit
+        char path[MAX_PATH];		// always MAX_PATH bytes
+        uint64_t pos;			// XXX this changes from 64bit to 32bit depending
+        unsigned int perms;		// always 32bit
         struct {
-                struct in_addr src_addr;
-                struct in_addr dst_addr;
-                uint16_t src_port;
-                uint16_t dst_port;
+                struct in_addr src_addr; // in_addr is always uint32_t
+                struct in_addr dst_addr; // in addr is always uint32_t
+                uint16_t src_port; // always 16bit
+                uint16_t dst_port; // always 16bit
         } socket;
-        char net;
-} fdinfo_t;
+        char net;			// always 1 byte
+} fdinfo_64_t;
 
+typedef struct fdinfo_32 {
+        int fd;                         // always 32bit
+        char path[MAX_PATH];            // always MAX_PATH bytes
+        uint32_t pos;                   // XXX this changes from 64bit to 32bit depending
+        unsigned int perms;             // always 32bit
+        struct {
+                struct in_addr src_addr; // in_addr is always uint32_t
+                struct in_addr dst_addr; // in addr is always uint32_t
+                uint16_t src_port; // always 16bit
+                uint16_t dst_port; // always 16bit
+        } socket;
+        char net;                       // always 1 byte
+} fdinfo_32_t;
+
+
+
+
+struct ecfs_type32 {
+	typedef fdinfo_32_t fdinfo;
+	typedef Elf32_Ehdr Ehdr;
+        typedef Elf32_Shdr Shdr;
+        typedef Elf32_Phdr Phdr;
+        typedef Elf32_Nhdr Nhdr;
+        typedef Elf32_Dyn Dyn;
+        typedef Elf32_Sym Sym;
+        typedef Elf32_Rela Rela;
+        typedef Elf32_Rel Rel;
+        typedef Elf32_Addr Addr;
+        typedef Elf32_Off Off;
+
+	// add siginfo here as well
+	// add prstatus
+	// add prpsinfo
+};
+struct ecfs_type64 {
+	typedef fdinfo_64_t fdinfo;
+	typedef Elf64_Ehdr Ehdr;
+        typedef Elf64_Shdr Shdr;
+        typedef Elf64_Phdr Phdr;
+        typedef Elf64_Nhdr Nhdr;
+        typedef Elf64_Dyn Dyn;
+        typedef Elf64_Sym Sym;
+        typedef Elf64_Rela Rela;
+        typedef Elf64_Rel Rel;
+        typedef Elf64_Addr Addr;
+        typedef Elf64_Off Off;
+
+};
+
+/*
+ * This struct is NOT stored in the ecfs file so we don't need
+ * both a 32bit and 64bit version of it kept internally.
+ */
 typedef struct pltgotinfo {
         unsigned long got_site; // address of where the GOT entry exists
         unsigned long got_entry_va; // address that is in the GOT entry (the pointer address)
@@ -88,35 +154,57 @@ typedef struct pltgotinfo {
         unsigned long shl_entry_va; // the shared library address the GOT should point to if it has been resolved
 } pltgotinfo_t;
 
+
 /******************
  * Main ECFS class that is used for loading and parsing ECFS files
  ****
  ****************<elfmaster>******************************
  */
 
+template <class ecfs_type> 
 class Ecfs {
+		typedef typename ecfs_type::Ehdr Ehdr;
+		typedef typename ecfs_type::Shdr Shdr;
+		typedef typename ecfs_type::Phdr Phdr;
+		typedef typename ecfs_type::Nhdr Nhdr;
+		typedef typename ecfs_type::Dyn Dyn;
+		typedef typename ecfs_type::Sym Sym;
+		typedef typename ecfs_type::Rela Rela;
+		typedef typename ecfs_type::Rel Rel; 
+		typedef typename ecfs_type::Addr Addr;
+		typedef typename ecfs_type::Off Off;
+		
+		/*
+		 * Non ELF types
+		 */
+		typedef typename ecfs_type::fdinfo fdinfo;	
+		
+		/*
+		 * Private members for encapsulation
+		 */
 	private:
+		
  		uint8_t *mem;          /* raw memory pointer */
     		char *shstrtab;        /* shdr string table */
     		char *strtab;          /* .symtab string table */
     		char *dynstr;          /* .dynstr string table */
     		unsigned long *pltgot;  /* pointer to .plt.got */
-    		ElfW(Ehdr) * ehdr;     /* ELF Header pointer */
-    		ElfW(Phdr) * phdr;     /* Program header table pointer */
-    		ElfW(Shdr) * shdr;     /* Section header table pointer */
-    		ElfW(Nhdr) * nhdr;     /* ELF Notes section pointer */
-    		ElfW(Dyn)  *dyn;       /* Dynamic segment pointer */
-    		ElfW(Sym)  *symtab;    /* Pointer to array of symtab symbol structs */
-    		ElfW(Sym)  *dynsym;    /* Pointer to array of dynsym symbol structs */
-    		ElfW(Addr) textVaddr;  /* Text segment virtual address */
-    		ElfW(Addr) dataVaddr;  /* data segment virtual address */
-   		ElfW(Addr) dynVaddr;   /* dynamic segment virtual address */
-    		ElfW(Addr) pltVaddr;
-    		ElfW(Off) textOff;
-    		ElfW(Off) dataOff;
-    		ElfW(Off) dynOff;
-    		ElfW(Rela) *plt_rela;  /* points to .rela.plt section */
-    		ElfW(Rela) *dyn_rela;  /* points to .rela.dyn section */
+    		Ehdr * ehdr;     /* ELF Header pointer */
+    		Phdr * phdr;     /* Program header table pointer */
+    		Shdr * shdr;     /* Section header table pointer */
+    		Nhdr * nhdr;     /* ELF Notes section pointer */
+    		Dyn  *dyn;       /* Dynamic segment pointer */
+    		Sym  *symtab;    /* Pointer to array of symtab symbol structs */
+    		Sym  *dynsym;    /* Pointer to array of dynsym symbol structs */
+    		Addr textVaddr;  /* Text segment virtual address */
+    		Addr dataVaddr;  /* data segment virtual address */
+   		Addr dynVaddr;   /* dynamic segment virtual address */
+    		Addr pltVaddr;
+    		Off textOff;
+    		Off dataOff;
+    		Off dynOff;
+    		Rela *plt_rela;  /* points to .rela.plt section */
+    		Rela *dyn_rela;  /* points to .rela.dyn section */
     		ssize_t plt_rela_count; /* number of .rela.plt entries */
     		ssize_t dyn_rela_count; /* number of .rela.dyn entries */
     		size_t filesize;       /* total file size              */
@@ -175,4 +263,4 @@ class Ecfs {
 #define MAX_SYM_LEN 255
 
 
-
+#endif
