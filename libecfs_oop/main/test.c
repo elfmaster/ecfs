@@ -11,6 +11,12 @@ int main(int argc, char **argv)
 	unsigned int i, ret;
 	printf("Creating ecfs object on %s\n", argv[1]);
 	Ecfs <ecfs_type64>ecfs(argv[1]);
+	vector <fdinfo_64> fdinfo_vector;
+	if (ecfs.get_fdinfo(fdinfo_vector) < 0) {
+		printf("Getting fdinfo failed\n");
+	}
+	for (i = 0; i < fdinfo_vector.size(); i++)
+		printf("%s\n", fdinfo_vector[i].path);
 #if 0
 	std::vector<ecfs_sym> dynsym;
 	std::vector<ecfs_sym> symtab;

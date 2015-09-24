@@ -178,7 +178,6 @@ class Ecfs {
 		 * Non ELF types
 		 */
 		typedef typename ecfs_type::fdinfo fdinfo;	
-		
 		/*
 		 * Private members for encapsulation
 		 */
@@ -236,7 +235,7 @@ class Ecfs {
 		int load (const char *); // invokes all other primary methods
 		void unload(void);	// free up all data structures of ecfs object
 		
-		std::vector<fdinfo> get_fdinfo(void);	// get vector of fdinfo structs
+		int get_fdinfo(std::vector<fdinfo>&);	// get vector of fdinfo structs
 		std::vector<elf_prstatus> get_prstatus(void); // get vector of elf_prstatus structs
 		int get_thread_count(void);	// get number of threads in process
 		char * get_exe_path(void);	// get path to original executable that spawned the process
