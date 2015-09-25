@@ -317,7 +317,7 @@ int Ecfs<ecfs_type>::get_dynamic_symbols(vector <ecfs_sym_t>&sym_vec)
  *
  */
 template <class ecfs_type>
-int Ecfs<ecfs_type>::get_siginfo(siginfo_t *siginfo)
+int Ecfs<ecfs_type>::get_siginfo(siginfo_t &siginfo)
 {
 	char *StringTable = this->shstrtab;
 	Ecfs::Shdr *shdr = this->shdr;
@@ -325,15 +325,13 @@ int Ecfs<ecfs_type>::get_siginfo(siginfo_t *siginfo)
 
 	for (i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".siginfo")) {
-			memcpy(siginfo, &this->mem[shdr[i].sh_offset], shdr[i].sh_size);
+			siginfo = *(siginfo_t *)(&this->mem[shdr[i].sh_offset]);
 			return 0;
 		}
 	}
 
 	return -1;
 }
-
-#if 0
 
 /*
  * This function takes a pointer passed by reference 
@@ -343,23 +341,25 @@ int Ecfs<ecfs_type>::get_siginfo(siginfo_t *siginfo)
  * and size all in one. On failure -1 is returned
  * or *ptr = NULL
  */
-ssize_t Ecfs::get_stack_ptr(uint8_t **ptr)
+template <class ecfs_type>
+ssize_t Ecfs<ecfs_type>::get_stack_ptr(uint8_t *&ptr)
 {
 	char *StringTable = this->shstrtab;
-	ElfW(Shdr) *shdr = this->shdr;
+	Ecfs::Shdr *shdr = this->shdr;
 	int i;
 	for (i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".stack")) {
-			*ptr = &this->mem[shdr[i].sh_offset];
+			ptr = &this->mem[shdr[i].sh_offset];
 			return shdr[i].sh_size;
 		}
 	}
 
-	*ptr = NULL;
+	ptr = NULL;
 	return -1;
 }
 
-ssize_t Ecfs::get_heap_ptr(uint8_t **ptr)
+template <class ecfs_type>
+ssize_t Ecfs<ecfs_type>::get_heap_ptr(uint8_t *&ptr)
 {
 	char *StringTable = this->shstrtab;
 	ElfW(Shdr) *shdr = this->shdr;
@@ -367,15 +367,16 @@ ssize_t Ecfs::get_heap_ptr(uint8_t **ptr)
 
 	for (i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".heap")) {
-			*ptr = &this->mem[shdr[i].sh_offset];
+			ptr = &this->mem[shdr[i].sh_offset];
 			return shdr[i].sh_size;
 		}
 	}
 	
-	*ptr = NULL;
+	ptr = NULL;
 	return -1;
 }
 
+#if 0
 vector <ecfs_sym> Ecfs::get_local_symbols(void)
 {
         int i, j;
