@@ -65,14 +65,26 @@ int main(int argc, char **argv)
 
 	printf("There are %d threads in for %s\n",
 	ecfs.get_thread_count(), ecfs.get_exe_path());
+	
+	/*
+    	 siginfo64_t siginfo;
+        ecfs.get_siginfo(&siginfo);
+        printf("last signal: %d\n", siginfo._si_signo);
+	*/
+
 	vector <ecfs_sym> dynsyms;
 	if (ecfs.get_dynamic_symbols(dynsyms) < 0) {
 		printf("get_dynamic_symbols() failed\n");
 	}
+
 	for (i = 0; i < dynsyms.size(); i++)
 		printf("Name: %s value: %lx\n",
 			dynsyms[i].name, dynsyms[i].symval);
 	
+	
+	siginfo_t siginfo;
+	ecfs.get_siginfo(&siginfo);
+	printf("Signa number: %d\n", siginfo.si_signo);
 #if 0
 	std::vector<ecfs_sym> dynsym;
 	std::vector<ecfs_sym> symtab;

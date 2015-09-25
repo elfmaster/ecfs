@@ -302,11 +302,25 @@ int Ecfs<ecfs_type>::get_dynamic_symbols(vector <ecfs_sym_t>&sym_vec)
 	return -1; // failed if we got here
 }
 
-#if 0
-int Ecfs::get_siginfo(siginfo_t *siginfo)
+/*
+ * We only use a 64bit version if siginfo_t with this
+ * function. There are too many oddities with this struct
+ * and glibc to redefine it as both 32bit and 64bit I have
+ * tried. This isn't a blocker however though because the first
+ * 6 members are the same whether it be in 64bit or 32bit and
+ * that's typically all we need from this structure to get the
+ * most interesting data, including signal numbers etc.
+ * In the future I may fix this by storing a custom siginfo_t
+ * structure within the .siginfo section of an ECFS file but I will
+ * have to change the ecfs code itself. This custom siginfo_t will
+ * contain only the first few members, similar to elf_siginfo struct.
+ *
+ */
+template <class ecfs_type>
+int Ecfs<ecfs_type>::get_siginfo(siginfo_t *siginfo)
 {
 	char *StringTable = this->shstrtab;
-	ElfW(Shdr) *shdr = this->shdr;
+	Ecfs::Shdr *shdr = this->shdr;
 	int i;
 
 	for (i = 0; i < this->ehdr->e_shnum; i++) {
@@ -318,6 +332,8 @@ int Ecfs::get_siginfo(siginfo_t *siginfo)
 
 	return -1;
 }
+
+#if 0
 
 /*
  * This function takes a pointer passed by reference 

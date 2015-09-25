@@ -101,7 +101,7 @@ typedef struct elf_siginfo_ {    /* Information about signal (unused)         */
 } elf_siginfo_t;
 
 /*
- * XXX This struct is exactly the same on 32bit and 64bit systems
+ * This struct is exactly the same on 32bit and 64bit systems
  * except for the user_regs_struct
  */
 typedef struct prstatus_64 {       /* Information about thread; includes CPU reg*/
@@ -138,6 +138,85 @@ typedef struct prstatus_32 {       /* Information about thread; includes CPU reg
   user_regs_struct_32 pr_reg;      /* CPU registers                             */
   uint32_t       pr_fpvalid;    /* True if math co-processor being used      */
 } prstatus_32;
+
+
+
+/* *************************** A BITCH
+ * siginfo we must have a 32bit and 64bit version
+ * at some point maybe we should modify the actual ecfs
+ * software so that it writes only elf_siginfo_t which
+ * is architecture agnostic since it just uses int32_t's.
+ */
+
+typedef union sigval32 {
+       	int sival_int;
+       	uint32_t sival_ptr; // XXX changed from void * to a uint32_t
+} sigval32_t;
+
+typedef union sigval64 {
+	int sival_int;
+	void *sival_ptr;
+} sigval64_t;
+
+
+/* 
+ * XXX
+ * because of defines like this in glibc headers
+ *
+ *   #define si_pid		_sifields._kill._pid
+ * we cannot name the members of this struct si_* it causes
+ * conflicts. We must use _si_* instead
+ */
+typedef struct siginfo32 {
+  	int      _si_signo;    /* Signal number */
+      	int      _si_errno;    /* An errno value */
+      	int      _si_code;     /* Signal code */
+      	int      _si_trapno;   /* Trap number that caused */
+	int      _si_pid;      /* Sending process ID */
+	int      _si_uid;      /* Real user ID of sending process */
+      	int      _si_status;   /* Exit value or signal */
+      	uint32_t  _si_utime;    /* User time consumed */
+      	uint32_t  _si_stime;    /* System time consumed */
+      	sigval32_t _si_value;    /* Signal value */
+      	int      _si_interrupt;      /* POSIX.1b signal */
+      	uint32_t _si_ptr;      /* POSIX.1b signal */
+      	int      _si_overrun;  /* Timer overrun count; POSIX.1b timers */
+      	int      _si_timerid;  /* Timer ID; POSIX.1b timers */
+      	uint32_t _si_addr;     /* Memory location which caused fault */
+       	uint32_t _si_band;     /* Band event (was int in
+                                       glibc 2.3.2 and earlier) */
+     	int      _si_fd;       /* File descriptor */
+      	short    _si_addr_lsb; /* Least significant bit of address
+                                        (since Linux 2.6.32) */
+} siginfo32_t;
+	
+typedef struct siginfo64 {
+	int      _si_signo;    /* Signal number */
+	int      _si_errno;    /* An errno value */
+	int      _si_code;     /* Signal code */
+	int      _si_trapno;   /* Trap number that caused
+                                        hardware-generated signal
+                                        (unused on most architectures) */
+	pid_t    _si_pid;      /* Sending process ID */
+	uid_t    _si_uid;      /* Real user ID of sending process */
+	int      _si_status;   /* Exit value or signal */
+	clock_t  _si_utime;    /* User time consumed */
+       	clock_t  _si_stime;    /* System time consumed */
+      	sigval64_t _si_value;    /* Signal value */
+      	int      _si_interrupt;      /* POSIX.1b signal */
+       	void * _si_ptr;      /* POSIX.1b signal */
+       	int      _si_overrun;  /* Timer overrun count; POSIX.1b timers */
+      	int      _si_timerid;  /* Timer ID; POSIX.1b timers */
+        void *_si_addr;     /* Memory location which caused fault */
+       	long _si_band;     /* Band event (was int in
+                               glibc 2.3.2 and earlier) */
+      	int      _si_fd;       /* File descriptor */
+      	short    _si_addr_lsb; /* Least significant bit of address
+                                        (since Linux 2.6.32) */
+} siginfo64_t;
+
+
+
 
 
 /*
