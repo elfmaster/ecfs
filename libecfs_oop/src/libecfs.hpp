@@ -203,6 +203,15 @@ int Ecfs<ecfs_type>::get_fdinfo(std::vector<Ecfs::fdinfo> &fdinfo_vec)
 	return -1; // failed if we got here
 }
 
+/*
+ example:
+ 	vector <prstatus_64> prstatus_vector;
+        if (ecfs.get_prstatus(prstatus_vector) < 0)
+                printf("Getting prstatus failed\n");
+	for (i = 0; i < prstatus_vector.size(); i++)
+		printf("%d\n", prstatus_vector[i].pr_pid);
+*/
+
 template <class ecfs_type>
 int Ecfs<ecfs_type>::get_prstatus(std::vector<Ecfs::prstatus> &prstatus_vec)
 {
@@ -229,11 +238,12 @@ int Ecfs<ecfs_type>::get_prstatus(std::vector<Ecfs::prstatus> &prstatus_vec)
 	//this->prstatus_vector = prstatus_vec;
 	return -1;
 }
-#if 0
-int Ecfs::get_thread_count(void)
+
+template <class ecfs_type>
+int Ecfs<ecfs_type>::get_thread_count(void)
 {
 	char *StringTable = this->shstrtab;
-	ElfW(Shdr) *shdr = this->shdr;
+	Ecfs::Shdr *shdr = this->shdr;
 	int i;
 
 	for (i = 0; i < this->ehdr->e_shnum; i++) {
@@ -243,11 +253,12 @@ int Ecfs::get_thread_count(void)
 	return -1;
 }
 	
-char * Ecfs::get_exe_path(void)
+template <class ecfs_type>
+char * Ecfs<ecfs_type>::get_exe_path(void)
 {
 	
 	char *StringTable = this->shstrtab;
-	ElfW(Shdr) *shdr = this->shdr;
+	Ecfs::Shdr *shdr = this->shdr;
 	char *ret;
 	
 	for (int i = 0; i < this->ehdr->e_shnum; i++) {
@@ -260,18 +271,19 @@ char * Ecfs::get_exe_path(void)
 	return NULL;
 }
 
-vector <ecfs_sym> Ecfs::get_dynamic_symbols(void)
+template <class ecfs_type>
+int Ecfs<ecfs_type>::get_dynamic_symbols(vector <ecfs_sym_t>&sym_vec)
 {
 	int i, j;
-	ElfW(Ehdr) *ehdr = this->ehdr;
-	ElfW(Shdr) *shdr = this->shdr;
+	Ecfs::Ehdr *ehdr = this->ehdr;
+	Ecfs::Shdr *shdr = this->shdr;
 	ssize_t symcount;
-	ElfW(Sym) *dynsym = this->dynsym;
-	vector <ecfs_sym> ecfs_sym_vec;
+	Ecfs::Sym *dynsym = this->dynsym;
 	ecfs_sym_t *syms;
+	
 	for (i = 0; i < ehdr->e_shnum; i++) {
 		if (shdr[i].sh_type == SHT_DYNSYM) {
-			symcount = shdr[i].sh_size / sizeof(ElfW(Sym));
+			symcount = shdr[i].sh_size / sizeof(Ecfs::Sym);
 			size_t alloc_len = symcount * sizeof(ecfs_sym_t);
 			syms = (ecfs_sym_t *)alloca(alloc_len);
 			for (j = 0; j < symcount; j++) {
@@ -283,12 +295,14 @@ vector <ecfs_sym> Ecfs::get_dynamic_symbols(void)
 				syms[j].nameoffset = dynsym[j].st_name;
 				syms[j].name = &syms[j].strtab[syms[j].nameoffset];
 			}
-			ecfs_sym_vec.assign(syms, &syms[symcount]);
+			sym_vec.assign(syms, &syms[symcount]);
+			return sym_vec.size();
 		}
 	}
-	return ecfs_sym_vec; // by value
+	return -1; // failed if we got here
 }
 
+#if 0
 int Ecfs::get_siginfo(siginfo_t *siginfo)
 {
 	char *StringTable = this->shstrtab;

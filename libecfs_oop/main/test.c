@@ -63,6 +63,16 @@ int main(int argc, char **argv)
 		print_registers(&prstatus_vector[i].pr_reg);
 	}
 
+	printf("There are %d threads in for %s\n",
+	ecfs.get_thread_count(), ecfs.get_exe_path());
+	vector <ecfs_sym> dynsyms;
+	if (ecfs.get_dynamic_symbols(dynsyms) < 0) {
+		printf("get_dynamic_symbols() failed\n");
+	}
+	for (i = 0; i < dynsyms.size(); i++)
+		printf("Name: %s value: %lx\n",
+			dynsyms[i].name, dynsyms[i].symval);
+	
 #if 0
 	std::vector<ecfs_sym> dynsym;
 	std::vector<ecfs_sym> symtab;
