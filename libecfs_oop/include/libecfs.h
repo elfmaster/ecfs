@@ -407,8 +407,8 @@ class Ecfs {
 		int get_siginfo(siginfo_t &);	// will fill siginfo_t with the signal struct
 		ssize_t get_stack_ptr(uint8_t *&); // will set pointer at .stack section and return the size
 		ssize_t get_heap_ptr(uint8_t *&); // will set pointer at .heap section and return the size
-		ssize_t get_ptr_for_va(unsigned long, uint8_t **); // will set ptr to the segment address specified, and return the size of bytes left
-		ssize_t get_section_pointer(const char *, uint8_t **); // set ptr to a given ELF section within a binary and return section size
+		ssize_t get_ptr_for_va(unsigned long, uint8_t *&); // will set ptr to the segment address specified, and return the size of bytes left
+		ssize_t get_section_pointer(const char *, uint8_t *&); // set ptr to a given ELF section within a binary and return section size
 		ssize_t get_section_size(const char *); // return the size of a section by name
 		unsigned long get_section_va(const char *); // return the vaddr of a section by name
 		unsigned long get_text_va(void);	// get vaddr of text segment

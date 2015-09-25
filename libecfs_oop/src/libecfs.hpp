@@ -414,95 +414,70 @@ int Ecfs<ecfs_type>::get_local_symbols(vector <ecfs_sym_t>&sym_vec)
         return -1; // failed if we got here
 }
 
-#if 0
-vector <ecfs_sym> Ecfs::get_local_symbols(void)
-{
-        int i, j;
-        ElfW(Ehdr) *ehdr = this->ehdr;
-        ElfW(Shdr) *shdr = this->shdr;
-        ssize_t symcount;
-        ElfW(Sym) *symtab = this->symtab;
-        vector <ecfs_sym> ecfs_sym_vec;
-        ecfs_sym_t *syms;
-
-        for (i = 0; i < ehdr->e_shnum; i++) {
-                if (shdr[i].sh_type == SHT_SYMTAB) {
-                        symcount = shdr[i].sh_size / sizeof(ElfW(Sym));
-                        size_t alloc_len = symcount * sizeof(ecfs_sym_t);
-                        syms = (ecfs_sym_t *)alloca(alloc_len);
-                        for (j = 0; j < symcount; j++) {
-                                syms[j].strtab = this->strtab;
-                                syms[j].symval = symtab[j].st_value;
-                                syms[j].size = symtab[j].st_size;
-                                syms[j].type = ELF32_ST_TYPE(symtab[j].st_info);
-                                syms[j].binding = ELF32_ST_BIND(symtab[j].st_info);
-                                syms[j].nameoffset = symtab[j].st_name;
-				syms[j].name = (char *)&this->strtab[symtab[j].st_name];
-                        }
-                        ecfs_sym_vec.assign(syms, &syms[symcount]);
-                }
-        }
-        return ecfs_sym_vec; // by value
-}
-
 /*
- * Example of using get_ptr_for_va() to zero out part of a segment
+ * Example of using get_ptr_for_va(). Lets zero out part of a segment
  * starting at an arbitrary address within the segment.
  *
  * uint8_t *ptr;
- * ssize_t bytes_left_in_segment = ecfs.get_ptr_for_va(0x4000ff, &ptr);
+ * ssize_t bytes_left_in_segment = ecfs.get_ptr_for_va(0x4000ff, ptr);
  * if (ptr) 
  * 	for (int i = 0; i < bytes_left_in_segment; i++) 
  * 		ptr[i] = 0;
  * 
  */
-ssize_t Ecfs::get_ptr_for_va(unsigned long vaddr, uint8_t **ptr)
+template <class ecfs_type>
+ssize_t Ecfs<ecfs_type>::get_ptr_for_va(unsigned long vaddr, uint8_t *&ptr)
 {
-	ElfW(Ehdr) *ehdr = this->ehdr;
-	ElfW(Phdr) *phdr = this->phdr;
+	Ecfs::Ehdr *ehdr = this->ehdr;
+	Ecfs::Phdr *phdr = this->phdr;
 	ssize_t len;
 	int i;
 	
 	for (i = 0; i < ehdr->e_phnum; i++) {
 		if (vaddr >= phdr[i].p_vaddr && vaddr < phdr[i].p_vaddr + phdr[i].p_memsz) {
-			*ptr = (uint8_t *)&this->mem[phdr[i].p_offset + (vaddr - phdr[i].p_vaddr)];
+			ptr = (uint8_t *)&this->mem[phdr[i].p_offset + (vaddr - phdr[i].p_vaddr)];
 			len = phdr[i].p_vaddr + phdr[i].p_memsz - vaddr;
 			return len;
 		}
 	}
-	*ptr = NULL;
+	ptr = NULL;
 	return -1;
 	
 }
 
 /*
- * i.e. len = ecfs.get_section_pointer(desc, ".bss", &ptr);
- * while (i < len) 
- * 	printf("%02x\n", ptr[i++]);
+ * Example of us printing out the uninitialized data memory
+ * from .bss section:
+ *
+ * len = ecfs.get_section_pointer(".bss", ptr);
+ * for (int i = 0; i < len; i++)
+ * 	printf("%02x\n", ptr[i]);
  *
  */
-ssize_t Ecfs::get_section_pointer(const char *name, uint8_t **ptr)
+template <class ecfs_type>
+ssize_t Ecfs<ecfs_type>::get_section_pointer(const char *name, uint8_t *&ptr)
 {
 	char *StringTable = this->shstrtab;
-	ElfW(Shdr) *shdr = this->shdr;
+	Ecfs::Shdr *shdr = this->shdr;
 	ssize_t len;
 	int i;
 
 	for (i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], name)) {
-			*ptr = (uint8_t *)&this->mem[shdr[i].sh_offset];
+			ptr = (uint8_t *)&this->mem[shdr[i].sh_offset];
 			len = shdr[i].sh_size;
 			return len;
 		}		
 	}
-	*ptr = NULL;
+	ptr = NULL;
 	return -1;
 }
 
 /*
  * i.e len = get_section_size(desc, ".bss");
  */
-ssize_t Ecfs::get_section_size(const char *name)
+template <class ecfs_type>
+ssize_t Ecfs<ecfs_type>::get_section_size(const char *name)
 {
 	char *StringTable = this->shstrtab;
 	ElfW(Shdr) *shdr = this->shdr;
@@ -518,6 +493,7 @@ ssize_t Ecfs::get_section_size(const char *name)
 	return -1;
 }
 
+#if 0
 unsigned long Ecfs::get_section_va(const char *name)
 {
 	char *StringTable = this->shstrtab;
