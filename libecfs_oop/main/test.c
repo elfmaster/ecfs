@@ -96,5 +96,11 @@ int main(int argc, char **argv)
 	for (i = 0; i < 16; i++)
 		printf("%02x", stack_ptr[i]);
 	
+	printf("text size: %d bytes\n", ecfs.get_text_size());
+	
+	vector <Elf64_auxv_t> auxv;
+	int asz = ecfs.get_auxv(auxv);
+	for (i = 0; i < asz; i++)
+		printf("auxv type: %d\n", auxv[i].a_type);
 }	
 

@@ -493,11 +493,11 @@ ssize_t Ecfs<ecfs_type>::get_section_size(const char *name)
 	return -1;
 }
 
-#if 0
-unsigned long Ecfs::get_section_va(const char *name)
+template <class ecfs_type>
+unsigned long Ecfs<ecfs_type>::get_section_va(const char *name)
 {
 	char *StringTable = this->shstrtab;
-	ElfW(Shdr) *shdr = this->shdr;
+	Ecfs::Shdr *shdr = this->shdr;
 	int i;
 	unsigned long addr;
 
@@ -510,71 +510,68 @@ unsigned long Ecfs::get_section_va(const char *name)
 	return 0;
 }
 
-
-
-unsigned long Ecfs::get_text_va(void)
+template <class ecfs_type>
+unsigned long Ecfs<ecfs_type>::get_text_va(void)
 {
 	return this->textVaddr;
 }
 
-unsigned long Ecfs::get_data_va(void)
+template <class ecfs_type>
+unsigned long Ecfs<ecfs_type>::get_data_va(void)
 {
 	return this->dataVaddr;
 }
 
-size_t Ecfs::get_text_size(void) 
+template <class ecfs_type>
+size_t Ecfs<ecfs_type>::get_text_size(void) 
 {
 	return this->textSize;
 }
 
-size_t Ecfs::get_data_size(void)
+template <class ecfs_type>
+size_t Ecfs<ecfs_type>::get_data_size(void)
 {
 	return this->dataSize;
 }
 
-unsigned long Ecfs::get_plt_va(void)
+template <class ecfs_type>
+unsigned long Ecfs<ecfs_type>::get_plt_va(void)
 {
 	return this->pltVaddr;
 }
 
-unsigned long Ecfs::get_plt_size(void)
+template <class ecfs_type>
+unsigned long Ecfs<ecfs_type>::get_plt_size(void)
 {
 	return this->pltSize;
 }
-int get_auxiliary_vector32(ecfs_elf_t *desc, Elf32_auxv_t **auxv)
+
+
+/*
+ * Use a vector, why not? We are afterall dealing
+ * with the 'auxiliary vector'
+ */
+template <class ecfs_type>
+int Ecfs<ecfs_type>::get_auxv(vector <auxv_t> &auxv)
 {
-	ElfW(Ehdr) *ehdr = desc->ehdr;
-	ElfW(Shdr) *shdr = desc->shdr;
-	char *shstrtab = (char *)&desc->mem[shdr[ehdr->e_shstrndx].sh_offset];
+	Ecfs::Ehdr *ehdr = this->ehdr;
+	Ecfs::Shdr *shdr = this->shdr;
+	char *shstrtab = this->shstrtab;
 	int i, ac = 0;
+	Ecfs::auxv_t *auxp;
 
 	for (i = 0; i < ehdr->e_shnum; i++) {
 		if (!strcmp(&shstrtab[shdr[i].sh_name], ".auxvector")) {
-			ac = shdr[i].sh_size / sizeof(**auxv);
-			*auxv = (Elf32_auxv_t *)&desc->mem[shdr[i].sh_offset];
+			ac = shdr[i].sh_size / sizeof(Ecfs::auxv_t);
+			auxp = (Ecfs::auxv_t *)&this->mem[shdr[i].sh_offset];
+			auxv.assign(auxp, auxp + ac);
 			break;
 		}
 	}
 	return ac;
 }
 
-int get_auxiliary_vector64(ecfs_elf_t *desc, Elf64_auxv_t **auxv)
-{
-	ElfW(Ehdr) *ehdr = desc->ehdr;
-	ElfW(Shdr) *shdr = desc->shdr;
-	char *shstrtab = (char *)&desc->mem[shdr[ehdr->e_shstrndx].sh_offset];
-	int i, ac = 0;
-
-	for (i = 0; i < ehdr->e_shnum; i++) {
-		if (!strcmp(&shstrtab[shdr[i].sh_name], ".auxvector")) {
-			ac = shdr[i].sh_size / sizeof(**auxv);
-			*auxv = (Elf64_auxv_t *)&desc->mem[shdr[i].sh_offset];
-			break;
-		}
-	}
-	return ac;
-}
-	
+#if 0
 int get_shlib_mapping_names(ecfs_elf_t *desc, char ***shlvec)
 {
 	int i, count, c;	

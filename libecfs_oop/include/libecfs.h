@@ -274,6 +274,7 @@ typedef struct fdinfo_32 {
 struct ecfs_type32 {
 	typedef prstatus_32 prstatus;
 	typedef fdinfo_32_t fdinfo;
+	typedef Elf32_auxv_t auxv_t;
 	typedef Elf32_Ehdr Ehdr;
         typedef Elf32_Shdr Shdr;
         typedef Elf32_Phdr Phdr;
@@ -292,6 +293,7 @@ struct ecfs_type32 {
 struct ecfs_type64 {
 	typedef prstatus_64 prstatus;
 	typedef fdinfo_64_t fdinfo;
+	typedef Elf64_auxv_t auxv_t;
 	typedef Elf64_Ehdr Ehdr;
         typedef Elf64_Shdr Shdr;
         typedef Elf64_Phdr Phdr;
@@ -341,6 +343,8 @@ class Ecfs {
 		 */
 		typedef typename ecfs_type::fdinfo fdinfo;	
 		typedef typename ecfs_type::prstatus prstatus;
+		typedef typename ecfs_type::auxv_t auxv_t;
+
 		/*
 		 * Private members for encapsulation
 		 */
@@ -417,6 +421,7 @@ class Ecfs {
 		size_t get_data_size(void);		// get size of data segment
 		unsigned long get_plt_va(void);		// get vaddr of the .plt
 		unsigned long get_plt_size(void);	// get size of the .plt 
+		int get_auxv(vector <auxv_t>&);	// get auxiliary vector
 		
 
 		
