@@ -571,27 +571,33 @@ int Ecfs<ecfs_type>::get_auxv(vector <auxv_t> &auxv)
 	return ac;
 }
 
-#if 0
-int get_shlib_mapping_names(ecfs_elf_t *desc, char ***shlvec)
+template <class ecfs_type>
+int Ecfs<ecfs_type>::get_shlib_maps(vector <shlibmap_t> &shlib)
 {
 	int i, count, c;	
-	char *shstrtab = desc->shstrtab;
-	ElfW(Shdr) *shdr = desc->shdr;
-	
-	for (count = 0, i = 0; i < desc->ehdr->e_shnum; i++) 
-		if (shdr[i].sh_type == SHT_SHLIB || shdr[i].sh_type == SHT_INJECTED || shdr[i].sh_type == SHT_PRELOADED)
-			count++;
-	if (count == 0)
-		return 0;
-	
-	*shlvec = (char **)calloc(count + 1, sizeof(char *));
-	for (c = 0, i = 0; i < desc->ehdr->e_shnum; i++) {
-		if (shdr[i].sh_type == SHT_SHLIB || shdr[i].sh_type == SHT_INJECTED || shdr[i].sh_type == SHT_PRELOADED) 
-			*((*shlvec) + c++) = strdup(&shstrtab[shdr[i].sh_name]);
-	}	
+	char *shstrtab = this->shstrtab;
+	Ecfs::Shdr *shdr = this->shdr;
+	shlibmap_t *shlibp = alloca(sizeof(shlibmap_t));
+
+	for (count = 0, i = 0; i < this->ehdr->e_shnum; i++) {
+		switch(shdr[i].sh_type) {
+			case SHT_SHLIB:
+			case SHT_INJECTED:
+			case SHT_PRELOADED:
+				count++;
+				shlibp->name = xstrdup(&this->shstrtab[shdr[i].sh_name]);
+				shlibp->vaddr = shdr[i].sh_addr;
+				shlibp->offset = shdr[i].sh_offset;
+				shlibp->size = shdr[i].sh_size;
+				shlib.push_back(*shlibp);
+			default:
+				continue;
+		}
+	}
 	return count;
 }
 
+#if 0
 
 /*
  * This function fills in this struct:
@@ -650,7 +656,7 @@ int get_arg_list(ecfs_elf_t *desc, char ***argv)
 {
 	unsigned int i, argc, c;
 	ElfW(Ehdr) *ehdr = desc->ehdr;
-	ElfW(Shdr) *shdr = desc->shdr;
+	ElfW(Shdr) *shdr = desc->shdr;C++ **&
 	uint8_t *mem = desc->mem;
 	char *shstrtab = desc->shstrtab;
 	char *p = NULL;

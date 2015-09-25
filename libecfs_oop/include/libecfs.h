@@ -218,6 +218,12 @@ typedef struct siginfo64 {
 
 
 
+typedef struct shlibmap {
+	char *name;
+	loff_t offset;
+	unsigned long vaddr;
+	size_t size;
+} shlibmap_t;
 
 /*
  * This particular struct is created by libecfs and is not stored
@@ -422,7 +428,7 @@ class Ecfs {
 		unsigned long get_plt_va(void);		// get vaddr of the .plt
 		unsigned long get_plt_size(void);	// get size of the .plt 
 		int get_auxv(vector <auxv_t>&);	// get auxiliary vector
-		
+		int get_shlib_maps(vector <shlibmap_t>&);
 
 		
 };		
