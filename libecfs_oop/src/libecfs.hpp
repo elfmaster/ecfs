@@ -340,6 +340,13 @@ int Ecfs<ecfs_type>::get_siginfo(siginfo_t &siginfo)
  * do it so that the user can get both the section pointer
  * and size all in one. On failure -1 is returned
  * or *ptr = NULL
+ *
+ * Example:
+ * uint8_t *ptr;
+ * ssize_t stack_size = ecfs.get_stack_ptr(ptr);
+ * for(; stack_size != -1 && stack_size > 0; stack_size--)
+ *	printf("stack_byte: %02x\n", *ptr);
+ *
  */
 template <class ecfs_type>
 ssize_t Ecfs<ecfs_type>::get_stack_ptr(uint8_t *&ptr)
@@ -374,6 +381,37 @@ ssize_t Ecfs<ecfs_type>::get_heap_ptr(uint8_t *&ptr)
 	
 	ptr = NULL;
 	return -1;
+}
+
+template <class ecfs_type>
+int Ecfs<ecfs_type>::get_local_symbols(vector <ecfs_sym_t>&sym_vec)
+{
+        int i, j;
+        Ecfs::Ehdr *ehdr = this->ehdr;
+        Ecfs::Shdr *shdr = this->shdr;
+        ssize_t symcount;
+        Ecfs::Sym *symtab = this->symtab;
+        ecfs_sym_t *syms;
+
+        for (i = 0; i < ehdr->e_shnum; i++) {
+                if (shdr[i].sh_type == SHT_SYMTAB) {
+                        symcount = shdr[i].sh_size / sizeof(Ecfs::Sym);
+                        size_t alloc_len = symcount * sizeof(ecfs_sym_t);
+                        syms = (ecfs_sym_t *)alloca(alloc_len);
+                        for (j = 0; j < symcount; j++) {
+                                syms[j].strtab = this->strtab;
+                                syms[j].symval = symtab[j].st_value;
+                                syms[j].size = symtab[j].st_size;
+                                syms[j].type = ELF32_ST_TYPE(symtab[j].st_info);
+                                syms[j].binding = ELF32_ST_BIND(symtab[j].st_info);
+                                syms[j].nameoffset = symtab[j].st_name;
+                                syms[j].name = &syms[j].strtab[syms[j].nameoffset];
+                        }
+                        sym_vec.assign(syms, &syms[symcount]);
+                        return sym_vec.size();
+                }
+        }
+        return -1; // failed if we got here
 }
 
 #if 0

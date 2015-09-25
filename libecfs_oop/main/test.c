@@ -67,12 +67,10 @@ int main(int argc, char **argv)
 	printf("There are %d threads in for %s\n",
 	ecfs.get_thread_count(), ecfs.get_exe_path());
 	
-	/*
-    	 siginfo64_t siginfo;
-        ecfs.get_siginfo(&siginfo);
-        printf("last signal: %d\n", siginfo._si_signo);
-	*/
-
+	vector <ecfs_sym> symtab;
+	ssize_t symcount = ecfs.get_local_symbols(symtab);
+	for (i = 0; i < symcount; i++)
+		printf("Name: %s Value: %lx\n",  symtab[i].name,symtab[i].symval);
 	vector <ecfs_sym> dynsyms;
 	if (ecfs.get_dynamic_symbols(dynsyms) < 0) {
 		printf("get_dynamic_symbols() failed\n");
@@ -97,6 +95,6 @@ int main(int argc, char **argv)
 	printf("16 bytes of stack data\n");
 	for (i = 0; i < 16; i++)
 		printf("%02x", stack_ptr[i]);
-
+	
 }	
 
