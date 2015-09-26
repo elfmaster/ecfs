@@ -99,8 +99,15 @@ int main(int argc, char **argv)
 	printf("text size: %d bytes\n", ecfs.get_text_size());
 	
 	vector <Elf64_auxv_t> auxv;
-	int asz = ecfs.get_auxv(auxv);
+	unsigned int asz = ecfs.get_auxv(auxv);
 	for (i = 0; i < asz; i++)
 		printf("auxv type: %d\n", auxv[i].a_type);
+	
+	printf("Getting shlib maps\n");
+	vector <shlibmap_t> shlibs;
+	ecfs.get_shlib_maps(shlibs);
+	for (i = 0; i < shlibs.size(); i++)
+		printf("%s : %lx\n", shlibs[i].name, shlibs[i].vaddr);
+
 }	
 

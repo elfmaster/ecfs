@@ -574,10 +574,10 @@ int Ecfs<ecfs_type>::get_auxv(vector <auxv_t> &auxv)
 template <class ecfs_type>
 int Ecfs<ecfs_type>::get_shlib_maps(vector <shlibmap_t> &shlib)
 {
-	int i, count, c;	
+	int i, count;	
 	char *shstrtab = this->shstrtab;
 	Ecfs::Shdr *shdr = this->shdr;
-	shlibmap_t *shlibp = alloca(sizeof(shlibmap_t));
+	shlibmap_t *shlibp = (shlibmap_t *)alloca(sizeof(shlibmap_t));
 
 	for (count = 0, i = 0; i < this->ehdr->e_shnum; i++) {
 		switch(shdr[i].sh_type) {
@@ -585,7 +585,7 @@ int Ecfs<ecfs_type>::get_shlib_maps(vector <shlibmap_t> &shlib)
 			case SHT_INJECTED:
 			case SHT_PRELOADED:
 				count++;
-				shlibp->name = xstrdup(&this->shstrtab[shdr[i].sh_name]);
+				shlibp->name = xstrdup(&shstrtab[shdr[i].sh_name]);
 				shlibp->vaddr = shdr[i].sh_addr;
 				shlibp->offset = shdr[i].sh_offset;
 				shlibp->size = shdr[i].sh_size;
