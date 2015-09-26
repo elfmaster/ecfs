@@ -1,6 +1,5 @@
 #include <stdio.h>
-#include "../include/libecfs.h"
-#include "../src/libecfs.hpp"
+#include "../include/libecfs_reader.hpp"
 static void print_registers(struct user_regs_struct *reg)
 {
         struct user_regs_struct pt_reg;
