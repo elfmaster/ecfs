@@ -1,5 +1,6 @@
 #include <stdio.h>
-#include "../include/libecfs_reader.hpp"
+#include "../src/libecfs.hpp"
+
 static void print_registers(struct user_regs_struct *reg)
 {
         struct user_regs_struct pt_reg;
@@ -108,5 +109,11 @@ int main(int argc, char **argv)
 	for (i = 0; i < shlibs.size(); i++)
 		printf("%s : %lx\n", shlibs[i].name, shlibs[i].vaddr);
 
+	printf("Getting PLTGOT\n");
+	vector <pltgotinfo_t> pltgot;
+	ret = ecfs.get_pltgot_info(pltgot);
+	printf("ret = %d\n", ret);
+	for (i = 0; i < pltgot.size(); i++)
+		printf("value: %lx\n", pltgot[i].got_entry_va);
 }	
 

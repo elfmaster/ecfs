@@ -429,7 +429,7 @@ class Ecfs {
 		unsigned long get_plt_size(void);	// get size of the .plt 
 		int get_auxv(vector <auxv_t>&);	// get auxiliary vector
 		int get_shlib_maps(vector <shlibmap_t>&);
-
+		ssize_t get_pltgot_info(vector <pltgotinfo_t>&);
 		
 };		
 		
