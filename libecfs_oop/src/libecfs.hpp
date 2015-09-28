@@ -1128,7 +1128,7 @@ ssize_t Ecfs<ecfs_type>::get_pltgot_info(vector <pltgotinfo_t> &pginfo)
 	for (i = 0; i < this->plt_rela_count; i++) {
 		pginfo_ptr[i].got_site = this->plt_rela[i].r_offset;
 		pginfo_ptr[i].got_entry_va = (unsigned long)GOT[i];
-		 sym = (Ecfs::Sym *)&symtab[ELF64_R_SYM(this->plt_rela[i].r_info)];
+		sym = (Ecfs::Sym *)&symtab[ELF64_R_SYM(this->plt_rela[i].r_info)];
 		pginfo_ptr[i].shl_entry_va = sym->st_value;
 		 // the + 6 is because it must point to the push instruction in the plt entry
 		pginfo_ptr[i].plt_entry_va = (pltVaddr + 6); // + (desc->pie ? desc->textVaddr : 0); 
