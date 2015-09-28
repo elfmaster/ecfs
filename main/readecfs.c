@@ -219,6 +219,7 @@ usage:
 	printf("- Command line: ");
 	char **argvec;
 	int argcount = get_arg_list(desc, &argvec);
+	printf("argcount: %d\n", argcount);
 	for (i = 0; i < argcount; i++) 
 		printf("%s ", argvec[i]);
 	printf("\n");

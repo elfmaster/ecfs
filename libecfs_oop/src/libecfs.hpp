@@ -429,9 +429,11 @@ class Ecfs {
 		unsigned long get_plt_va(void);		// get vaddr of the .plt
 		unsigned long get_plt_size(void);	// get size of the .plt 
 		int get_auxv(vector <auxv_t>&);	// get auxiliary vector
-		ssize_t get_shlib_maps(vector <shlibmap_t>&);
-		ssize_t get_pltgot_info(vector <pltgotinfo_t>&);
-		
+		ssize_t get_shlib_maps(vector <shlibmap_t>&); // get vector of shlibmap_t structs
+		ssize_t get_pltgot_info(vector <pltgotinfo_t>&); // get vector of pltgotinfo_t structs
+		unsigned long get_fault_location(void);	// get address that the fault happened on (taken from siginfo_t)
+		int get_argv(char ***);	// get the argument vector (argc, and argv)
+		char * get_section_name_by_addr(unsigned long); // return pointer to section name
 };		
 		
 #define MAX_SYM_LEN 255
@@ -1092,14 +1094,12 @@ ssize_t Ecfs<ecfs_type>::get_pltgot_info(vector <pltgotinfo_t> &pginfo)
 	size_t pltSize;
 	pltgotinfo_t *pginfo_ptr;
 
-	printf("Getting PLT info, sizes and address\n");
 	if ((pltVaddr = this->get_plt_va()) == 0)
 		return -1;
 	if ((pltSize = this->get_plt_size()) == 0)
 		return -1;
 	if (this->plt_rela_count == 0 || this->plt_rela == NULL || symtab == NULL)
 		return -1;
-	printf("Building PLT vector\n");
 	pginfo_ptr = (pltgot_info_t *)alloca(this->plt_rela_count * sizeof(pltgotinfo_t));
 	GOT = &this->pltgot[3]; // the first 3 entries are reserved
 	pltVaddr += 16; // we want to start at the PLT entry after what is called PLT-0
@@ -1111,64 +1111,72 @@ ssize_t Ecfs<ecfs_type>::get_pltgot_info(vector <pltgotinfo_t> &pginfo)
 		 // the + 6 is because it must point to the push instruction in the plt entry
 		pginfo_ptr[i].plt_entry_va = (pltVaddr + 6); // + (desc->pie ? desc->textVaddr : 0); 
 		pltVaddr += 16;
-		printf("adding entry\n");
 		pginfo.push_back(pginfo_ptr[i]);
 	}
 	return i;
 }
 
-#if 0
-unsigned long get_fault_location(ecfs_elf_t *desc)
+template <class ecfs_type>
+unsigned long Ecfs<ecfs_type>::get_fault_location(void)
 {
 	siginfo_t siginfo;
 	
-	if (get_siginfo(desc, &siginfo) < 0)
+	if (this->get_siginfo(siginfo) < 0)
 		return 0;
 
 	return (unsigned long)siginfo.si_addr;
 }
 
 /*
- * Returns argc and allocated and fills argv
+ * Will change to vector of strings, for now use
+ * the good ole C way:
+ * char **argv;
+ * int argc = get_argv(&argv);
+ * while(argc--) printf("%s\n", *argv++);
  */
-int get_arg_list(ecfs_elf_t *desc, char ***argv)
+template <class ecfs_type>
+int Ecfs<ecfs_type>::get_argv(char ***argv)
 {
-	unsigned int i, argc, c;
-	ElfW(Ehdr) *ehdr = desc->ehdr;
-	ElfW(Shdr) *shdr = desc->shdr;C++ **&
-	uint8_t *mem = desc->mem;
-	char *shstrtab = desc->shstrtab;
-	char *p = NULL;
-	char *q = NULL;
+        int i, argc, c;
+        Ecfs::Ehdr *ehdr = this->ehdr;
+        Ecfs::Shdr *shdr = this->shdr;
+        uint8_t *mem = this->mem;
+        char *shstrtab = this->shstrtab;
+        char *p = NULL;
+        char *q = NULL;
 
-	for (i = 0; i < ehdr->e_shnum; i++) {
-		if (!strcmp(&shstrtab[shdr[i].sh_name], ".arglist")) {
-			*argv = (char **)heapAlloc(sizeof(char *) * MAX_ARGS);		
-			p = (char *)&mem[shdr[i].sh_offset];
-			for (argc = 0, c = 0; c < shdr[i].sh_size; ) {
-				*((*argv) + argc++) = xstrdup(p);
-				 q = strchr(p, '\0') + 1;
-				 c += (q - p);
-				 p = q;
-			}
-			return argc;
-		}
-	}
-	**argv = NULL;
-	return -1;
+        for (i = 0; i < ehdr->e_shnum; i++) {
+                if (!strcmp(&shstrtab[shdr[i].sh_name], ".arglist")) {
+                        *argv = (char **)heapAlloc(sizeof(char *) * MAX_ARGS);           
+                        p = (char *)&mem[shdr[i].sh_offset];
+                        for (argc = 0, c = 0; c < shdr[i].sh_size; ) {
+                                *((*argv) + argc++) = xstrdup(p);
+                                 q = strchr(p, '\0') + 1;
+                                 c += (q - p);
+                                 p = q;
+                        }
+                        return argc;
+                }
+        }
+        **argv = NULL;
+        return -1;
 }
 
-char * get_section_name_by_addr(ecfs_elf_t *desc, unsigned long addr)
+/*
+ * Give an address as a parameter and return the name of the
+ * section that the address resides in. 
+ */
+template <class ecfs_type>
+char * Ecfs<ecfs_type>::get_section_name_by_addr(unsigned long addr)
 {
-	ElfW(Ehdr) *ehdr = desc->ehdr;
-	ElfW(Shdr) *shdr = desc->shdr;
-	char *shstrtab = desc->shstrtab;
+	Ecfs::Ehdr *ehdr = this->ehdr;
+	Ecfs::Shdr *shdr = this->shdr;
+	char *shstrtab = this->shstrtab;
 	int i;
 
 	for (i = 0; i < ehdr->e_shnum; i++) 
-		if (shdr[i].sh_addr == addr)
+		if (addr >= shdr[i].sh_addr && addr < shdr[i].sh_addr + shdr[i].sh_size)
 			return &shstrtab[shdr[i].sh_name];
 	return NULL;
 }
-#endif
 #endif
