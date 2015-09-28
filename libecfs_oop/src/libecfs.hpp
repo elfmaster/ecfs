@@ -26,7 +26,6 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include "util.h"
 
 #include <iostream>
 #include <fstream>
@@ -34,6 +33,7 @@
 
 using namespace std;
 
+	
 
 #define MAX_ARGS 256 // for .arglist
 /*
@@ -435,6 +435,48 @@ class Ecfs {
 };		
 		
 #define MAX_SYM_LEN 255
+
+static inline int xopen(const char *path, int flags)
+{
+        int fd = open(path, flags);
+        if (fd < 0) {
+                fprintf(stderr, "opening path: %s failed\n", path);
+                exit(-1);
+        }
+        return fd;
+}
+
+static inline int xfstat(int fd, struct stat *st)
+{
+        int ret = fstat(fd, st);
+        if (ret < 0) {
+                perror("fstat");
+                exit(-1);
+        }
+        return 0;
+}
+
+static inline void * heapAlloc(size_t len)
+{
+        void *p = malloc(len);
+        if (p == NULL) {
+                perror("malloc");
+                exit(-1);
+        }
+        memset(p, 0, len);
+        return p;
+}
+
+
+static inline char * xstrdup(const char *s)
+{
+        char *p = strdup(s);
+        if (p == NULL) {
+                perror("strdup");
+                exit(-1);
+        }
+        return p;
+}
 
 
 
@@ -1050,13 +1092,14 @@ ssize_t Ecfs<ecfs_type>::get_pltgot_info(vector <pltgotinfo_t> &pginfo)
 	size_t pltSize;
 	pltgotinfo_t *pginfo_ptr;
 
+	printf("Getting PLT info, sizes and address\n");
 	if ((pltVaddr = this->get_plt_va()) == 0)
 		return -1;
 	if ((pltSize = this->get_plt_size()) == 0)
 		return -1;
 	if (this->plt_rela_count == 0 || this->plt_rela == NULL || symtab == NULL)
 		return -1;
-	
+	printf("Building PLT vector\n");
 	pginfo_ptr = (pltgot_info_t *)alloca(this->plt_rela_count * sizeof(pltgotinfo_t));
 	GOT = &this->pltgot[3]; // the first 3 entries are reserved
 	pltVaddr += 16; // we want to start at the PLT entry after what is called PLT-0
@@ -1066,8 +1109,9 @@ ssize_t Ecfs<ecfs_type>::get_pltgot_info(vector <pltgotinfo_t> &pginfo)
 		 sym = (Ecfs::Sym *)&symtab[ELF64_R_SYM(this->plt_rela[i].r_info)];
 		pginfo_ptr[i].shl_entry_va = sym->st_value;
 		 // the + 6 is because it must point to the push instruction in the plt entry
-		pginfo[i].plt_entry_va = (pltVaddr + 6); // + (desc->pie ? desc->textVaddr : 0); 
+		pginfo_ptr[i].plt_entry_va = (pltVaddr + 6); // + (desc->pie ? desc->textVaddr : 0); 
 		pltVaddr += 16;
+		printf("adding entry\n");
 		pginfo.push_back(pginfo_ptr[i]);
 	}
 	return i;
