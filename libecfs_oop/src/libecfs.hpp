@@ -391,13 +391,18 @@ class Ecfs {
 		elf_stat_t *elfstats;
 		char *filepath;
 	public:
+		int argc; // processes original argc value
 		/*
 		 * To maintain an internal copy of the vectors for various structure arrays
 		 */
                 std::vector <pltgotinfo> pltgot_vector;
                 std::vector <fdinfo> fdinfo_vector;
                 std::vector <prstatus> prstatus_vector;
-
+		std::vector <ecfs_sym_t> dynsym_vector; //dynamic symbols
+		std::vector <ecfs_sym_t> symtab_vector; //symtab vector
+		std::vector <auxv_t> auxv;
+		std::vector <string> argv;
+		
 		/*
 		 * Constructor
 		 */
@@ -629,6 +634,23 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path)
 	ecfs->shdr = shdr;
 	ecfs->mem = mem;
 	
+	/*
+	 * Now that we have assigned all of the private pointers and variables
+	 * lets set the internal vectors.
+	 */
+	this->get_fdinfo(this->fdinfo_vector);
+	this->get_pltgot_info(this->pltgot_vector);
+	this->get_dynamic_symbols(this->dynsym_vector);
+	this->get_local_symbols(this->symtab_vector);
+	this->get_prstatus(this->prstatus_vector);
+	this->get_auxv(this->auxv);
+	
+	/*
+	 * set argv
+	 */
+	char **argvp;
+	this->argc = this->get_argv(&argvp);
+	this->argv.assign(argvp, (argvp + this->argc)); 
 	return 0;
 }	
 template <class ecfs_type> 
@@ -671,7 +693,6 @@ int Ecfs<ecfs_type>::get_fdinfo(std::vector<Ecfs::fdinfo> &fdinfo_vec)
 			memcpy(fdinfo_ptr, &desc->mem[shdr[i].sh_offset], shdr[i].sh_size);
 			items = shdr[i].sh_size / sizeof(Ecfs::fdinfo);
 			fdinfo_vec.assign(fdinfo_ptr, &fdinfo_ptr[items]);
-			this->fdinfo_vector = fdinfo_vec;
 			return fdinfo_vec.size();
 		}
 	}
@@ -701,7 +722,6 @@ int Ecfs<ecfs_type>::get_prstatus(std::vector<Ecfs::prstatus> &prstatus_vec)
 			memcpy(prstatus_ptr, &this->mem[shdr[i].sh_offset], shdr[i].sh_size);
 			items = shdr[i].sh_size / sizeof(Ecfs::prstatus);
 			prstatus_vec.assign(prstatus_ptr, &prstatus_ptr[items]);
-			this->prstatus_vector = prstatus_vec;
 			return prstatus_vec.size();
 		}
 	}

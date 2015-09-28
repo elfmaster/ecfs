@@ -46,9 +46,15 @@ int main(int argc, char **argv)
 		exit(0);
 	}
 	unsigned int i, ret;
+	
 	printf("Creating ecfs object on %s\n", argv[1]);
 	Ecfs <ecfs_type64>ecfs(argv[1]);
+	for (i = 0; i < ecfs.fdinfo_vector.size(); i++)
+		printf("fd path: %s\n", ecfs.fdinfo_vector[i].path);
+	for (i = 0; i < ecfs.symtab_vector.size(); i++)
+		printf("symbol name: %s value: %lx\n", ecfs.symtab_vector[i].name, ecfs.symtab_vector[i].symval);
 
+#if 0
 	/*
 	 * Get fdinfo
 	 */
@@ -180,6 +186,6 @@ int main(int argc, char **argv)
 	for (i = 0; i < dlen; i++)
 		printf("%02x", data_ptr[i]);
 
-
+#endif
 }	
 
