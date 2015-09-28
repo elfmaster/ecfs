@@ -324,6 +324,7 @@ typedef struct pltgotinfo {
         unsigned long shl_entry_va; // the shared library address the GOT should point to if it has been resolved
 } pltgotinfo_t;
 
+typedef pltgotinfo_t pltgot_info_t; // for backwards compatibility
 
 /******************
  * Main ECFS class that is used for loading and parsing ECFS files
@@ -428,8 +429,8 @@ class Ecfs {
 		unsigned long get_plt_va(void);		// get vaddr of the .plt
 		unsigned long get_plt_size(void);	// get size of the .plt 
 		int get_auxv(vector <auxv_t>&);	// get auxiliary vector
-		int get_shlib_maps(vector <shlibmap_t>&);
-
+		ssize_t get_shlib_maps(vector <shlibmap_t>&);
+		ssize_t get_pltgot_info(vector <pltgotinfo_t>&);
 		
 };		
 		
@@ -1002,9 +1003,9 @@ int Ecfs<ecfs_type>::get_auxv(vector <auxv_t> &auxv)
 }
 
 template <class ecfs_type>
-int Ecfs<ecfs_type>::get_shlib_maps(vector <shlibmap_t> &shlib)
+ssize_t Ecfs<ecfs_type>::get_shlib_maps(vector <shlibmap_t> &shlib)
 {
-	int i, count;	
+	ssize_t i, count;	
 	char *shstrtab = this->shstrtab;
 	Ecfs::Shdr *shdr = this->shdr;
 	shlibmap_t *shlibp = (shlibmap_t *)alloca(sizeof(shlibmap_t));
@@ -1027,48 +1028,52 @@ int Ecfs<ecfs_type>::get_shlib_maps(vector <shlibmap_t> &shlib)
 	return count;
 }
 
-#if 0
 
 /*
- * This function fills in this struct:
-   typedef struct pltgotinfo {
-		unsigned long got_site; // address of where the GOT entry exists
-		unsigned long got_entry_va; // address that is in the GOT entry (the pointer address)
-		unsigned long plt_entry_va; // the PLT address that the GOT entry should point to if not yet resolved
-		unsigned long shl_entry_va; // the shared library address the GOT should point to if it has been resolved
-} pltgot_info_t;
+ * XXX FALSE POSITIVES BUG
+ * I'm not sure if this function is the culprit, or if its a problem with the
+ * symbol resolution against certain shared libraries, but in really big GOT's
+ * such as with sshd, there are incorrect values showing up, such as pginfo[N].got_entry_va
+ * might have an address that doesn't match the proper shared library address, or the PLT address
+ * which normally indicates a PLT/GOT hooks, but in this case, its verified that there are no
+ * hooks, thus resulting in FALSE POSITIVES
 */
-ssize_t get_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo)
+
+template <class ecfs_type>
+ssize_t Ecfs<ecfs_type>::get_pltgot_info(vector <pltgotinfo_t> &pginfo)
 {	
-	int i;
+	ssize_t i;
 	unsigned long *GOT = NULL;
-	ElfW(Sym) *symtab = desc->dynsym;
-	ElfW(Sym) *sym;
-	ElfW(Addr) pltVaddr;
+	Ecfs::Sym *symtab = this->dynsym;
+	Ecfs::Sym *sym;
+	Ecfs::Addr pltVaddr;
 	size_t pltSize;
+	pltgotinfo_t *pginfo_ptr;
+
+	if ((pltVaddr = this->get_plt_va()) == 0)
+		return -1;
+	if ((pltSize = this->get_plt_size()) == 0)
+		return -1;
+	if (this->plt_rela_count == 0 || this->plt_rela == NULL || symtab == NULL)
+		return -1;
 	
-	if ((pltVaddr = get_plt_va(desc)) == 0)
-		return -1;
-	if ((pltSize = get_plt_size(desc)) == 0)
-		return -1;
-	if (desc->plt_rela_count == 0 || desc->plt_rela == NULL || symtab == NULL)
-		return -1;
-	
-	*pginfo = (pltgot_info_t *)heapAlloc(desc->plt_rela_count * sizeof(pltgot_info_t));
-	GOT = &desc->pltgot[3]; // the first 3 entries are reserved
+	pginfo_ptr = (pltgot_info_t *)alloca(this->plt_rela_count * sizeof(pltgotinfo_t));
+	GOT = &this->pltgot[3]; // the first 3 entries are reserved
 	pltVaddr += 16; // we want to start at the PLT entry after what is called PLT-0
-	for (i = 0; i < desc->plt_rela_count; i++) {
-		(*pginfo)[i].got_site = desc->plt_rela[i].r_offset;
-		(*pginfo)[i].got_entry_va = (unsigned long)GOT[i];
-		 sym = (ElfW(Sym) *)&symtab[ELF64_R_SYM(desc->plt_rela[i].r_info)];
-		(*pginfo)[i].shl_entry_va = sym->st_value;
+	for (i = 0; i < this->plt_rela_count; i++) {
+		pginfo_ptr[i].got_site = this->plt_rela[i].r_offset;
+		pginfo_ptr[i].got_entry_va = (unsigned long)GOT[i];
+		 sym = (Ecfs::Sym *)&symtab[ELF64_R_SYM(this->plt_rela[i].r_info)];
+		pginfo_ptr[i].shl_entry_va = sym->st_value;
 		 // the + 6 is because it must point to the push instruction in the plt entry
-		(*pginfo)[i].plt_entry_va = (pltVaddr + 6); // + (desc->pie ? desc->textVaddr : 0); 
+		pginfo[i].plt_entry_va = (pltVaddr + 6); // + (desc->pie ? desc->textVaddr : 0); 
 		pltVaddr += 16;
+		pginfo.push_back(pginfo_ptr[i]);
 	}
 	return i;
 }
 
+#if 0
 unsigned long get_fault_location(ecfs_elf_t *desc)
 {
 	siginfo_t siginfo;
