@@ -49,59 +49,67 @@ int main(int argc, char **argv)
 	
 	printf("Creating ecfs object on %s\n", argv[1]);
 	Ecfs <ecfs_type64>ecfs(argv[1]);
-	for (i = 0; i < ecfs.fdinfo_vector.size(); i++)
-		printf("fd path: %s\n", ecfs.fdinfo_vector[i].path);
-	for (i = 0; i < ecfs.symtab_vector.size(); i++)
-		printf("symbol name: %s value: %lx\n", ecfs.symtab_vector[i].name, ecfs.symtab_vector[i].symval);
-
-#if 0
-	/*
-	 * Get fdinfo
-	 */
-	vector <fdinfo_64> fdinfo_vector;
-	if (ecfs.get_fdinfo(fdinfo_vector) < 0) {
-		printf("Getting fdinfo failed\n");
-	}
-	for (i = 0; i < fdinfo_vector.size(); i++)
-		printf("%s\n", fdinfo_vector[i].path);
-	
 	
 	/*
-	 * Get prstatus 
+	 * NOTE: 
+	 * Now that we've instantiated the ecfs object, we can access
+	 * various public members, namely the vectors that have already
+	 * been loaded. argv, auxv, fdinfo, symtab, dynsym, prstatus, shlib,
 	 */
-	vector <prstatus_64> prstatus_vector;
-	if (ecfs.get_prstatus(prstatus_vector) < 0)
-		printf("Getting prstatus failed\n");
-	
-	for (i = 0; i < prstatus_vector.size(); i++) {
-		printf("pid: %d\n", prstatus_vector[i].pr_pid);
-		print_registers(&prstatus_vector[i].pr_reg);
-	}
 
+	/*
+	 * Read fdinfo
+	 */
+	vector <fdinfo_64> fdinfo = ecfs.m_fdinfo;
+	for (i = 0; i < fdinfo.size(); i++)
+		printf("fd path: %s\n", fdinfo[i].path);
+
+		
+	/*
+	 * Read local symbols (from .symtab)
+	 */
+	vector <ecfs_sym_t> symtab = ecfs.m_symtab;
+	for (i = 0; i < symtab.size(); i++)
+		printf("symbol name: %s value: %lx\n", symtab[i].name, symtab[i].symval);
+
+	/*
+	 * read dynamic symbols
+	 */
+	vector <ecfs_sym_t> dynsym = ecfs.m_dynsym;
+	for (i = 0; i < dynsym.size(); i++)
+		printf("symbol name: %s value: %lx\n", dynsym[i].name, dynsym[i].symval);
+
+	/*
+	 * Read prstatus
+	 */
+	vector <prstatus_64> prstatus = ecfs.m_prstatus;
+	for (i = 0; i < prstatus.size(); i++)
+		printf("pid: %d\n", prstatus[i].pr_pid);
+	
+	/*
+	 * Read pltgot info
+	 */
+	vector <pltgotinfo_t> pltgot = ecfs.m_pltgot;
+	for (i = 0; i < pltgot.size(); i++)
+		printf("Reloc offset: %lx value: %lx expected shlib: %lx pltstub: %lx\n",
+			pltgot[i].got_site, pltgot[i].got_entry_va, pltgot[i].shl_entry_va, pltgot[i].plt_entry_va);
+
+	
+	vector <string> args = ecfs.m_argv;
+	for (i = 0; i < ecfs.m_argc; i++) {
+		printf("%s", args[i].c_str());
+	}
+	
+	vector <Elf64_auxv_t> auxv = ecfs.m_auxv;
+	for (i = 0; i < auxv.size(); i++) {
+		printf("auxv a_type: %lx a_val: %lx\n", auxv[i].a_type, auxv[i].a_un.a_val);
+	}
+	
 	/* 
 	 * Get thread count and exepath
 	 */
 	printf("There are %d threads in for %s\n",
 	ecfs.get_thread_count(), ecfs.get_exe_path());
-	
-	/*
-	 * Get local symbols
-	 */
-	vector <ecfs_sym> symtab;
-	ssize_t symcount = ecfs.get_local_symbols(symtab);
-	for (i = 0; i < symcount; i++)
-		printf("Name: %s Value: %lx\n",  symtab[i].name,symtab[i].symval);
-	
-	/*
-	 * Get the dynamic symbols
-	 */
-	vector <ecfs_sym> dynsyms;
-	if (ecfs.get_dynamic_symbols(dynsyms) < 0) {
-		printf("get_dynamic_symbols() failed\n");
-	}
-	for (i = 0; i < dynsyms.size(); i++)
-		printf("Name: %s value: %lx\n",
-		dynsyms[i].name, dynsyms[i].symval);
 	
 	
 	/*
@@ -139,53 +147,18 @@ int main(int argc, char **argv)
 	printf("text size: %d bytes\n", ecfs.get_text_size());
 	
 	/*
-	 * Get and print auxiliary vector
-	 */
-	vector <Elf64_auxv_t> auxv;
-	unsigned int asz = ecfs.get_auxv(auxv);
-	for (i = 0; i < asz; i++)
-		printf("auxv type: %d\n", auxv[i].a_type);
-	
-	/*
-	 * Get the shared library mappings
-	 */
-	printf("Getting shlib maps\n");
-	vector <shlibmap_t> shlibs;
-	ecfs.get_shlib_maps(shlibs);
-	for (i = 0; i < shlibs.size(); i++)
-		printf("%s : %lx\n", shlibs[i].name, shlibs[i].vaddr);
-	
-	/*
-	 * Get PLT/GOT info
-	 */
-	printf("Getting PLTGOT\n");
-	vector <pltgotinfo_t> pltgot;
-	ret = ecfs.get_pltgot_info(pltgot);
-	for (i = 0; i < pltgot.size(); i++)
-		printf("value: %lx expected shlib: %lx or pltstub_addr: %lx\n", pltgot[i].got_entry_va,pltgot[i].shl_entry_va, pltgot[i].plt_entry_va);
-	
-	/*
 	 * Show fault address
  	 */
 	printf("Fault location: %lx\n", ecfs.get_fault_location());
 	
-	/*
-	 * Get argument vector (C style)
-	 */
-	char **arg;
-	int ac = ecfs.get_argv(&arg);
-	for (i = 0; i < ac; i++)
-		printf("%s", arg[i]);
-	
 
 	/*
-	 * Get a pointer into the .data section
+	 * Get a pointer into an arbitrary section, lets try the .data section
 	 */
 	uint8_t *data_ptr;
 	ssize_t dlen = ecfs.get_section_pointer(".data", data_ptr);
 	for (i = 0; i < dlen; i++)
 		printf("%02x", data_ptr[i]);
 
-#endif
 }	
 

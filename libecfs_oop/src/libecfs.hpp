@@ -391,18 +391,19 @@ class Ecfs {
 		elf_stat_t *elfstats;
 		char *filepath;
 	public:
-		int argc; // processes original argc value
+
+		int m_argc; // processes original argc value
 		/*
 		 * To maintain an internal copy of the vectors for various structure arrays
 		 */
-                std::vector <pltgotinfo> pltgot_vector;
-                std::vector <fdinfo> fdinfo_vector;
-                std::vector <prstatus> prstatus_vector;
-		std::vector <ecfs_sym_t> dynsym_vector; //dynamic symbols
-		std::vector <ecfs_sym_t> symtab_vector; //symtab vector
-		std::vector <auxv_t> auxv;
-		std::vector <string> argv;
-		
+                std::vector <pltgotinfo> m_pltgot;
+                std::vector <fdinfo> m_fdinfo;
+                std::vector <prstatus> m_prstatus;
+		std::vector <ecfs_sym_t> m_dynsym; //dynamic symbols
+		std::vector <ecfs_sym_t> m_symtab; //symtab vector
+		std::vector <auxv_t> m_auxv;
+		std::vector <string> m_argv;
+		std::vector <shlibmap_t> m_shlib;
 		/*
 		 * Constructor
 		 */
@@ -638,19 +639,20 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path)
 	 * Now that we have assigned all of the private pointers and variables
 	 * lets set the internal vectors.
 	 */
-	this->get_fdinfo(this->fdinfo_vector);
-	this->get_pltgot_info(this->pltgot_vector);
-	this->get_dynamic_symbols(this->dynsym_vector);
-	this->get_local_symbols(this->symtab_vector);
-	this->get_prstatus(this->prstatus_vector);
-	this->get_auxv(this->auxv);
-	
+	this->get_fdinfo(this->m_fdinfo);
+	this->get_pltgot_info(this->m_pltgot);
+	this->get_dynamic_symbols(this->m_dynsym);
+	this->get_local_symbols(this->m_symtab);
+	this->get_prstatus(this->m_prstatus);
+	this->get_auxv(this->m_auxv);
+	this->get_shlib_maps(this->m_shlib);
+
 	/*
 	 * set argv
 	 */
 	char **argvp;
-	this->argc = this->get_argv(&argvp);
-	this->argv.assign(argvp, (argvp + this->argc)); 
+	this->m_argc = this->get_argv(&argvp);
+	this->m_argv.assign(argvp, (argvp + this->m_argc)); 
 	return 0;
 }	
 template <class ecfs_type> 
