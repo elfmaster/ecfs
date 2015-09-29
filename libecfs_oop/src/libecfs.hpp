@@ -411,6 +411,12 @@ class Ecfs {
 			if (Ecfs::load(path) < 0) 
 				fprintf(stderr, "Unable to load ecfs-core file '%s' into Ecfs object\n", path);
 		}
+		~Ecfs() {
+			m_pltgot.clear();
+			m_fdinfo.clear();
+			m_prstatus.clear();
+			m_dynsym.clear();
+		}
 		
 		int load (const char *); // invokes all other primary methods
 		void unload(void);	// free up all data structures of ecfs object
