@@ -404,6 +404,8 @@ class Ecfs {
 		std::vector <auxv_t> m_auxv;
 		std::vector <string> m_argv;
 		std::vector <shlibmap_t> m_shlib;
+		std::vector <Phdr> m_phdr;
+		std::vector <Shdr> m_shdr;
 		/*
 		 * Constructor
 		 */
@@ -446,6 +448,8 @@ class Ecfs {
 		unsigned long get_fault_location(void);	// get address that the fault happened on (taken from siginfo_t)
 		int get_argv(char ***);	// get the argument vector (argc, and argv)
 		char * get_section_name_by_addr(unsigned long); // return pointer to section name
+		int get_phdrs(vector <Phdr>&); // to get physical access to the program headers
+		int get_shdrs(vector <Shdr>&); // to get physical access to the section headers
 };		
 		
 #define MAX_SYM_LEN 255
@@ -652,6 +656,8 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path)
 	this->get_prstatus(this->m_prstatus);
 	this->get_auxv(this->m_auxv);
 	this->get_shlib_maps(this->m_shlib);
+	this->get_phdrs(this->m_phdr);
+	this->get_shdrs(this->m_shdr);
 
 	/*
 	 * set argv
@@ -1207,4 +1213,29 @@ char * Ecfs<ecfs_type>::get_section_name_by_addr(unsigned long addr)
 			return &shstrtab[shdr[i].sh_name];
 	return NULL;
 }
+
+/*
+ * Example:
+ * vector <Elf64_Phdr> phdr;
+ * int phnum = ecfs.get_phdrs(phdr);
+ * for (auto &ph : phdr) {
+ * 	printf("Vaddr: %lx\n", ph.p_vaddr);
+ * }
+ */
+template <class ecfs_type>
+int Ecfs<ecfs_type>::get_phdrs(std::vector <Phdr> &phdr_vec)
+{
+	Ecfs::Phdr *phdr_ptr = this->phdr;
+	phdr_vec.assign(phdr_ptr, &phdr_ptr[this->ehdr->e_phnum]);
+	return this->ehdr->e_phnum;
+}
+
+template <class ecfs_type>
+int Ecfs <ecfs_type>::get_shdrs(std::vector <Shdr> &shdr_vec)
+{
+	Ecfs::Shdr *shdr_ptr = this->shdr;
+	shdr_vec.assign(shdr_ptr, &shdr_ptr[this->ehdr->e_shnum]);
+	return this->ehdr->e_shnum;
+}
+
 #endif
