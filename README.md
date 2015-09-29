@@ -359,7 +359,7 @@ pecific stuff.
     0x601038           0x7f38219c74e0     0x7f38219c74e0     0x400506          
     0x601040           0x7f3821a19d00     0x7f3821a19d00     0x400516          
 
-    - Printing auxiliary vector (.auxilliary):
+    - Printing auxiliary vector (.auxiliary):
     AT_PAGESZ:   0x1000
     AT_PHDR:     0x400040
     AT_PHENT:    0x38
