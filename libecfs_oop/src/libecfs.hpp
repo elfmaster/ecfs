@@ -391,7 +391,8 @@ class Ecfs {
 		elf_stat_t *elfstats;
 		char *filepath;
 	public:
-
+		
+		char *m_shstrtab; // incase anyone wants to publicly access the section string table
 		int m_argc; // processes original argc value
 		/*
 		 * To maintain an internal copy of the vectors for various structure arrays
@@ -545,7 +546,7 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path)
 	 * setup section header string table
 	 */
 	ecfs->shstrtab = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
-	
+	ecfs->m_shstrtab = ecfs->shstrtab;
 	/*
 	 * setup .dynsym symbols, .symtab symbols, and .dynstr and .strtab string table
 	 */

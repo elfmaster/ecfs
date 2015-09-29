@@ -49,17 +49,27 @@ int main(int argc, char **argv)
 	
 	printf("Creating ecfs object on %s\n", argv[1]);
 	Ecfs <ecfs_type64>ecfs(argv[1]);
-	
+
+        /*
+         * NOTE: 
+         * Now that we've instantiated the ecfs object, we can access
+         * various public members, namely the vectors that have already
+         * been loaded: phdr, shdr, argv, auxv, fdinfo, symtab, dynsym, prstatus, shlib,
+         */
+
+	/*
+	 * read the program headers and print each address
+	 */
 	printf("phdr count: %d\n", ecfs.m_phdr.size());
 	for (i = 0; i < ecfs.m_phdr.size(); i++)
 		printf("segment addresss %lx\n", ecfs.m_phdr[i].p_vaddr);
 
 	/*
-	 * NOTE: 
-	 * Now that we've instantiated the ecfs object, we can access
-	 * various public members, namely the vectors that have already
-	 * been loaded. argv, auxv, fdinfo, symtab, dynsym, prstatus, shlib,
+	 * read the section headers and print each address
 	 */
+	printf("shdr count: %d\n", ecfs.m_shdr.size());
+	for (i = 0; i < ecfs.m_shdr.size(); i++)
+		printf("section: %s: %lx\n", &ecfs.m_shstrtab[ecfs.m_shdr[i].sh_name], ecfs.m_shdr[i].sh_addr);
 
 	/*
 	 * Read fdinfo
