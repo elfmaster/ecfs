@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -23,6 +25,10 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define MAX_ARGS 256 // for .arglist
 /*
@@ -137,3 +143,7 @@ unsigned long get_fault_location(ecfs_elf_t *desc);
 int get_arg_list(ecfs_elf_t *desc, char ***argv);
 unsigned long get_section_va(ecfs_elf_t *desc, const char *name);
 char * get_section_name_by_addr(ecfs_elf_t *desc, unsigned long addr);
+
+#ifdef __cplusplus
+}
+#endif
