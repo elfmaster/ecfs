@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "../src/libecfs.hpp"
+#include "../include/libecfs.h"
 
 static void print_registers(struct user_regs_struct *reg)
 {
@@ -50,6 +50,7 @@ int main(int argc, char **argv)
 	printf("Creating ecfs object on %s\n", argv[1]);
 	Ecfs <ecfs_type64>ecfs(argv[1]);
 
+#if 0
         /*
          * NOTE: 
          * Now that we've instantiated the ecfs object, we can access
@@ -174,5 +175,6 @@ int main(int argc, char **argv)
 	for (i = 0; i < dlen; i++)
 		printf("%02x", data_ptr[i]);
 
+#endif 
 }	
 
