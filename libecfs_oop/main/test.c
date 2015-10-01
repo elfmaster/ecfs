@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "../include/libecfs.h"
+#include "../include/libecfs.hpp"
 
 static void print_registers(struct user_regs_struct *reg)
 {

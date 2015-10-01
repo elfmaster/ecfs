@@ -440,7 +440,7 @@ class Ecfs {
 		size_t get_text_size(void); 		// get size of text segment
 		size_t get_data_size(void);		// get size of data segment
 		unsigned long get_plt_va(void);		// get vaddr of the .plt
-		unsigned long get_plt_size(void);	// get size of the .plt 
+		size_t get_plt_size(void);	// get size of the .plt 
 		int get_auxv(vector <auxv_t>&);	// get auxiliary vector
 		ssize_t get_shlib_maps(vector <shlibmap_t>&); // get vector of shlibmap_t structs
 		ssize_t get_pltgot_info(vector <pltgotinfo_t>&); // get vector of pltgotinfo_t structs

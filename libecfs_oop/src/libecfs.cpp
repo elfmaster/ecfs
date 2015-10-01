@@ -172,6 +172,9 @@ template int Ecfs<ecfs_type32>::load(const char *);
 template int Ecfs<ecfs_type64>::load(const char *);
 
 
+
+
+
 template <class ecfs_type> 
 void Ecfs<ecfs_type>::unload(void)
 {
@@ -304,7 +307,6 @@ template char * Ecfs<ecfs_type32>::get_exe_path(void);
 template char * Ecfs<ecfs_type64>::get_exe_path(void);
 
 
-#if 0
 template <class ecfs_type>
 int Ecfs<ecfs_type>::get_dynamic_symbols(vector <ecfs_sym_t>&sym_vec)
 {
@@ -335,6 +337,8 @@ int Ecfs<ecfs_type>::get_dynamic_symbols(vector <ecfs_sym_t>&sym_vec)
 	}
 	return -1; // failed if we got here
 }
+template int Ecfs<ecfs_type32>::get_dynamic_symbols(vector <ecfs_sym_t>&);
+template int Ecfs<ecfs_type64>::get_dynamic_symbols(vector <ecfs_sym_t>&);
 
 /*
  * We only use a 64bit version if siginfo_t with this
@@ -366,6 +370,8 @@ int Ecfs<ecfs_type>::get_siginfo(siginfo_t &siginfo)
 
 	return -1;
 }
+template int Ecfs<ecfs_type32>::get_siginfo(siginfo_t &);
+template int Ecfs<ecfs_type64>::get_siginfo(siginfo_t &);
 
 /*
  * This function takes a pointer passed by reference 
@@ -398,12 +404,16 @@ ssize_t Ecfs<ecfs_type>::get_stack_ptr(uint8_t *&ptr)
 	ptr = NULL;
 	return -1;
 }
+template ssize_t Ecfs<ecfs_type32>::get_stack_ptr(uint8_t *&);
+template ssize_t Ecfs<ecfs_type64>::get_stack_ptr(uint8_t *&);
+
+
 
 template <class ecfs_type>
 ssize_t Ecfs<ecfs_type>::get_heap_ptr(uint8_t *&ptr)
 {
 	char *StringTable = this->shstrtab;
-	ElfW(Shdr) *shdr = this->shdr;
+	Ecfs::Shdr *shdr = this->shdr;
 	int i;
 
 	for (i = 0; i < this->ehdr->e_shnum; i++) {
@@ -416,6 +426,10 @@ ssize_t Ecfs<ecfs_type>::get_heap_ptr(uint8_t *&ptr)
 	ptr = NULL;
 	return -1;
 }
+template ssize_t Ecfs<ecfs_type32>::get_heap_ptr(uint8_t *&);
+template ssize_t Ecfs<ecfs_type64>::get_heap_ptr(uint8_t *&);
+
+
 
 template <class ecfs_type>
 int Ecfs<ecfs_type>::get_local_symbols(vector <ecfs_sym_t>&sym_vec)
@@ -447,6 +461,8 @@ int Ecfs<ecfs_type>::get_local_symbols(vector <ecfs_sym_t>&sym_vec)
         }
         return -1; // failed if we got here
 }
+template int Ecfs<ecfs_type32>::get_local_symbols(vector <ecfs_sym_t>&);
+template int Ecfs<ecfs_type64>::get_local_symbols(vector <ecfs_sym_t>&);
 
 /*
  * Example of using get_ptr_for_va(). Lets zero out part of a segment
@@ -479,6 +495,9 @@ ssize_t Ecfs<ecfs_type>::get_ptr_for_va(unsigned long vaddr, uint8_t *&ptr)
 	
 }
 
+template ssize_t Ecfs<ecfs_type32>::get_ptr_for_va(unsigned long, uint8_t *&ptr);
+template ssize_t Ecfs<ecfs_type64>::get_ptr_for_va(unsigned long, uint8_t *&ptr);
+
 /*
  * Example of us printing out the uninitialized data memory
  * from .bss section:
@@ -507,6 +526,9 @@ ssize_t Ecfs<ecfs_type>::get_section_pointer(const char *name, uint8_t *&ptr)
 	return -1;
 }
 
+template ssize_t Ecfs<ecfs_type32>::get_section_pointer(const char *, uint8_t *&);
+template ssize_t Ecfs<ecfs_type64>::get_section_pointer(const char *, uint8_t *&);
+
 /*
  * i.e len = get_section_size(desc, ".bss");
  */
@@ -514,7 +536,7 @@ template <class ecfs_type>
 ssize_t Ecfs<ecfs_type>::get_section_size(const char *name)
 {
 	char *StringTable = this->shstrtab;
-	ElfW(Shdr) *shdr = this->shdr;
+	Ecfs::Shdr *shdr = this->shdr;
 	ssize_t len;
 	int i;
 
@@ -526,6 +548,14 @@ ssize_t Ecfs<ecfs_type>::get_section_size(const char *name)
 	}
 	return -1;
 }
+template ssize_t Ecfs<ecfs_type32>::get_section_size(const char *);
+template ssize_t Ecfs<ecfs_type64>::get_section_size(const char *);
+
+
+
+
+
+
 
 template <class ecfs_type>
 unsigned long Ecfs<ecfs_type>::get_section_va(const char *name)
@@ -544,11 +574,17 @@ unsigned long Ecfs<ecfs_type>::get_section_va(const char *name)
 	return 0;
 }
 
+template unsigned long Ecfs<ecfs_type32>::get_section_va(const char *);
+template unsigned long Ecfs<ecfs_type64>::get_section_va(const char *);
+
 template <class ecfs_type>
 unsigned long Ecfs<ecfs_type>::get_text_va(void)
 {
 	return this->textVaddr;
 }
+
+template unsigned long Ecfs<ecfs_type32>::get_text_va(void);
+template unsigned long Ecfs<ecfs_type64>::get_text_va(void);
 
 template <class ecfs_type>
 unsigned long Ecfs<ecfs_type>::get_data_va(void)
@@ -556,11 +592,18 @@ unsigned long Ecfs<ecfs_type>::get_data_va(void)
 	return this->dataVaddr;
 }
 
+
+template unsigned long Ecfs<ecfs_type32>::get_data_va(void);
+template unsigned long Ecfs<ecfs_type64>::get_data_va(void);
+
 template <class ecfs_type>
 size_t Ecfs<ecfs_type>::get_text_size(void) 
 {
 	return this->textSize;
 }
+
+template size_t Ecfs<ecfs_type32>::get_text_size(void);
+template size_t Ecfs<ecfs_type64>::get_text_size(void);
 
 template <class ecfs_type>
 size_t Ecfs<ecfs_type>::get_data_size(void)
@@ -568,17 +611,27 @@ size_t Ecfs<ecfs_type>::get_data_size(void)
 	return this->dataSize;
 }
 
+template size_t Ecfs<ecfs_type32>::get_data_size(void);
+template size_t Ecfs<ecfs_type64>::get_data_size(void);
+
 template <class ecfs_type>
 unsigned long Ecfs<ecfs_type>::get_plt_va(void)
 {
 	return this->pltVaddr;
 }
 
+template unsigned long Ecfs<ecfs_type32>::get_plt_va(void);
+template unsigned long Ecfs<ecfs_type64>::get_plt_va(void);
+
 template <class ecfs_type>
-unsigned long Ecfs<ecfs_type>::get_plt_size(void)
+size_t Ecfs<ecfs_type>::get_plt_size(void)
 {
 	return this->pltSize;
 }
+
+template size_t Ecfs<ecfs_type32>::get_plt_size(void);
+template size_t Ecfs<ecfs_type64>::get_plt_size(void);
+
 
 
 /*
@@ -605,6 +658,10 @@ int Ecfs<ecfs_type>::get_auxv(vector <auxv_t> &auxv)
 	return ac;
 }
 
+template int Ecfs<ecfs_type32>::get_auxv(vector <auxv_t>&);
+template int Ecfs<ecfs_type64>::get_auxv(vector <auxv_t>&);
+
+
 template <class ecfs_type>
 ssize_t Ecfs<ecfs_type>::get_shlib_maps(vector <shlibmap_t> &shlib)
 {
@@ -630,6 +687,9 @@ ssize_t Ecfs<ecfs_type>::get_shlib_maps(vector <shlibmap_t> &shlib)
 	}
 	return count;
 }
+
+template ssize_t Ecfs<ecfs_type32>::get_shlib_maps(vector <shlibmap_t>&);
+template ssize_t Ecfs<ecfs_type64>::get_shlib_maps(vector <shlibmap_t>&);
 
 
 /*
@@ -675,6 +735,11 @@ ssize_t Ecfs<ecfs_type>::get_pltgot_info(vector <pltgotinfo_t> &pginfo)
 	return i;
 }
 
+template ssize_t Ecfs<ecfs_type32>::get_pltgot_info(vector <pltgotinfo_t> &);
+template ssize_t Ecfs<ecfs_type64>::get_pltgot_info(vector <pltgotinfo_t> &);
+
+
+
 template <class ecfs_type>
 unsigned long Ecfs<ecfs_type>::get_fault_location(void)
 {
@@ -685,6 +750,9 @@ unsigned long Ecfs<ecfs_type>::get_fault_location(void)
 
 	return (unsigned long)siginfo.si_addr;
 }
+
+template unsigned long Ecfs<ecfs_type32>::get_fault_location(void);
+template unsigned long Ecfs<ecfs_type64>::get_fault_location(void);
 
 /*
  * Will change to vector of strings, for now use
@@ -720,6 +788,10 @@ int Ecfs<ecfs_type>::get_argv(char ***argv)
         **argv = NULL;
         return -1;
 }
+template int Ecfs<ecfs_type32>::get_argv(char ***);
+template int Ecfs<ecfs_type64>::get_argv(char ***);
+
+
 
 /*
  * Give an address as a parameter and return the name of the
@@ -739,6 +811,9 @@ char * Ecfs<ecfs_type>::get_section_name_by_addr(unsigned long addr)
 	return NULL;
 }
 
+template char * Ecfs<ecfs_type32>::get_section_name_by_addr(unsigned long);
+template char * Ecfs<ecfs_type64>::get_section_name_by_addr(unsigned long);
+
 /*
  * Example:
  * vector <Elf64_Phdr> phdr;
@@ -754,6 +829,10 @@ int Ecfs<ecfs_type>::get_phdrs(std::vector <Phdr> &phdr_vec)
 	phdr_vec.assign(phdr_ptr, &phdr_ptr[this->ehdr->e_phnum]);
 	return this->ehdr->e_phnum;
 }
+template int Ecfs<ecfs_type32>::get_phdrs(std::vector <Phdr> &);
+template int Ecfs<ecfs_type64>::get_phdrs(std::vector <Phdr> &);
+
+
 
 template <class ecfs_type>
 int Ecfs <ecfs_type>::get_shdrs(std::vector <Shdr> &shdr_vec)
@@ -763,4 +842,7 @@ int Ecfs <ecfs_type>::get_shdrs(std::vector <Shdr> &shdr_vec)
 	return this->ehdr->e_shnum;
 }
 
-#endif
+template int Ecfs<ecfs_type32>::get_shdrs(std::vector <Shdr>&);
+template int Ecfs<ecfs_type64>::get_shdrs(std::vector <Shdr>&);
+
+
