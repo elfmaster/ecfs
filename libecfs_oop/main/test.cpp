@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include <iostream>
 #include "../include/libecfs.hpp"
 
 static void print_registers(struct user_regs_struct *reg)
@@ -45,7 +45,7 @@ int main(int argc, char **argv)
 		printf("%s file\n", argv[0]);
 		exit(0);
 	}
-	unsigned int i, ret;
+	unsigned int i;
 	
 	printf("Creating ecfs object on %s\n", argv[1]);
 	Ecfs <ecfs_type64>ecfs(argv[1]);
