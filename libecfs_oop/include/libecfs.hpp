@@ -103,38 +103,38 @@ typedef struct elf_siginfo_ {    /* Information about signal (unused)         */
  * except for the user_regs_struct
  */
 typedef struct prstatus_64 {       /* Information about thread; includes CPU reg*/
-  elf_siginfo_t    pr_info;       /* Info associated with signal               */
-  uint16_t       pr_cursig;     /* Current signal                            */
-  unsigned long  pr_sigpend;    /* Set of pending signals                    */
-  unsigned long  pr_sighold;    /* Set of held signals                       */
-  pid_t          pr_pid;        /* Process ID                                */
-  pid_t          pr_ppid;       /* Parent's process ID                       */
-  pid_t          pr_pgrp;       /* Group ID                                  */
-  pid_t          pr_sid;        /* Session ID                                */
-  elf_timeval    pr_utime;      /* User time                                 */
-  elf_timeval    pr_stime;      /* System time                               */
-  elf_timeval    pr_cutime;     /* Cumulative user time                      */
-  elf_timeval    pr_cstime;     /* Cumulative system time                    */
-  user_regs_struct pr_reg;      /* CPU registers                             */
-  uint32_t       pr_fpvalid;    /* True if math co-processor being used      */
+	elf_siginfo_t    pr_info;       /* Info associated with signal               */
+	uint16_t       pr_cursig;     /* Current signal                            */
+	unsigned long  pr_sigpend;    /* Set of pending signals                    */
+	unsigned long  pr_sighold;    /* Set of held signals                       */
+	pid_t          pr_pid;        /* Process ID                                */
+	pid_t          pr_ppid;       /* Parent's process ID                       */
+	pid_t          pr_pgrp;       /* Group ID                                  */
+	pid_t          pr_sid;        /* Session ID                                */
+	elf_timeval    pr_utime;      /* User time                                 */
+	elf_timeval    pr_stime;      /* System time                               */
+	elf_timeval    pr_cutime;     /* Cumulative user time                      */
+	elf_timeval    pr_cstime;     /* Cumulative system time                    */
+	user_regs_struct pr_reg;      /* CPU registers                             */
+uint32_t       pr_fpvalid;    /* True if math co-processor being used      */
 } prstatus_64;
 
 
 typedef struct prstatus_32 {       /* Information about thread; includes CPU reg*/
-  elf_siginfo_t    pr_info;       /* Info associated with signal               */
-  uint16_t       pr_cursig;     /* Current signal                            */
-  unsigned long  pr_sigpend;    /* Set of pending signals                    */
-  unsigned long  pr_sighold;    /* Set of held signals                       */
-  pid_t          pr_pid;        /* Process ID                                */
-  pid_t          pr_ppid;       /* Parent's process ID                       */
-  pid_t          pr_pgrp;       /* Group ID                                  */
-  pid_t          pr_sid;        /* Session ID                                */
-  elf_timeval    pr_utime;      /* User time                                 */
-  elf_timeval    pr_stime;      /* System time                               */
-  elf_timeval    pr_cutime;     /* Cumulative user time                      */
-  elf_timeval    pr_cstime;     /* Cumulative system time                    */
-  user_regs_struct_32 pr_reg;      /* CPU registers                             */
-  uint32_t       pr_fpvalid;    /* True if math co-processor being used      */
+	elf_siginfo_t    pr_info;       /* Info associated with signal               */
+	uint16_t       pr_cursig;     /* Current signal                            */
+	unsigned long  pr_sigpend;    /* Set of pending signals                    */
+	unsigned long  pr_sighold;    /* Set of held signals                       */
+	pid_t          pr_pid;        /* Process ID                                */
+	pid_t          pr_ppid;       /* Parent's process ID                       */
+	pid_t          pr_pgrp;       /* Group ID                                  */
+	pid_t          pr_sid;        /* Session ID                                */
+	elf_timeval    pr_utime;      /* User time                                 */
+	elf_timeval    pr_stime;      /* System time                               */
+	elf_timeval    pr_cutime;     /* Cumulative user time                      */
+	elf_timeval    pr_cstime;     /* Cumulative system time                    */
+	user_regs_struct_32 pr_reg;      /* CPU registers                             */
+uint32_t       pr_fpvalid;    /* True if math co-processor being used      */
 } prstatus_32;
 
 
@@ -354,6 +354,8 @@ class Ecfs {
 		 * Private members for encapsulation
 		 */
 	private:
+
+		void gen_prstatus();
 		
  		uint8_t *mem;          /* raw memory pointer */
     		char *shstrtab;        /* shdr string table */
@@ -396,7 +398,7 @@ class Ecfs {
 		 */
 		std::vector <pltgotinfo> m_pltgot;
 		std::vector <fdinfo> m_fdinfo;
-		std::vector <prstatus> m_prstatus;
+		std::vector <prstatus *> m_prstatus;
 		std::vector <ecfs_sym_t> m_dynsym; //dynamic symbols
 		std::vector <ecfs_sym_t> m_symtab; //symtab vector
 		std::vector <auxv_t> m_auxv;
@@ -423,7 +425,7 @@ class Ecfs {
 		void unload(void);	// free up all data structures of ecfs object
 		
 		int get_fdinfo(std::vector<fdinfo>&);	// get vector of fdinfo structs
-		int get_prstatus(std::vector<prstatus>&); // get vector of elf_prstatus structs
+		std::vector<prstatus *> get_prstatus(); // get vector of elf_prstatus structs
 		int get_thread_count(void);	// get number of threads in process
 		char * get_exe_path(void);	// get path to original executable that spawned the process
 		int get_dynamic_symbols(vector <ecfs_sym_t>&);	// get a vector of the complete .dynsym symbol table

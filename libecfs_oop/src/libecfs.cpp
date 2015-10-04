@@ -152,7 +152,7 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const string path)
 	this->get_pltgot_info(this->m_pltgot);
 	this->get_dynamic_symbols(this->m_dynsym);
 	this->get_local_symbols(this->m_symtab);
-	this->get_prstatus(this->m_prstatus);
+	this->gen_prstatus();
 	this->get_auxv(this->m_auxv);
 	this->get_shlib_maps(this->m_shlib);
 	this->get_phdrs(this->m_phdr);
@@ -227,44 +227,37 @@ template int Ecfs<ecfs_type32>::get_fdinfo(std::vector<Ecfs::fdinfo> &);
 template int Ecfs<ecfs_type64>::get_fdinfo(std::vector<Ecfs::fdinfo> &);
 
 
-
-/*
- example:
- 	vector <prstatus_64> prstatus_vector;
-        if (ecfs.get_prstatus(prstatus_vector) < 0)
-                printf("Getting prstatus failed\n");
-	for (i = 0; i < prstatus_vector.size(); i++)
-		printf("%d\n", prstatus_vector[i].pr_pid);
-*/
-
 template <class ecfs_type>
-int Ecfs<ecfs_type>::get_prstatus(std::vector<Ecfs::prstatus> &prstatus_vec)
+void Ecfs<ecfs_type>::gen_prstatus()
 {
 	char *StringTable = this->shstrtab;
 	Ecfs::Shdr *shdr = this->shdr;
-	Ecfs::prstatus *prstatus_ptr;
-	size_t items;
+	std::vector<Ecfs::prstatus *> prstatus_vec;
+	Ecfs::prstatus *prstatus;
 
 	for (int i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".prstatus")) {
-			prstatus_ptr = (Ecfs::prstatus *)alloca(shdr[i].sh_size);
-			memcpy(prstatus_ptr, &this->mem[shdr[i].sh_offset], shdr[i].sh_size);
-			items = shdr[i].sh_size / sizeof(Ecfs::prstatus);
-			prstatus_vec.assign(prstatus_ptr, &prstatus_ptr[items]);
-			return prstatus_vec.size();
+			prstatus = static_cast<Ecfs::prstatus *>(alloca(shdr[i].sh_size));
+			memcpy(prstatus, &this->mem[shdr[i].sh_offset], shdr[i].sh_size);  // this is scary, are we sure the data is aligned correctly?
+
+			prstatus_vec.emplace_back(prstatus);
 		}
 	}
-	/*
-	 * In addition to returning a vector we assign the internal
-	 * copy as well that can be used at any time until the Ecfs object is
-	 * destructed.
-	 */
-	//this->prstatus_vector = prstatus_vec;
-	return -1;
+	this->m_prstatus = prstatus_vec;
 }
 
-template int Ecfs<ecfs_type32>::get_prstatus(std::vector<Ecfs::prstatus> &);
-template int Ecfs<ecfs_type64>::get_prstatus(std::vector<Ecfs::prstatus> &);
+template void Ecfs<ecfs_type32>::gen_prstatus();
+template void Ecfs<ecfs_type64>::gen_prstatus();
+
+
+template <class ecfs_type>
+std::vector<typename ecfs_type::prstatus *> Ecfs<ecfs_type>::get_prstatus()
+{
+	return m_prstatus;
+}
+
+template std::vector<ecfs_type32::prstatus *> Ecfs<ecfs_type32>::get_prstatus();
+template std::vector<ecfs_type64::prstatus *> Ecfs<ecfs_type64>::get_prstatus();
 
 
 template <class ecfs_type>
