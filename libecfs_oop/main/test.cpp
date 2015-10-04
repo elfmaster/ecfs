@@ -48,7 +48,9 @@ int main(int argc, char **argv)
 	unsigned int i;
 	
 	printf("Creating ecfs object on %s\n", argv[1]);
-	Ecfs <ecfs_type64>ecfs(argv[1]);
+	Ecfs <ecfs_type64>ecfs;
+	ecfs.load(argv[1]);
+
 
 #if 0
         /*

@@ -1,30 +1,30 @@
 V = dev
 B = 64
 
-dev_CFLAGS = -DDEBUG -g -D_GNU_SOURCE -Wall -m${B}
+dev_CXXFLAGS = -std=c++11 -DDEBUG -g -D_GNU_SOURCE -Wall -m${B}
 dev_LDFLAGS = -ldwarf -lelf
 dev_TGT = ${BINS}
-dev_CC = clang++
+dev_CXX = clang++
 
-asan_CFLAGS = -ggdb -fsanitize=address -O0 -fno-omit-frame-pointer -m${B}
+asan_CXXFLAGS = -std=c++11 -ggdb -fsanitize=address -O0 -fno-omit-frame-pointer -m${B}
 asan_LDFLAGS = -ldwarf -lelf
 asan_TGT = ${BINS}
-asan_CC = clang++
+asan_CXX = clang++
 
-perf_CFLAGS = -g -O3 -fPIC -Wall -m${B}
+perf_CXXFLAGS = -std=c++11 -g -O3 -fPIC -Wall -m${B}
 perf_LDFLAGS = -ldwarf -lelf
 perf_TGT = ${BINS}
-perf_CC = g++
+perf_CXX = g++
 
-prod_CFLAGS = -O3 -Wall -DNDEBUG -D_FORTIFY_SOURCE=2 -fPIC -m${B}
+prod_CXXFLAGS = -std=c++11 -O3 -Wall -DNDEBUG -D_FORTIFY_SOURCE=2 -fPIC -m${B}
 prod_LDFLAGS = -ldwarf -lelf -pie
 prod_TGT = ${BINS}
-prod_CC = g++
+prod_CXX = g++
 
-shared_CFLAGS = -fPIC -m${B}
+shared_CXXFLAGS = -std=c++11 -fPIC -m${B}
 shared_LDFLAGS = -shared -Wl,-soname,libecfsreader${B}.so.1 -lc -m${B}
 shared_TGT = ${BIN_DIR}/${V}/${B}/libecfsreader${B}.so.1
-shared_CC = g++
+shared_CXX = g++
 
 OBJ_DIR = build
 SRC_DIR = src
@@ -43,7 +43,7 @@ all: ${${V}_TGT}
 
 ${BIN_DIR}/${V}/${B}/libecfsreader${B}.so.1: ${OBJS}
 	@mkdir -p $(dir $@)
-	 ${${V}_CC} -o $@ ${${V}_LDFLAGS} $^
+	 ${${V}_CXX} -o $@ ${${V}_LDFLAGS} $^
 
 ${BIN_DIR}/${V}/${B}/libecfsreader${B}.a: ${OBJS}
 	@mkdir -p $(dir $@)
@@ -51,11 +51,11 @@ ${BIN_DIR}/${V}/${B}/libecfsreader${B}.a: ${OBJS}
 
 ${OBJ_DIR}/${V}/${B}/%.o: ${SRC_DIR}/%.cpp ${HEADERS}
 	@mkdir -p $(dir $@)
-	${${V}_CC} ${${V}_CFLAGS} -o $@ -c $<
+	${${V}_CXX} ${${V}_CXXFLAGS} -o $@ -c $<
 
 ${BIN_DIR}/${V}/${B}/%: main/%.cpp ${BIN_DIR}/${V}/${B}/libecfsreader${B}.a
 	@mkdir -p $(dir $@)
-	$(${V}_CC) $(COPTS) $(${V}_CFLAGS) $^ -o $@ $(${V}_LDFLAGS)
+	$(${V}_CXX) $(COPTS) $(${V}_CXXFLAGS) $^ -o $@ $(${V}_LDFLAGS)
 
 .PHONY: clean
 clean:

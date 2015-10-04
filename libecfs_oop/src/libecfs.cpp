@@ -1,6 +1,5 @@
 #include "../include/libecfs.hpp"
-//template int Ecfs::load<ecfs_type32>(const char *);
-//template int Ecfs::load<ecfs_type64>(const char *);
+
 
 /*
  * NOTE:
@@ -8,7 +7,7 @@
  * to Ecfs::load(), we have to atleast specify it in the declaration of
  * the function template, hence the int Ecfs<ecfs_type>::load()
  */
-template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path)
+template <class ecfs_type> int Ecfs<ecfs_type>::load(const string path)
 {	
 	Ecfs *ecfs = this;
 	uint8_t *mem;
@@ -18,7 +17,7 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path)
 	Ecfs::Phdr *phdr;
 	Ecfs::Shdr *shdr;
 
-	fd = xopen(path, O_RDONLY);
+	fd = xopen(path.c_str(), O_RDONLY);
 	xfstat(fd, &st);
 	ecfs->filesize = st.st_size;
 	mem = (uint8_t *)mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
@@ -164,12 +163,13 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path)
 	 */
 	char **argvp;
 	this->m_argc = this->get_argv(&argvp);
-	this->m_argv.assign(argvp, (argvp + this->m_argc)); 
+	this->m_argv.assign(argvp, (argvp + this->m_argc));
+	free(argvp);
 	return 0;
 }	
 
-template int Ecfs<ecfs_type32>::load(const char *);
-template int Ecfs<ecfs_type64>::load(const char *);
+template int Ecfs<ecfs_type32>::load(const string);
+template int Ecfs<ecfs_type64>::load(const string);
 
 
 
@@ -676,15 +676,17 @@ ssize_t Ecfs<ecfs_type>::get_shlib_maps(vector <shlibmap_t> &shlib)
 			case SHT_INJECTED:
 			case SHT_PRELOADED:
 				count++;
-				shlibp->name = xstrdup(&shstrtab[shdr[i].sh_name]);
+				shlibp->name.copy(&shstrtab[shdr[i].sh_name], shdr[i].sh_size, 0);
 				shlibp->vaddr = shdr[i].sh_addr;
 				shlibp->offset = shdr[i].sh_offset;
 				shlibp->size = shdr[i].sh_size;
 				shlib.push_back(*shlibp);
+				break;
 			default:
 				continue;
 		}
 	}
+
 	return count;
 }
 

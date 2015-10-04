@@ -217,7 +217,7 @@ typedef struct siginfo64 {
 
 
 typedef struct shlibmap {
-	char *name;
+	string name;
 	loff_t offset;
 	unsigned long vaddr;
 	size_t size;
@@ -388,16 +388,15 @@ class Ecfs {
     		
 		elf_stat_t *elfstats;
 		char *filepath;
-	public:
 		
 		char *m_shstrtab; // incase anyone wants to publicly access the section string table
 		int m_argc; // processes original argc value
 		/*
 		 * To maintain an internal copy of the vectors for various structure arrays
 		 */
-                std::vector <pltgotinfo> m_pltgot;
-                std::vector <fdinfo> m_fdinfo;
-                std::vector <prstatus> m_prstatus;
+		std::vector <pltgotinfo> m_pltgot;
+		std::vector <fdinfo> m_fdinfo;
+		std::vector <prstatus> m_prstatus;
 		std::vector <ecfs_sym_t> m_dynsym; //dynamic symbols
 		std::vector <ecfs_sym_t> m_symtab; //symtab vector
 		std::vector <auxv_t> m_auxv;
@@ -405,12 +404,13 @@ class Ecfs {
 		std::vector <shlibmap_t> m_shlib;
 		std::vector <Phdr> m_phdr;
 		std::vector <Shdr> m_shdr;
+
+	public:
+
 		/*
 		 * Constructor
 		 */
-		Ecfs(const char *path) {
-			if (Ecfs::load(path) < 0) 
-				fprintf(stderr, "Unable to load ecfs-core file '%s' into Ecfs object\n", path);
+		Ecfs() {
 		}
 		~Ecfs() {
 			m_pltgot.clear();
@@ -419,7 +419,7 @@ class Ecfs {
 			m_dynsym.clear();
 		}
 		
-		int load (const char *); // invokes all other primary methods
+		int load (const string); // invokes all other primary methods
 		void unload(void);	// free up all data structures of ecfs object
 		
 		int get_fdinfo(std::vector<fdinfo>&);	// get vector of fdinfo structs
