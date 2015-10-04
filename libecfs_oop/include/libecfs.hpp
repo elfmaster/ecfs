@@ -217,7 +217,7 @@ typedef struct siginfo64 {
 
 
 typedef struct shlibmap {
-	string name;
+	std::string name;
 	loff_t offset;
 	unsigned long vaddr;
 	size_t size;
@@ -403,7 +403,7 @@ class Ecfs {
 		std::vector <ecfs_sym_t> m_symtab; //symtab vector
 		std::vector <auxv_t> m_auxv;
 		std::vector <string> m_argv;
-		std::vector <shlibmap_t> m_shlib;
+		std::vector <shlibmap_t *> m_shlib;
 		std::vector <Phdr> m_phdr;
 		std::vector <Shdr> m_shdr;
 
@@ -444,7 +444,7 @@ class Ecfs {
 		unsigned long get_plt_va(void);		// get vaddr of the .plt
 		size_t get_plt_size(void);	// get size of the .plt 
 		int get_auxv(vector <auxv_t>&);	// get auxiliary vector
-		ssize_t get_shlib_maps(vector <shlibmap_t>&); // get vector of shlibmap_t structs
+		ssize_t get_shlib_maps(vector <shlibmap_t *>&); // get vector of shlibmap_t structs
 		ssize_t get_pltgot_info(vector <pltgotinfo_t>&); // get vector of pltgotinfo_t structs
 		unsigned long get_fault_location(void);	// get address that the fault happened on (taken from siginfo_t)
 		int get_argv(char ***);	// get the argument vector (argc, and argv)

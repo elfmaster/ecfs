@@ -237,7 +237,7 @@ void Ecfs<ecfs_type>::gen_prstatus()
 
 	for (int i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".prstatus")) {
-			prstatus = static_cast<Ecfs::prstatus *>(alloca(shdr[i].sh_size));
+			prstatus = reinterpret_cast<Ecfs::prstatus *>(alloca(shdr[i].sh_size));
 			memcpy(prstatus, &this->mem[shdr[i].sh_offset], shdr[i].sh_size);  // this is scary, are we sure the data is aligned correctly?
 
 			prstatus_vec.emplace_back(prstatus);
@@ -656,12 +656,12 @@ template int Ecfs<ecfs_type64>::get_auxv(vector <auxv_t>&);
 
 
 template <class ecfs_type>
-ssize_t Ecfs<ecfs_type>::get_shlib_maps(vector <shlibmap_t> &shlib)
+ssize_t Ecfs<ecfs_type>::get_shlib_maps(vector <shlibmap_t *> &shlib)
 {
 	ssize_t i, count;	
 	char *shstrtab = this->shstrtab;
 	Ecfs::Shdr *shdr = this->shdr;
-	shlibmap_t *shlibp = (shlibmap_t *)alloca(sizeof(shlibmap_t));
+	shlibmap_t shlibp;
 
 	for (count = 0, i = 0; i < this->ehdr->e_shnum; i++) {
 		switch(shdr[i].sh_type) {
@@ -669,11 +669,11 @@ ssize_t Ecfs<ecfs_type>::get_shlib_maps(vector <shlibmap_t> &shlib)
 			case SHT_INJECTED:
 			case SHT_PRELOADED:
 				count++;
-				shlibp->name.copy(&shstrtab[shdr[i].sh_name], shdr[i].sh_size, 0);
-				shlibp->vaddr = shdr[i].sh_addr;
-				shlibp->offset = shdr[i].sh_offset;
-				shlibp->size = shdr[i].sh_size;
-				shlib.push_back(*shlibp);
+				shlibp.name = std::string(&shstrtab[shdr[i].sh_name]);
+				shlibp.vaddr = shdr[i].sh_addr;
+				shlibp.offset = shdr[i].sh_offset;
+				shlibp.size = shdr[i].sh_size;
+				shlib.emplace_back(&shlibp);
 				break;
 			default:
 				continue;
@@ -683,8 +683,8 @@ ssize_t Ecfs<ecfs_type>::get_shlib_maps(vector <shlibmap_t> &shlib)
 	return count;
 }
 
-template ssize_t Ecfs<ecfs_type32>::get_shlib_maps(vector <shlibmap_t>&);
-template ssize_t Ecfs<ecfs_type64>::get_shlib_maps(vector <shlibmap_t>&);
+template ssize_t Ecfs<ecfs_type32>::get_shlib_maps(vector <shlibmap_t *>&);
+template ssize_t Ecfs<ecfs_type64>::get_shlib_maps(vector <shlibmap_t *>&);
 
 
 /*
