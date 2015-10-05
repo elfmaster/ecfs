@@ -161,10 +161,8 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const string path)
 	/*
 	 * set argv
 	 */
-	char **argvp;
-	this->m_argc = this->get_argv(&argvp);
-	this->m_argv.assign(argvp, (argvp + this->m_argc));
-	free(argvp);
+	this->gen_argv();
+
 	return 0;
 }	
 
@@ -232,13 +230,13 @@ void Ecfs<ecfs_type>::gen_prstatus()
 {
 	char *StringTable = this->shstrtab;
 	Ecfs::Shdr *shdr = this->shdr;
-	std::vector<Ecfs::prstatus *> prstatus_vec;
-	Ecfs::prstatus *prstatus;
+	std::vector<Ecfs::prstatus> prstatus_vec;
+	Ecfs::prstatus prstatus;
 
 	for (int i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".prstatus")) {
-			prstatus = reinterpret_cast<Ecfs::prstatus *>(alloca(shdr[i].sh_size));
-			memcpy(prstatus, &this->mem[shdr[i].sh_offset], shdr[i].sh_size);  // this is scary, are we sure the data is aligned correctly?
+			memcpy(&prstatus, &this->mem[shdr[i].sh_offset], sizeof(Ecfs::prstatus));  // this is scary, are we sure the data is aligned correctly?
+//			prstatus = reinterpret_cast<Ecfs::prstatus *>(this->mem[shdr[i].sh_offset]);
 
 			prstatus_vec.emplace_back(prstatus);
 		}
@@ -251,13 +249,23 @@ template void Ecfs<ecfs_type64>::gen_prstatus();
 
 
 template <class ecfs_type>
-std::vector<typename ecfs_type::prstatus *> Ecfs<ecfs_type>::get_prstatus()
+std::vector<typename ecfs_type::prstatus> &Ecfs<ecfs_type>::get_prstatus()
 {
 	return m_prstatus;
 }
 
-template std::vector<ecfs_type32::prstatus *> Ecfs<ecfs_type32>::get_prstatus();
-template std::vector<ecfs_type64::prstatus *> Ecfs<ecfs_type64>::get_prstatus();
+template std::vector<ecfs_type32::prstatus> &Ecfs<ecfs_type32>::get_prstatus();
+template std::vector<ecfs_type64::prstatus> &Ecfs<ecfs_type64>::get_prstatus();
+
+
+template <class ecfs_type>
+std::vector<typename ecfs_type::prstatus> const &Ecfs<ecfs_type>::get_prstatus() const
+{
+	return m_prstatus;
+}
+
+template std::vector<ecfs_type32::prstatus> const &Ecfs<ecfs_type32>::get_prstatus() const;
+template std::vector<ecfs_type64::prstatus> const &Ecfs<ecfs_type64>::get_prstatus() const;
 
 
 template <class ecfs_type>
@@ -736,7 +744,7 @@ template ssize_t Ecfs<ecfs_type64>::get_pltgot_info(vector <pltgotinfo_t> &);
 
 
 template <class ecfs_type>
-unsigned long Ecfs<ecfs_type>::get_fault_location(void)
+unsigned long Ecfs<ecfs_type>::get_fault_location()
 {
 	siginfo_t siginfo;
 	
@@ -746,46 +754,54 @@ unsigned long Ecfs<ecfs_type>::get_fault_location(void)
 	return (unsigned long)siginfo.si_addr;
 }
 
-template unsigned long Ecfs<ecfs_type32>::get_fault_location(void);
-template unsigned long Ecfs<ecfs_type64>::get_fault_location(void);
+template unsigned long Ecfs<ecfs_type32>::get_fault_location();
+template unsigned long Ecfs<ecfs_type64>::get_fault_location();
 
-/*
- * Will change to vector of strings, for now use
- * the good ole C way:
- * char **argv;
- * int argc = get_argv(&argv);
- * while(argc--) printf("%s\n", *argv++);
- */
+
 template <class ecfs_type>
-int Ecfs<ecfs_type>::get_argv(char ***argv)
+void Ecfs<ecfs_type>::gen_argv()
 {
-        int i, argc, c;
-        Ecfs::Ehdr *ehdr = this->ehdr;
-        Ecfs::Shdr *shdr = this->shdr;
-        uint8_t *mem = this->mem;
-        char *shstrtab = this->shstrtab;
-        char *p = NULL;
-        char *q = NULL;
+	uint64_t i;
+	Ecfs::Ehdr *ehdr = this->ehdr;
+	Ecfs::Shdr *shdr = this->shdr;
+	uint8_t *mem = this->mem;
+	char *shstrtab = this->shstrtab;
 
-        for (i = 0; i < ehdr->e_shnum; i++) {
-                if (!strcmp(&shstrtab[shdr[i].sh_name], ".arglist")) {
-                        *argv = (char **)heapAlloc(sizeof(char *) * MAX_ARGS);           
-                        p = (char *)&mem[shdr[i].sh_offset];
-                        for (argc = 0, c = 0; c < shdr[i].sh_size; ) {
-                                *((*argv) + argc++) = xstrdup(p);
-                                 q = strchr(p, '\0') + 1;
-                                 c += (q - p);
-                                 p = q;
-                        }
-                        return argc;
-                }
-        }
-        **argv = NULL;
-        return -1;
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (!strcmp(&shstrtab[shdr[i].sh_name], ".arglist")) {
+			std::string cur_string(reinterpret_cast<char *>(&mem[shdr[i].sh_offset]));
+
+			// split the string on spaces
+			std::string item;
+			std::istringstream ss(cur_string);
+			while (std::getline(ss, item, ' ')) {
+				this->m_argv.push_back(item);
+		    }
+
+			break;
+		}
+	}
 }
-template int Ecfs<ecfs_type32>::get_argv(char ***);
-template int Ecfs<ecfs_type64>::get_argv(char ***);
+template void Ecfs<ecfs_type32>::gen_argv();
+template void Ecfs<ecfs_type64>::gen_argv();
 
+
+template <class ecfs_type>
+std::vector<std::string> &Ecfs<ecfs_type>::get_argv()
+{
+	return this->m_argv;
+}
+template std::vector<std::string> &Ecfs<ecfs_type32>::get_argv();
+template std::vector<std::string> &Ecfs<ecfs_type64>::get_argv();
+
+
+template <class ecfs_type>
+std::vector<std::string> const &Ecfs<ecfs_type>::get_argv() const
+{
+	return this->m_argv;
+}
+template std::vector<std::string> const &Ecfs<ecfs_type32>::get_argv() const;
+template std::vector<std::string> const &Ecfs<ecfs_type64>::get_argv() const;
 
 
 /*

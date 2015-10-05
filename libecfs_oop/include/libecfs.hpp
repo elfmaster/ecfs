@@ -26,8 +26,11 @@
 #include <arpa/inet.h>
 
 #include <iostream>
+#include <sstream>
+#include <string>
 #include <fstream>
 #include <vector>
+#include <iterator>
 
 using namespace std;
 
@@ -157,7 +160,7 @@ typedef union sigval64 {
 } sigval64_t;
 
 
-/* 
+/*
  * XXX
  * because of defines like this in glibc headers
  *
@@ -166,28 +169,28 @@ typedef union sigval64 {
  * conflicts. We must use _si_* instead
  */
 typedef struct siginfo32 {
-  	int      _si_signo;    /* Signal number */
-      	int      _si_errno;    /* An errno value */
-      	int      _si_code;     /* Signal code */
-      	int      _si_trapno;   /* Trap number that caused */
+	int      _si_signo;    /* Signal number */
+	int      _si_errno;    /* An errno value */
+	int      _si_code;     /* Signal code */
+	int      _si_trapno;   /* Trap number that caused */
 	int      _si_pid;      /* Sending process ID */
 	int      _si_uid;      /* Real user ID of sending process */
-      	int      _si_status;   /* Exit value or signal */
-      	uint32_t  _si_utime;    /* User time consumed */
-      	uint32_t  _si_stime;    /* System time consumed */
-      	sigval32_t _si_value;    /* Signal value */
-      	int      _si_interrupt;      /* POSIX.1b signal */
-      	uint32_t _si_ptr;      /* POSIX.1b signal */
-      	int      _si_overrun;  /* Timer overrun count; POSIX.1b timers */
-      	int      _si_timerid;  /* Timer ID; POSIX.1b timers */
-      	uint32_t _si_addr;     /* Memory location which caused fault */
-       	uint32_t _si_band;     /* Band event (was int in
-                                       glibc 2.3.2 and earlier) */
-     	int      _si_fd;       /* File descriptor */
-      	short    _si_addr_lsb; /* Least significant bit of address
+	int      _si_status;   /* Exit value or signal */
+	uint32_t  _si_utime;    /* User time consumed */
+	uint32_t  _si_stime;    /* System time consumed */
+	sigval32_t _si_value;    /* Signal value */
+	int      _si_interrupt;      /* POSIX.1b signal */
+	uint32_t _si_ptr;      /* POSIX.1b signal */
+	int      _si_overrun;  /* Timer overrun count; POSIX.1b timers */
+	int      _si_timerid;  /* Timer ID; POSIX.1b timers */
+	uint32_t _si_addr;     /* Memory location which caused fault */
+	uint32_t _si_band;     /* Band event (was int in
+								   glibc 2.3.2 and earlier) */
+	int      _si_fd;       /* File descriptor */
+	short    _si_addr_lsb; /* Least significant bit of address
                                         (since Linux 2.6.32) */
 } siginfo32_t;
-	
+
 typedef struct siginfo64 {
 	int      _si_signo;    /* Signal number */
 	int      _si_errno;    /* An errno value */
@@ -199,17 +202,17 @@ typedef struct siginfo64 {
 	uid_t    _si_uid;      /* Real user ID of sending process */
 	int      _si_status;   /* Exit value or signal */
 	clock_t  _si_utime;    /* User time consumed */
-       	clock_t  _si_stime;    /* System time consumed */
-      	sigval64_t _si_value;    /* Signal value */
-      	int      _si_interrupt;      /* POSIX.1b signal */
-       	void * _si_ptr;      /* POSIX.1b signal */
-       	int      _si_overrun;  /* Timer overrun count; POSIX.1b timers */
-      	int      _si_timerid;  /* Timer ID; POSIX.1b timers */
-        void *_si_addr;     /* Memory location which caused fault */
-       	long _si_band;     /* Band event (was int in
-                               glibc 2.3.2 and earlier) */
-      	int      _si_fd;       /* File descriptor */
-      	short    _si_addr_lsb; /* Least significant bit of address
+	clock_t  _si_stime;    /* System time consumed */
+	sigval64_t _si_value;    /* Signal value */
+	int      _si_interrupt;      /* POSIX.1b signal */
+	void * _si_ptr;      /* POSIX.1b signal */
+	int      _si_overrun;  /* Timer overrun count; POSIX.1b timers */
+	int      _si_timerid;  /* Timer ID; POSIX.1b timers */
+	void *_si_addr;     /* Memory location which caused fault */
+	long _si_band;     /* Band event (was int in
+						   glibc 2.3.2 and earlier) */
+	int      _si_fd;       /* File descriptor */
+	short    _si_addr_lsb; /* Least significant bit of address
                                         (since Linux 2.6.32) */
 } siginfo64_t;
 
@@ -229,12 +232,12 @@ typedef struct shlibmap {
  * and 32bit version of this struct.
  */
 typedef struct ecfs_sym {
-        long symval; /* Symbol value (address/offset) */
-        size_t size;       /* size of object/function       */
-        uint8_t type;      /* symbol type, i.e STT_FUNC, STT_OBJECT */
-        uint8_t binding;   /* symbol bind, i.e STB_GLOBAL, STB_LOCAL */
-        char *strtab; /* pointer to the symbols associated string table */
-        int nameoffset;    /* Offset of symbol name into symbol strtab */
+	long symval; /* Symbol value (address/offset) */
+	size_t size;       /* size of object/function       */
+	uint8_t type;      /* symbol type, i.e STT_FUNC, STT_OBJECT */
+	uint8_t binding;   /* symbol bind, i.e STB_GLOBAL, STB_LOCAL */
+	char *strtab; /* pointer to the symbols associated string table */
+	int nameoffset;    /* Offset of symbol name into symbol strtab */
 	char *name;  /* A pointer into the string table, to the symbol name */
 } ecfs_sym_t;
 
@@ -245,31 +248,31 @@ typedef struct ecfs_sym {
  * a 64bit ecfs file will have one that is of 64bit values.
  */
 typedef struct fdinfo_64 {
-        int fd;				// always 32bit
-        char path[MAX_PATH];		// always MAX_PATH bytes
-        uint64_t pos;			// XXX this changes from 64bit to 32bit depending
-        unsigned int perms;		// always 32bit
-        struct {
-                struct in_addr src_addr; // in_addr is always uint32_t
-                struct in_addr dst_addr; // in addr is always uint32_t
-                uint16_t src_port; // always 16bit
-                uint16_t dst_port; // always 16bit
-        } socket;
-        char net;			// always 1 byte
+	int fd;				// always 32bit
+	char path[MAX_PATH];		// always MAX_PATH bytes
+	uint64_t pos;			// XXX this changes from 64bit to 32bit depending
+	unsigned int perms;		// always 32bit
+	struct {
+		struct in_addr src_addr; // in_addr is always uint32_t
+		struct in_addr dst_addr; // in addr is always uint32_t
+		uint16_t src_port; // always 16bit
+		uint16_t dst_port; // always 16bit
+	} socket;
+	char net;			// always 1 byte
 } fdinfo_64_t;
 
 typedef struct fdinfo_32 {
-        int fd;                         // always 32bit
-        char path[MAX_PATH];            // always MAX_PATH bytes
-        uint32_t pos;                   // XXX this changes from 64bit to 32bit depending
-        unsigned int perms;             // always 32bit
-        struct {
-                struct in_addr src_addr; // in_addr is always uint32_t
-                struct in_addr dst_addr; // in addr is always uint32_t
-                uint16_t src_port; // always 16bit
-                uint16_t dst_port; // always 16bit
-        } socket;
-        char net;                       // always 1 byte
+	int fd;                         // always 32bit
+	char path[MAX_PATH];            // always MAX_PATH bytes
+	uint32_t pos;                   // XXX this changes from 64bit to 32bit depending
+	unsigned int perms;             // always 32bit
+	struct {
+		struct in_addr src_addr; // in_addr is always uint32_t
+		struct in_addr dst_addr; // in addr is always uint32_t
+		uint16_t src_port; // always 16bit
+		uint16_t dst_port; // always 16bit
+	} socket;
+	char net;                       // always 1 byte
 } fdinfo_32_t;
 
 
@@ -280,15 +283,15 @@ struct ecfs_type32 {
 	typedef fdinfo_32_t fdinfo;
 	typedef Elf32_auxv_t auxv_t;
 	typedef Elf32_Ehdr Ehdr;
-        typedef Elf32_Shdr Shdr;
-        typedef Elf32_Phdr Phdr;
-        typedef Elf32_Nhdr Nhdr;
-        typedef Elf32_Dyn Dyn;
-        typedef Elf32_Sym Sym;
-        typedef Elf32_Rela Rela;
-        typedef Elf32_Rel Rel;
-        typedef Elf32_Addr Addr;
-        typedef Elf32_Off Off;
+	typedef Elf32_Shdr Shdr;
+	typedef Elf32_Phdr Phdr;
+	typedef Elf32_Nhdr Nhdr;
+	typedef Elf32_Dyn Dyn;
+	typedef Elf32_Sym Sym;
+	typedef Elf32_Rela Rela;
+	typedef Elf32_Rel Rel;
+	typedef Elf32_Addr Addr;
+	typedef Elf32_Off Off;
 
 	// add siginfo here as well
 	// add prstatus
@@ -299,16 +302,15 @@ struct ecfs_type64 {
 	typedef fdinfo_64_t fdinfo;
 	typedef Elf64_auxv_t auxv_t;
 	typedef Elf64_Ehdr Ehdr;
-        typedef Elf64_Shdr Shdr;
-        typedef Elf64_Phdr Phdr;
-        typedef Elf64_Nhdr Nhdr;
-        typedef Elf64_Dyn Dyn;
-        typedef Elf64_Sym Sym;
-        typedef Elf64_Rela Rela;
-        typedef Elf64_Rel Rel;
-        typedef Elf64_Addr Addr;
-        typedef Elf64_Off Off;
-
+	typedef Elf64_Shdr Shdr;
+	typedef Elf64_Phdr Phdr;
+	typedef Elf64_Nhdr Nhdr;
+	typedef Elf64_Dyn Dyn;
+	typedef Elf64_Sym Sym;
+	typedef Elf64_Rela Rela;
+	typedef Elf64_Rel Rel;
+	typedef Elf64_Addr Addr;
+	typedef Elf64_Off Off;
 };
 
 /*
@@ -356,6 +358,7 @@ class Ecfs {
 	private:
 
 		void gen_prstatus();
+		void gen_argv();
 		
  		uint8_t *mem;          /* raw memory pointer */
     		char *shstrtab;        /* shdr string table */
@@ -392,13 +395,12 @@ class Ecfs {
 		char *filepath;
 		
 		char *m_shstrtab; // incase anyone wants to publicly access the section string table
-		int m_argc; // processes original argc value
 		/*
 		 * To maintain an internal copy of the vectors for various structure arrays
 		 */
 		std::vector <pltgotinfo> m_pltgot;
 		std::vector <fdinfo> m_fdinfo;
-		std::vector <prstatus *> m_prstatus;
+		std::vector <prstatus> m_prstatus;
 		std::vector <ecfs_sym_t> m_dynsym; //dynamic symbols
 		std::vector <ecfs_sym_t> m_symtab; //symtab vector
 		std::vector <auxv_t> m_auxv;
@@ -425,7 +427,9 @@ class Ecfs {
 		void unload(void);	// free up all data structures of ecfs object
 		
 		int get_fdinfo(std::vector<fdinfo>&);	// get vector of fdinfo structs
-		std::vector<prstatus *> get_prstatus(); // get vector of elf_prstatus structs
+		std::vector<prstatus> &get_prstatus(); // get vector of elf_prstatus structs
+		std::vector<prstatus> const &get_prstatus() const;
+
 		int get_thread_count(void);	// get number of threads in process
 		char * get_exe_path(void);	// get path to original executable that spawned the process
 		int get_dynamic_symbols(vector <ecfs_sym_t>&);	// get a vector of the complete .dynsym symbol table
@@ -446,8 +450,9 @@ class Ecfs {
 		int get_auxv(vector <auxv_t>&);	// get auxiliary vector
 		ssize_t get_shlib_maps(vector <shlibmap_t *>&); // get vector of shlibmap_t structs
 		ssize_t get_pltgot_info(vector <pltgotinfo_t>&); // get vector of pltgotinfo_t structs
-		unsigned long get_fault_location(void);	// get address that the fault happened on (taken from siginfo_t)
-		int get_argv(char ***);	// get the argument vector (argc, and argv)
+		unsigned long get_fault_location();	// get address that the fault happened on (taken from siginfo_t)
+		std::vector<std::string> &get_argv();	// get the argument vector
+		std::vector<std::string> const &get_argv() const;
 		char * get_section_name_by_addr(unsigned long); // return pointer to section name
 		int get_phdrs(vector <Phdr>&); // to get physical access to the program headers
 		int get_shdrs(vector <Shdr>&); // to get physical access to the section headers
