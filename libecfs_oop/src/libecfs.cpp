@@ -1,6 +1,4 @@
 #include "../include/libecfs.hpp"
-//template int Ecfs::load<ecfs_type32>(const char *);
-//template int Ecfs::load<ecfs_type64>(const char *);
 
 /*
  * NOTE:
@@ -760,11 +758,14 @@ template unsigned long Ecfs<ecfs_type64>::get_fault_location(void);
  * char **argv;
  * int argc = get_argv(&argv);
  * while(argc--) printf("%s\n", *argv++);
+ * XXX
+ * ECFS currently uses the pr_psargs buffer form
+ * struct prpsinfo.
  */
 template <class ecfs_type>
 int Ecfs<ecfs_type>::get_argv(char ***argv)
 {
-        int i, argc, c;
+        int i, argc, c, j;
         Ecfs::Ehdr *ehdr = this->ehdr;
         Ecfs::Shdr *shdr = this->shdr;
         uint8_t *mem = this->mem;
@@ -778,9 +779,9 @@ int Ecfs<ecfs_type>::get_argv(char ***argv)
                         p = (char *)&mem[shdr[i].sh_offset];
                         for (argc = 0, c = 0; c < shdr[i].sh_size; ) {
                                 *((*argv) + argc++) = xstrdup(p);
-                                 q = strchr(p, '\0') + 1;
-                                 c += (q - p);
-                                 p = q;
+                               	q = strchr(p, '\0') + 1;
+                              	c += (q - p);
+                              	p = q;
                         }
                         return argc;
                 }

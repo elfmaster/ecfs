@@ -49,8 +49,9 @@ int main(int argc, char **argv)
 	
 	printf("Creating ecfs object on %s\n", argv[1]);
 	Ecfs <ecfs_type64>ecfs(argv[1]);
-
-#if 0
+	
+	Ecfs <ecfs_type64> *obj = new Ecfs<ecfs_type64>(argv[1]);
+	printf("obj.m_argc: %d\n", obj->m_argc);
         /*
          * NOTE: 
          * Now that we've instantiated the ecfs object, we can access
@@ -111,6 +112,7 @@ int main(int argc, char **argv)
 
 	
 	vector <string> args = ecfs.m_argv;
+	printf("argc: %d\n", ecfs.m_argc);
 	for (i = 0; i < ecfs.m_argc; i++) {
 		printf("%s", args[i].c_str());
 	}
@@ -175,6 +177,5 @@ int main(int argc, char **argv)
 	for (i = 0; i < dlen; i++)
 		printf("%02x", data_ptr[i]);
 
-#endif 
 }	
 
