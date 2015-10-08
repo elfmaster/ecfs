@@ -4,12 +4,12 @@ B = 64
 dev_CFLAGS = -DDEBUG -g -D_GNU_SOURCE -Wall -m${B}
 dev_LDFLAGS = -ldwarf -lelf
 dev_TGT = ${BINS}
-dev_CC = clang
+dev_CC = clang++
 
 asan_CFLAGS = -ggdb -fsanitize=address -O0 -fno-omit-frame-pointer -m${B}
 asan_LDFLAGS = -ldwarf -lelf
 asan_TGT = ${BINS}
-asan_CC = clang
+asan_CC = clang++
 
 perf_CFLAGS = -g -O3 -fPIC -Wall -m${B}
 perf_LDFLAGS = -ldwarf -lelf
@@ -31,11 +31,11 @@ SRC_DIR = src
 INCLUDE_DIR = include
 BIN_DIR = bin
 MAIN_DIR = main
-MAINS = $(shell find ${MAIN_DIR} -name '*.c' -printf '%P\n')
-SRCS = $(shell find ${SRC_DIR} -name '*.c' -printf '%P\n')
-HEADERS = $(addprefix ${INCLUDE_DIR}/, $(shell find ${INCLUDE_DIR} -name '*.h' -printf '%P\n'))
-OBJS = $(addprefix ${OBJ_DIR}/${V}/${B}/,${SRCS:.c=.o})
-BINS = $(addprefix ${BIN_DIR}/${V}/${B}/,${MAINS:.c=})
+MAINS = $(shell find ${MAIN_DIR} -name '*.cpp' -printf '%P\n')
+SRCS = $(shell find ${SRC_DIR} -name '*.cpp' -printf '%P\n')
+HEADERS = $(addprefix ${INCLUDE_DIR}/, $(shell find ${INCLUDE_DIR} -name '*.hpp' -printf '%P\n'))
+OBJS = $(addprefix ${OBJ_DIR}/${V}/${B}/,${SRCS:.cpp=.o})
+BINS = $(addprefix ${BIN_DIR}/${V}/${B}/,${MAINS:.cpp=})
 
 .PHONY: all
 all: ${${V}_TGT}
@@ -49,11 +49,11 @@ ${BIN_DIR}/${V}/${B}/libecfsreader${B}.a: ${OBJS}
 	@mkdir -p $(dir $@)
 	ar rcs $@ $^
 
-${OBJ_DIR}/${V}/${B}/%.o: ${SRC_DIR}/%.c ${HEADERS}
+${OBJ_DIR}/${V}/${B}/%.o: ${SRC_DIR}/%.cpp ${HEADERS}
 	@mkdir -p $(dir $@)
 	${${V}_CC} ${${V}_CFLAGS} -o $@ -c $<
 
-${BIN_DIR}/${V}/${B}/%: main/%.c ${BIN_DIR}/${V}/${B}/libecfsreader${B}.a
+${BIN_DIR}/${V}/${B}/%: main/%.cpp ${BIN_DIR}/${V}/${B}/libecfsreader${B}.a
 	@mkdir -p $(dir $@)
 	$(${V}_CC) $(COPTS) $(${V}_CFLAGS) $^ -o $@ $(${V}_LDFLAGS)
 
