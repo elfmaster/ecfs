@@ -360,6 +360,7 @@ class Ecfs {
 		void gen_prstatus();
 		void gen_argv();
 		void gen_local_symbols();
+		void gen_dynamic_symbols();
 		
 		uint8_t *mem;          /* raw memory pointer */
 		char *shstrtab;        /* shdr string table */
@@ -433,7 +434,8 @@ class Ecfs {
 
 		int get_thread_count(void);	// get number of threads in process
 		char * get_exe_path(void);	// get path to original executable that spawned the process
-		int get_dynamic_symbols(vector <ecfs_sym_t>&);	// get a vector of the complete .dynsym symbol table
+		std::vector <ecfs_sym_t> &get_dynamic_symbols(); // get a vector of the complete .dynsym symbol table
+		std::vector <ecfs_sym_t> const &get_dynamic_symbols() const;
 		int get_local_symbols(vector <ecfs_sym_t>&);
 		std::vector<ecfs_sym_t> &get_local_symbols();
 		std::vector<ecfs_sym_t> const &get_local_symbols() const;

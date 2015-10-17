@@ -151,7 +151,7 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const string path)
 	 */
 	this->get_fdinfo(this->m_fdinfo);
 	this->get_pltgot_info(this->m_pltgot);
-	this->get_dynamic_symbols(this->m_dynsym);
+	this->gen_dynamic_symbols();
 	this->gen_local_symbols();
 	this->gen_prstatus();
 	this->get_auxv(this->m_auxv);
@@ -310,37 +310,56 @@ template char * Ecfs<ecfs_type64>::get_exe_path(void);
 
 
 template <class ecfs_type>
-int Ecfs<ecfs_type>::get_dynamic_symbols(vector <ecfs_sym_t>&sym_vec)
+void Ecfs<ecfs_type>::gen_dynamic_symbols()
 {
 	int i, j;
+	ssize_t symcount;
 	Ecfs::Ehdr *ehdr = this->ehdr;
 	Ecfs::Shdr *shdr = this->shdr;
-	ssize_t symcount;
 	Ecfs::Sym *dynsym = this->dynsym;
-	ecfs_sym_t *syms;
 	
 	for (i = 0; i < ehdr->e_shnum; i++) {
 		if (shdr[i].sh_type == SHT_DYNSYM) {
 			symcount = shdr[i].sh_size / sizeof(Ecfs::Sym);
-			size_t alloc_len = symcount * sizeof(ecfs_sym_t);
-			syms = (ecfs_sym_t *)alloca(alloc_len);
+
 			for (j = 0; j < symcount; j++) {
-				syms[j].strtab = this->dynstr;
-				syms[j].symval = dynsym[j].st_value;
-				syms[j].size = dynsym[j].st_size;
-				syms[j].type = ELF32_ST_TYPE(dynsym[j].st_info);
-				syms[j].binding = ELF32_ST_BIND(dynsym[j].st_info);
-				syms[j].nameoffset = dynsym[j].st_name;
-				syms[j].name = &syms[j].strtab[syms[j].nameoffset];
+				ecfs_sym_t sym;
+
+				sym.strtab = this->dynstr;
+				sym.symval = dynsym[j].st_value;
+				sym.size = dynsym[j].st_size;
+				sym.type = ELF32_ST_TYPE(dynsym[j].st_info);
+				sym.binding = ELF32_ST_BIND(dynsym[j].st_info);
+				sym.nameoffset = dynsym[j].st_name;
+				sym.name = &this->dynstr[sym.nameoffset];
+
+				this->m_symtab.emplace_back(sym);
 			}
-			sym_vec.assign(syms, &syms[symcount]);
-			return sym_vec.size();
+			return;
 		}
 	}
-	return -1; // failed if we got here
 }
-template int Ecfs<ecfs_type32>::get_dynamic_symbols(vector <ecfs_sym_t>&);
-template int Ecfs<ecfs_type64>::get_dynamic_symbols(vector <ecfs_sym_t>&);
+template void Ecfs<ecfs_type32>::gen_dynamic_symbols();
+template void Ecfs<ecfs_type64>::gen_dynamic_symbols();
+
+
+template <class ecfs_type>
+std::vector <ecfs_sym_t> &Ecfs<ecfs_type>::get_dynamic_symbols()
+{
+	return this->m_dynsym;
+}
+template std::vector <ecfs_sym_t> &Ecfs<ecfs_type32>::get_dynamic_symbols();
+template std::vector <ecfs_sym_t> &Ecfs<ecfs_type64>::get_dynamic_symbols();
+
+template <class ecfs_type>
+std::vector <ecfs_sym_t> const &Ecfs<ecfs_type>::get_dynamic_symbols() const
+{
+	return this->m_dynsym;
+}
+template std::vector <ecfs_sym_t> const &Ecfs<ecfs_type32>::get_dynamic_symbols() const;
+template std::vector <ecfs_sym_t> const &Ecfs<ecfs_type64>::get_dynamic_symbols() const;
+
+
 
 /*
  * We only use a 64bit version if siginfo_t with this
