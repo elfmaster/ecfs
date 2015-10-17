@@ -143,6 +143,7 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const string path)
 	ecfs->phdr = phdr;
 	ecfs->shdr = shdr;
 	ecfs->mem = mem;
+	ecfs->filepath = path;
 	
 	/*
 	 * Now that we have assigned all of the private pointers and variables
@@ -151,7 +152,7 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const string path)
 	this->get_fdinfo(this->m_fdinfo);
 	this->get_pltgot_info(this->m_pltgot);
 	this->get_dynamic_symbols(this->m_dynsym);
-	this->get_local_symbols(this->m_symtab);
+	this->gen_local_symbols();
 	this->gen_prstatus();
 	this->get_auxv(this->m_auxv);
 	this->get_shlib_maps(this->m_shlib);
@@ -431,39 +432,55 @@ template ssize_t Ecfs<ecfs_type32>::get_heap_ptr(uint8_t *&);
 template ssize_t Ecfs<ecfs_type64>::get_heap_ptr(uint8_t *&);
 
 
+template <class ecfs_type>
+void Ecfs<ecfs_type>::gen_local_symbols()
+{
+	int i, j;
+	Ecfs::Ehdr *ehdr = this->ehdr;
+	Ecfs::Shdr *shdr = this->shdr;
+	ssize_t symcount;
+	Ecfs::Sym *symtab = this->symtab;
+	ecfs_sym_t *syms;
+
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (shdr[i].sh_type == SHT_SYMTAB) {
+			symcount = shdr[i].sh_size / sizeof(Ecfs::Sym);
+			size_t alloc_len = symcount * sizeof(ecfs_sym_t);
+			syms = (ecfs_sym_t *)alloca(alloc_len);
+			for (j = 0; j < symcount; j++) {
+				syms[j].strtab = this->strtab;
+				syms[j].symval = symtab[j].st_value;
+				syms[j].size = symtab[j].st_size;
+				syms[j].type = ELF32_ST_TYPE(symtab[j].st_info);
+				syms[j].binding = ELF32_ST_BIND(symtab[j].st_info);
+				syms[j].nameoffset = symtab[j].st_name;
+				syms[j].name = &syms[j].strtab[syms[j].nameoffset];
+				printf("%s\n", syms[j].name);
+			}
+			this->m_symtab.assign(syms, &syms[symcount]);
+			break;
+		}
+	}
+}
+template void Ecfs<ecfs_type32>::gen_local_symbols();
+template void Ecfs<ecfs_type64>::gen_local_symbols();
 
 template <class ecfs_type>
-int Ecfs<ecfs_type>::get_local_symbols(vector <ecfs_sym_t>&sym_vec)
+std::vector<ecfs_sym_t> &Ecfs<ecfs_type>::get_local_symbols()
 {
-        int i, j;
-        Ecfs::Ehdr *ehdr = this->ehdr;
-        Ecfs::Shdr *shdr = this->shdr;
-        ssize_t symcount;
-        Ecfs::Sym *symtab = this->symtab;
-        ecfs_sym_t *syms;
-
-        for (i = 0; i < ehdr->e_shnum; i++) {
-                if (shdr[i].sh_type == SHT_SYMTAB) {
-                        symcount = shdr[i].sh_size / sizeof(Ecfs::Sym);
-                        size_t alloc_len = symcount * sizeof(ecfs_sym_t);
-                        syms = (ecfs_sym_t *)alloca(alloc_len);
-                        for (j = 0; j < symcount; j++) {
-                                syms[j].strtab = this->strtab;
-                                syms[j].symval = symtab[j].st_value;
-                                syms[j].size = symtab[j].st_size;
-                                syms[j].type = ELF32_ST_TYPE(symtab[j].st_info);
-                                syms[j].binding = ELF32_ST_BIND(symtab[j].st_info);
-                                syms[j].nameoffset = symtab[j].st_name;
-                                syms[j].name = &syms[j].strtab[syms[j].nameoffset];
-                        }
-                        sym_vec.assign(syms, &syms[symcount]);
-                        return sym_vec.size();
-                }
-        }
-        return -1; // failed if we got here
+	return this->m_symtab;
 }
-template int Ecfs<ecfs_type32>::get_local_symbols(vector <ecfs_sym_t>&);
-template int Ecfs<ecfs_type64>::get_local_symbols(vector <ecfs_sym_t>&);
+template std::vector<ecfs_sym_t> &Ecfs<ecfs_type32>::get_local_symbols();
+template std::vector<ecfs_sym_t> &Ecfs<ecfs_type64>::get_local_symbols();
+
+template <class ecfs_type>
+std::vector<ecfs_sym_t> const &Ecfs<ecfs_type>::get_local_symbols() const
+{
+	return this->m_symtab;
+}
+template std::vector<ecfs_sym_t> const &Ecfs<ecfs_type32>::get_local_symbols() const;
+template std::vector<ecfs_sym_t> const &Ecfs<ecfs_type64>::get_local_symbols() const;
+
 
 /*
  * Example of using get_ptr_for_va(). Lets zero out part of a segment
@@ -844,7 +861,6 @@ template int Ecfs<ecfs_type32>::get_phdrs(std::vector <Phdr> &);
 template int Ecfs<ecfs_type64>::get_phdrs(std::vector <Phdr> &);
 
 
-
 template <class ecfs_type>
 int Ecfs <ecfs_type>::get_shdrs(std::vector <Shdr> &shdr_vec)
 {
@@ -855,5 +871,15 @@ int Ecfs <ecfs_type>::get_shdrs(std::vector <Shdr> &shdr_vec)
 
 template int Ecfs<ecfs_type32>::get_shdrs(std::vector <Shdr>&);
 template int Ecfs<ecfs_type64>::get_shdrs(std::vector <Shdr>&);
+
+
+template <class ecfs_type>
+std::string Ecfs <ecfs_type>::get_filepath()
+{
+	return this->filepath;
+}
+
+template std::string Ecfs<ecfs_type32>::get_filepath();
+template std::string Ecfs<ecfs_type64>::get_filepath();
 
 

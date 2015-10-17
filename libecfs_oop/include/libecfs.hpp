@@ -359,6 +359,7 @@ class Ecfs {
 
 		void gen_prstatus();
 		void gen_argv();
+		void gen_local_symbols();
 		
  		uint8_t *mem;          /* raw memory pointer */
     		char *shstrtab;        /* shdr string table */
@@ -392,7 +393,7 @@ class Ecfs {
     		int pie;        /* is the process from a PIE executable? */
     		
 		elf_stat_t *elfstats;
-		char *filepath;
+		std::string filepath;
 		
 		char *m_shstrtab; // incase anyone wants to publicly access the section string table
 		/*
@@ -434,6 +435,8 @@ class Ecfs {
 		char * get_exe_path(void);	// get path to original executable that spawned the process
 		int get_dynamic_symbols(vector <ecfs_sym_t>&);	// get a vector of the complete .dynsym symbol table
 		int get_local_symbols(vector <ecfs_sym_t>&);
+		std::vector<ecfs_sym_t> &get_local_symbols();
+		std::vector<ecfs_sym_t> const &get_local_symbols() const;
 		int get_siginfo(siginfo_t &);	// will fill siginfo_t with the signal struct
 		ssize_t get_stack_ptr(uint8_t *&); // will set pointer at .stack section and return the size
 		ssize_t get_heap_ptr(uint8_t *&); // will set pointer at .heap section and return the size
@@ -456,6 +459,7 @@ class Ecfs {
 		char * get_section_name_by_addr(unsigned long); // return pointer to section name
 		int get_phdrs(vector <Phdr>&); // to get physical access to the program headers
 		int get_shdrs(vector <Shdr>&); // to get physical access to the section headers
+		std::string get_filepath();
 };		
 		
 #define MAX_SYM_LEN 255
