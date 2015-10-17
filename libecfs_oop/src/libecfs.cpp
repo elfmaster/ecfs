@@ -436,29 +436,28 @@ template <class ecfs_type>
 void Ecfs<ecfs_type>::gen_local_symbols()
 {
 	int i, j;
+	Ecfs::Sym *symtab = this->symtab;
 	Ecfs::Ehdr *ehdr = this->ehdr;
 	Ecfs::Shdr *shdr = this->shdr;
 	ssize_t symcount;
-	Ecfs::Sym *symtab = this->symtab;
-	ecfs_sym_t *syms;
 
 	for (i = 0; i < ehdr->e_shnum; i++) {
 		if (shdr[i].sh_type == SHT_SYMTAB) {
 			symcount = shdr[i].sh_size / sizeof(Ecfs::Sym);
-			size_t alloc_len = symcount * sizeof(ecfs_sym_t);
-			syms = (ecfs_sym_t *)alloca(alloc_len);
 			for (j = 0; j < symcount; j++) {
-				syms[j].strtab = this->strtab;
-				syms[j].symval = symtab[j].st_value;
-				syms[j].size = symtab[j].st_size;
-				syms[j].type = ELF32_ST_TYPE(symtab[j].st_info);
-				syms[j].binding = ELF32_ST_BIND(symtab[j].st_info);
-				syms[j].nameoffset = symtab[j].st_name;
-				syms[j].name = &syms[j].strtab[syms[j].nameoffset];
-				printf("%s\n", syms[j].name);
+				ecfs_sym_t sym;
+
+				sym.strtab = this->strtab;
+				sym.symval = symtab[j].st_value;
+				sym.size = symtab[j].st_size;
+				sym.type = ELF32_ST_TYPE(symtab[j].st_info);
+				sym.binding = ELF32_ST_BIND(symtab[j].st_info);
+				sym.nameoffset = symtab[j].st_name;
+				sym.name = &this->strtab[sym.nameoffset];
+
+				this->m_symtab.emplace_back(sym);
 			}
-			this->m_symtab.assign(syms, &syms[symcount]);
-			break;
+			return;
 		}
 	}
 }

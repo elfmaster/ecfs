@@ -361,36 +361,36 @@ class Ecfs {
 		void gen_argv();
 		void gen_local_symbols();
 		
- 		uint8_t *mem;          /* raw memory pointer */
-    		char *shstrtab;        /* shdr string table */
-    		char *strtab;          /* .symtab string table */
-    		char *dynstr;          /* .dynstr string table */
-    		unsigned long *pltgot;  /* pointer to .plt.got */
-    		Ehdr * ehdr;     /* ELF Header pointer */
-    		Phdr * phdr;     /* Program header table pointer */
-    		Shdr * shdr;     /* Section header table pointer */
-    		Nhdr * nhdr;     /* ELF Notes section pointer */
-    		Dyn  *dyn;       /* Dynamic segment pointer */
-    		Sym  *symtab;    /* Pointer to array of symtab symbol structs */
-    		Sym  *dynsym;    /* Pointer to array of dynsym symbol structs */
-    		Addr textVaddr;  /* Text segment virtual address */
-    		Addr dataVaddr;  /* data segment virtual address */
-   		Addr dynVaddr;   /* dynamic segment virtual address */
-    		Addr pltVaddr;
-    		Off textOff;
-    		Off dataOff;
-    		Off dynOff;
-    		Rela *plt_rela;  /* points to .rela.plt section */
-    		Rela *dyn_rela;  /* points to .rela.dyn section */
-    		ssize_t plt_rela_count; /* number of .rela.plt entries */
-    		ssize_t dyn_rela_count; /* number of .rela.dyn entries */
-    		size_t filesize;       /* total file size              */
-    		size_t dataSize;       /* p_memsz of data segment      */
-    		size_t textSize;       /* p_memsz of text segment      */
-    		size_t dynSize;        /* p_memsz of dynamnic segment  */
-    		size_t pltSize; /* size of .plt section */
-    		int fd;                /* A copy of the file descriptor to the file */
-    		int pie;        /* is the process from a PIE executable? */
+		uint8_t *mem;          /* raw memory pointer */
+		char *shstrtab;        /* shdr string table */
+		char *strtab;          /* .symtab string table */
+		char *dynstr;          /* .dynstr string table */
+		unsigned long *pltgot;  /* pointer to .plt.got */
+		Ehdr * ehdr;     /* ELF Header pointer */
+		Phdr * phdr;     /* Program header table pointer */
+		Shdr * shdr;     /* Section header table pointer */
+		Nhdr * nhdr;     /* ELF Notes section pointer */
+		Dyn  *dyn;       /* Dynamic segment pointer */
+		Sym  *symtab;    /* Pointer to array of symtab symbol structs */
+		Sym  *dynsym;    /* Pointer to array of dynsym symbol structs */
+		Addr textVaddr;  /* Text segment virtual address */
+		Addr dataVaddr;  /* data segment virtual address */
+		Addr dynVaddr;   /* dynamic segment virtual address */
+		Addr pltVaddr;
+		Off textOff;
+		Off dataOff;
+		Off dynOff;
+		Rela *plt_rela;  /* points to .rela.plt section */
+		Rela *dyn_rela;  /* points to .rela.dyn section */
+		ssize_t plt_rela_count; /* number of .rela.plt entries */
+		ssize_t dyn_rela_count; /* number of .rela.dyn entries */
+		size_t filesize;       /* total file size              */
+		size_t dataSize;       /* p_memsz of data segment      */
+		size_t textSize;       /* p_memsz of text segment      */
+		size_t dynSize;        /* p_memsz of dynamnic segment  */
+		size_t pltSize; /* size of .plt section */
+		int fd;                /* A copy of the file descriptor to the file */
+		int pie;        /* is the process from a PIE executable? */
     		
 		elf_stat_t *elfstats;
 		std::string filepath;
