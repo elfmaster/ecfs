@@ -49,12 +49,12 @@ using namespace std;
 #define NET_UDP 2
 
 typedef struct elf_stats {
-#define ELF_STATIC (1 << 1) // if its statically linked (instead of dynamically)
-#define ELF_PIE (1 << 2)    // if its position indepdendent executable
-#define ELF_LOCSYM (1 << 3) // local symtab exists?
+#define ELF_STATIC (1 << 1)     // if its statically linked (instead of dynamically)
+#define ELF_PIE (1 << 2)        // if its position indepdendent executable
+#define ELF_LOCSYM (1 << 3)     // local symtab exists?
 #define ELF_HEURISTICS (1 << 4) // were detection heuristics used by ecfs?
 #define ELF_STRIPPED_SHDRS (1 << 8)
-	unsigned int personality; // if (personality & ELF_STATIC)
+	unsigned int personality;   // if (personality & ELF_STATIC)
 } elf_stat_t;
 
 #ifndef MAX_PATH
@@ -95,7 +95,7 @@ typedef struct elf_timeval {    /* Time value with microsecond resolution    */
   long tv_usec;                 /* Microseconds                              */
 } elf_timeval;
 
-typedef struct elf_siginfo_ {    /* Information about signal (unused)         */
+typedef struct elf_siginfo_ {   /* Information about signal (unused)         */
   int32_t si_signo;             /* Signal number                             */
   int32_t si_code;              /* Extra code                                */
   int32_t si_errno;             /* Errno                                     */
@@ -105,8 +105,8 @@ typedef struct elf_siginfo_ {    /* Information about signal (unused)         */
  * This struct is exactly the same on 32bit and 64bit systems
  * except for the user_regs_struct
  */
-typedef struct prstatus_64 {       /* Information about thread; includes CPU reg*/
-	elf_siginfo_t    pr_info;       /* Info associated with signal               */
+typedef struct prstatus_64 {      /* Information about thread; includes CPU reg*/
+	elf_siginfo_t    pr_info;     /* Info associated with signal               */
 	uint16_t       pr_cursig;     /* Current signal                            */
 	unsigned long  pr_sigpend;    /* Set of pending signals                    */
 	unsigned long  pr_sighold;    /* Set of held signals                       */
@@ -119,12 +119,12 @@ typedef struct prstatus_64 {       /* Information about thread; includes CPU reg
 	elf_timeval    pr_cutime;     /* Cumulative user time                      */
 	elf_timeval    pr_cstime;     /* Cumulative system time                    */
 	user_regs_struct pr_reg;      /* CPU registers                             */
-uint32_t       pr_fpvalid;    /* True if math co-processor being used      */
+uint32_t       pr_fpvalid;        /* True if math co-processor being used      */
 } prstatus_64;
 
 
-typedef struct prstatus_32 {       /* Information about thread; includes CPU reg*/
-	elf_siginfo_t    pr_info;       /* Info associated with signal               */
+typedef struct prstatus_32 {      /* Information about thread; includes CPU reg*/
+	elf_siginfo_t    pr_info;     /* Info associated with signal               */
 	uint16_t       pr_cursig;     /* Current signal                            */
 	unsigned long  pr_sigpend;    /* Set of pending signals                    */
 	unsigned long  pr_sighold;    /* Set of held signals                       */
@@ -136,8 +136,8 @@ typedef struct prstatus_32 {       /* Information about thread; includes CPU reg
 	elf_timeval    pr_stime;      /* System time                               */
 	elf_timeval    pr_cutime;     /* Cumulative user time                      */
 	elf_timeval    pr_cstime;     /* Cumulative system time                    */
-	user_regs_struct_32 pr_reg;      /* CPU registers                             */
-uint32_t       pr_fpvalid;    /* True if math co-processor being used      */
+	user_regs_struct_32 pr_reg;   /* CPU registers                             */
+uint32_t       pr_fpvalid;        /* True if math co-processor being used      */
 } prstatus_32;
 
 
@@ -150,8 +150,8 @@ uint32_t       pr_fpvalid;    /* True if math co-processor being used      */
  */
 
 typedef union sigval32 {
-       	int sival_int;
-       	uint32_t sival_ptr; // XXX changed from void * to a uint32_t
+	int sival_int;
+	uint32_t sival_ptr; // XXX changed from void * to a uint32_t
 } sigval32_t;
 
 typedef union sigval64 {
@@ -205,11 +205,11 @@ typedef struct siginfo64 {
 	clock_t  _si_stime;    /* System time consumed */
 	sigval64_t _si_value;    /* Signal value */
 	int      _si_interrupt;      /* POSIX.1b signal */
-	void * _si_ptr;      /* POSIX.1b signal */
+	void    *_si_ptr;      /* POSIX.1b signal */
 	int      _si_overrun;  /* Timer overrun count; POSIX.1b timers */
 	int      _si_timerid;  /* Timer ID; POSIX.1b timers */
-	void *_si_addr;     /* Memory location which caused fault */
-	long _si_band;     /* Band event (was int in
+	void    *_si_addr;     /* Memory location which caused fault */
+	long     _si_band;     /* Band event (was int in
 						   glibc 2.3.2 and earlier) */
 	int      _si_fd;       /* File descriptor */
 	short    _si_addr_lsb; /* Least significant bit of address
@@ -217,14 +217,18 @@ typedef struct siginfo64 {
 } siginfo64_t;
 
 
-
-
-typedef struct shlibmap {
+struct ecfs_map {
 	std::string name;
-	loff_t offset;
-	unsigned long vaddr;
-	size_t size;
-} shlibmap_t;
+	uint64_t    type;
+	uint64_t    flags;
+	uint64_t    vaddr;
+	uint64_t    offset;
+	uint64_t    size;
+	uint64_t    link;
+	uint64_t    info;
+	uint64_t    addralign;
+	uint64_t    entsize;
+};
 
 /*
  * This particular struct is created by libecfs and is not stored
@@ -232,13 +236,13 @@ typedef struct shlibmap {
  * and 32bit version of this struct.
  */
 typedef struct ecfs_sym {
-	long symval; /* Symbol value (address/offset) */
-	size_t size;       /* size of object/function       */
-	uint8_t type;      /* symbol type, i.e STT_FUNC, STT_OBJECT */
-	uint8_t binding;   /* symbol bind, i.e STB_GLOBAL, STB_LOCAL */
-	char *strtab; /* pointer to the symbols associated string table */
-	int nameoffset;    /* Offset of symbol name into symbol strtab */
-	char *name;  /* A pointer into the string table, to the symbol name */
+	long    symval;     /* Symbol value (address/offset) */
+	size_t  size;       /* size of object/function       */
+	uint8_t type;       /* symbol type, i.e STT_FUNC, STT_OBJECT */
+	uint8_t binding;    /* symbol bind, i.e STB_GLOBAL, STB_LOCAL */
+	char   *strtab;    /* pointer to the symbols associated string table */
+	int     nameoffset; /* Offset of symbol name into symbol strtab */
+	char   *name;      /* A pointer into the string table, to the symbol name */
 } ecfs_sym_t;
 
 
@@ -318,10 +322,10 @@ struct ecfs_type64 {
  * both a 32bit and 64bit version of it kept internally.
  */
 typedef struct pltgotinfo {
-        unsigned long got_site; // address of where the GOT entry exists
-        unsigned long got_entry_va; // address that is in the GOT entry (the pointer address)
-        unsigned long plt_entry_va; // the PLT address that the GOT entry should point to if not yet resolved
-        unsigned long shl_entry_va; // the shared library address the GOT should point to if it has been resolved
+	unsigned long got_site; // address of where the GOT entry exists
+	unsigned long got_entry_va; // address that is in the GOT entry (the pointer address)
+	unsigned long plt_entry_va; // the PLT address that the GOT entry should point to if not yet resolved
+	unsigned long shl_entry_va; // the shared library address the GOT should point to if it has been resolved
 } pltgotinfo_t;
 
 typedef pltgotinfo_t pltgot_info_t; // for backwards compatibility
@@ -334,6 +338,11 @@ typedef pltgotinfo_t pltgot_info_t; // for backwards compatibility
 
 template <class ecfs_type> 
 class Ecfs {
+	/*
+	 * Private members for encapsulation
+	 */
+	private:
+
 		typedef typename ecfs_type::Ehdr Ehdr;
 		typedef typename ecfs_type::Shdr Shdr;
 		typedef typename ecfs_type::Phdr Phdr;
@@ -351,11 +360,6 @@ class Ecfs {
 		typedef typename ecfs_type::fdinfo fdinfo;	
 		typedef typename ecfs_type::prstatus prstatus;
 		typedef typename ecfs_type::auxv_t auxv_t;
-
-		/*
-		 * Private members for encapsulation
-		 */
-	private:
 
 		void gen_prstatus();
 		void gen_argv();
@@ -396,22 +400,21 @@ class Ecfs {
 		elf_stat_t *elfstats;
 		std::string filepath;
 		
+	public:
 		char *m_shstrtab; // incase anyone wants to publicly access the section string table
 		/*
 		 * To maintain an internal copy of the vectors for various structure arrays
 		 */
 		std::vector <pltgotinfo> m_pltgot;
-		std::vector <fdinfo> m_fdinfo;
-		std::vector <prstatus> m_prstatus;
-		std::vector <ecfs_sym_t> m_dynsym; //dynamic symbols
-		std::vector <ecfs_sym_t> m_symtab; //symtab vector
-		std::vector <auxv_t> m_auxv;
-		std::vector <string> m_argv;
-		std::vector <shlibmap_t *> m_shlib;
-		std::vector <Phdr> m_phdr;
-		std::vector <Shdr> m_shdr;
-
-	public:
+		std::vector <fdinfo>     m_fdinfo;
+		std::vector <prstatus>   m_prstatus;
+		std::vector <ecfs_sym_t> m_dynsym;   // dynamic symbols
+		std::vector <ecfs_sym_t> m_symtab;   // symtab vector
+		std::vector <auxv_t>     m_auxv;
+		std::vector <string>     m_argv;
+		std::vector <ecfs_map *> m_shlib;
+		std::vector <Phdr>       m_phdr;
+		std::vector <Shdr>       m_shdr;
 
 		/*
 		 * Constructor
@@ -429,16 +432,9 @@ class Ecfs {
 		void unload(void);	// free up all data structures of ecfs object
 		
 		int get_fdinfo(std::vector<fdinfo>&);	// get vector of fdinfo structs
-		std::vector<prstatus> &get_prstatus(); // get vector of elf_prstatus structs
-		std::vector<prstatus> const &get_prstatus() const;
 
 		int get_thread_count(void);	// get number of threads in process
 		char * get_exe_path(void);	// get path to original executable that spawned the process
-		std::vector <ecfs_sym_t> &get_dynamic_symbols(); // get a vector of the complete .dynsym symbol table
-		std::vector <ecfs_sym_t> const &get_dynamic_symbols() const;
-		int get_local_symbols(vector <ecfs_sym_t>&);
-		std::vector<ecfs_sym_t> &get_local_symbols();
-		std::vector<ecfs_sym_t> const &get_local_symbols() const;
 		int get_siginfo(siginfo_t &);	// will fill siginfo_t with the signal struct
 		ssize_t get_stack_ptr(uint8_t *&); // will set pointer at .stack section and return the size
 		ssize_t get_heap_ptr(uint8_t *&); // will set pointer at .heap section and return the size
@@ -453,11 +449,9 @@ class Ecfs {
 		unsigned long get_plt_va(void);		// get vaddr of the .plt
 		size_t get_plt_size(void);	// get size of the .plt 
 		int get_auxv(vector <auxv_t>&);	// get auxiliary vector
-		ssize_t get_shlib_maps(vector <shlibmap_t *>&); // get vector of shlibmap_t structs
+		ssize_t get_shlib_maps(vector <ecfs_map *>&); // get vector of shlibmap_t structs
 		ssize_t get_pltgot_info(vector <pltgotinfo_t>&); // get vector of pltgotinfo_t structs
 		unsigned long get_fault_location();	// get address that the fault happened on (taken from siginfo_t)
-		std::vector<std::string> &get_argv();	// get the argument vector
-		std::vector<std::string> const &get_argv() const;
 		char * get_section_name_by_addr(unsigned long); // return pointer to section name
 		int get_phdrs(vector <Phdr>&); // to get physical access to the program headers
 		int get_shdrs(vector <Shdr>&); // to get physical access to the section headers
@@ -478,34 +472,34 @@ static inline int xopen(const char *path, int flags)
 
 static inline int xfstat(int fd, struct stat *st)
 {
-        int ret = fstat(fd, st);
-        if (ret < 0) {
-                perror("fstat");
-                exit(-1);
-        }
-        return 0;
+	int ret = fstat(fd, st);
+	if (ret < 0) {
+		perror("fstat");
+		exit(-1);
+	}
+	return 0;
 }
 
 static inline void * heapAlloc(size_t len)
 {
-        void *p = malloc(len);
-        if (p == NULL) {
-                perror("malloc");
-                exit(-1);
-        }
-        memset(p, 0, len);
-        return p;
+	void *p = malloc(len);
+	if (p == NULL) {
+		perror("malloc");
+		exit(-1);
+	}
+	memset(p, 0, len);
+	return p;
 }
 
 
 static inline char * xstrdup(const char *s)
 {
-        char *p = strdup(s);
-        if (p == NULL) {
-                perror("strdup");
-                exit(-1);
-        }
-        return p;
+	char *p = strdup(s);
+	if (p == NULL) {
+		perror("strdup");
+		exit(-1);
+	}
+	return p;
 }
 
 		

@@ -248,27 +248,6 @@ void Ecfs<ecfs_type>::gen_prstatus()
 template void Ecfs<ecfs_type32>::gen_prstatus();
 template void Ecfs<ecfs_type64>::gen_prstatus();
 
-
-template <class ecfs_type>
-std::vector<typename ecfs_type::prstatus> &Ecfs<ecfs_type>::get_prstatus()
-{
-	return m_prstatus;
-}
-
-template std::vector<ecfs_type32::prstatus> &Ecfs<ecfs_type32>::get_prstatus();
-template std::vector<ecfs_type64::prstatus> &Ecfs<ecfs_type64>::get_prstatus();
-
-
-template <class ecfs_type>
-std::vector<typename ecfs_type::prstatus> const &Ecfs<ecfs_type>::get_prstatus() const
-{
-	return m_prstatus;
-}
-
-template std::vector<ecfs_type32::prstatus> const &Ecfs<ecfs_type32>::get_prstatus() const;
-template std::vector<ecfs_type64::prstatus> const &Ecfs<ecfs_type64>::get_prstatus() const;
-
-
 template <class ecfs_type>
 int Ecfs<ecfs_type>::get_thread_count(void)
 {
@@ -341,24 +320,6 @@ void Ecfs<ecfs_type>::gen_dynamic_symbols()
 }
 template void Ecfs<ecfs_type32>::gen_dynamic_symbols();
 template void Ecfs<ecfs_type64>::gen_dynamic_symbols();
-
-
-template <class ecfs_type>
-std::vector <ecfs_sym_t> &Ecfs<ecfs_type>::get_dynamic_symbols()
-{
-	return this->m_dynsym;
-}
-template std::vector <ecfs_sym_t> &Ecfs<ecfs_type32>::get_dynamic_symbols();
-template std::vector <ecfs_sym_t> &Ecfs<ecfs_type64>::get_dynamic_symbols();
-
-template <class ecfs_type>
-std::vector <ecfs_sym_t> const &Ecfs<ecfs_type>::get_dynamic_symbols() const
-{
-	return this->m_dynsym;
-}
-template std::vector <ecfs_sym_t> const &Ecfs<ecfs_type32>::get_dynamic_symbols() const;
-template std::vector <ecfs_sym_t> const &Ecfs<ecfs_type64>::get_dynamic_symbols() const;
-
 
 
 /*
@@ -482,22 +443,6 @@ void Ecfs<ecfs_type>::gen_local_symbols()
 }
 template void Ecfs<ecfs_type32>::gen_local_symbols();
 template void Ecfs<ecfs_type64>::gen_local_symbols();
-
-template <class ecfs_type>
-std::vector<ecfs_sym_t> &Ecfs<ecfs_type>::get_local_symbols()
-{
-	return this->m_symtab;
-}
-template std::vector<ecfs_sym_t> &Ecfs<ecfs_type32>::get_local_symbols();
-template std::vector<ecfs_sym_t> &Ecfs<ecfs_type64>::get_local_symbols();
-
-template <class ecfs_type>
-std::vector<ecfs_sym_t> const &Ecfs<ecfs_type>::get_local_symbols() const
-{
-	return this->m_symtab;
-}
-template std::vector<ecfs_sym_t> const &Ecfs<ecfs_type32>::get_local_symbols() const;
-template std::vector<ecfs_sym_t> const &Ecfs<ecfs_type64>::get_local_symbols() const;
 
 
 /*
@@ -699,12 +644,12 @@ template int Ecfs<ecfs_type64>::get_auxv(vector <auxv_t>&);
 
 
 template <class ecfs_type>
-ssize_t Ecfs<ecfs_type>::get_shlib_maps(vector <shlibmap_t *> &shlib)
+ssize_t Ecfs<ecfs_type>::get_shlib_maps(vector <ecfs_map *> &shlib)
 {
 	ssize_t i, count;	
 	char *shstrtab = this->shstrtab;
 	Ecfs::Shdr *shdr = this->shdr;
-	shlibmap_t shlibp;
+	ecfs_map shlibp;
 
 	for (count = 0, i = 0; i < this->ehdr->e_shnum; i++) {
 		switch(shdr[i].sh_type) {
@@ -726,8 +671,8 @@ ssize_t Ecfs<ecfs_type>::get_shlib_maps(vector <shlibmap_t *> &shlib)
 	return count;
 }
 
-template ssize_t Ecfs<ecfs_type32>::get_shlib_maps(vector <shlibmap_t *>&);
-template ssize_t Ecfs<ecfs_type64>::get_shlib_maps(vector <shlibmap_t *>&);
+template ssize_t Ecfs<ecfs_type32>::get_shlib_maps(vector <ecfs_map *>&);
+template ssize_t Ecfs<ecfs_type64>::get_shlib_maps(vector <ecfs_map *>&);
 
 
 /*
@@ -819,25 +764,6 @@ void Ecfs<ecfs_type>::gen_argv()
 }
 template void Ecfs<ecfs_type32>::gen_argv();
 template void Ecfs<ecfs_type64>::gen_argv();
-
-
-template <class ecfs_type>
-std::vector<std::string> &Ecfs<ecfs_type>::get_argv()
-{
-	return this->m_argv;
-}
-template std::vector<std::string> &Ecfs<ecfs_type32>::get_argv();
-template std::vector<std::string> &Ecfs<ecfs_type64>::get_argv();
-
-
-template <class ecfs_type>
-std::vector<std::string> const &Ecfs<ecfs_type>::get_argv() const
-{
-	return this->m_argv;
-}
-template std::vector<std::string> const &Ecfs<ecfs_type32>::get_argv() const;
-template std::vector<std::string> const &Ecfs<ecfs_type64>::get_argv() const;
-
 
 /*
  * Give an address as a parameter and return the name of the
