@@ -232,14 +232,15 @@ void Ecfs<ecfs_type>::gen_prstatus()
 	char *StringTable = this->shstrtab;
 	Ecfs::Shdr *shdr = this->shdr;
 	std::vector<Ecfs::prstatus> prstatus_vec;
-	Ecfs::prstatus prstatus;
+	Ecfs::prstatus *prstatus;
+	uint64_t items;
 
 	for (int i = 0; i < this->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".prstatus")) {
-			memcpy(&prstatus, &this->mem[shdr[i].sh_offset], sizeof(Ecfs::prstatus));  // this is scary, are we sure the data is aligned correctly?
-//			prstatus = reinterpret_cast<Ecfs::prstatus *>(this->mem[shdr[i].sh_offset]);
-
-			prstatus_vec.emplace_back(prstatus);
+			prstatus = (Ecfs::prstatus *)&this->mem[shdr[i].sh_offset];
+			items = shdr[i].sh_size / sizeof(Ecfs::prstatus);
+			prstatus_vec.assign(prstatus, &prstatus[items]);
+			break;
 		}
 	}
 	this->m_prstatus = prstatus_vec;
