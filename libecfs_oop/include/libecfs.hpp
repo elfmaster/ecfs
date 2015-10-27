@@ -354,7 +354,8 @@ class Ecfs {
 		 * Private members for encapsulation
 		 */
 	private:
-		
+		bool loaded;		/* Has a file been loaded yet? */
+		bool error;		/* Did a call to load() fail? */
  		uint8_t *mem;          /* raw memory pointer */
     		char *shstrtab;        /* shdr string table */
     		char *strtab;          /* .symtab string table */
@@ -389,7 +390,7 @@ class Ecfs {
 		elf_stat_t *elfstats;
 		char *filepath;
 	public:
-		
+		char *m_errmsg;
 		char *m_shstrtab; // incase anyone wants to publicly access the section string table
 		int m_argc; // processes original argc value
 		/*
@@ -412,6 +413,11 @@ class Ecfs {
 			if (Ecfs::load(path) < 0) 
 				fprintf(stderr, "Unable to load ecfs-core file '%s' into Ecfs object\n", path);
 		}
+		Ecfs(void) {
+			/*
+			 * Does nothing, requires manual call to load now
+			 */
+		}
 		~Ecfs() {
 			m_pltgot.clear();
 			m_fdinfo.clear();
@@ -419,6 +425,7 @@ class Ecfs {
 			m_dynsym.clear();
 		}
 		
+		bool fail(void); // did ecfs object instantiation fail?
 		int load (const char *); // invokes all other primary methods
 		void unload(void);	// free up all data structures of ecfs object
 		

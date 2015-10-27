@@ -50,6 +50,10 @@ int main(int argc, char **argv)
 	printf("Creating ecfs object on %s\n", argv[1]);
 	Ecfs <ecfs_type64>ecfs(argv[1]);
 	
+	if (ecfs.fail()) {
+		fprintf(stderr, "ECFS failed: %s\n", ecfs.errmsg);
+		exit(-1);
+	}
 	Ecfs <ecfs_type64> *obj = new Ecfs<ecfs_type64>(argv[1]);
 	printf("obj.m_argc: %d\n", obj->m_argc);
         /*
@@ -98,6 +102,8 @@ int main(int argc, char **argv)
 	/*
 	 * Read prstatus
 	 */
+	printf("prstatus_64: %d bytes\n", sizeof(prstatus_64));
+	printf("elf_prstatus: %d bytes\n", sizeof(struct elf_prstatus));
 	vector <prstatus_64> prstatus = ecfs.m_prstatus;
 	for (i = 0; i < prstatus.size(); i++)
 		printf("pid: %d\n", prstatus[i].pr_pid);

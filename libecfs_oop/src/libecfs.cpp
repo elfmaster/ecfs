@@ -1,10 +1,15 @@
 #include "../include/libecfs.hpp"
 
+
+template <class ecfs_type> bool Ecfs<ecfs_type>::fail(void)
+{
+	return this->error ? true : false;
+}
+
+	
 /*
- * NOTE:
- * Since the template type 'ecfs_type' is not passed as any arguments
- * to Ecfs::load(), we have to atleast specify it in the declaration of
- * the function template, hence the int Ecfs<ecfs_type>::load()
+ * Is invoked in the constructor, or can be called by itself
+ *
  */
 template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path)
 {	
@@ -25,16 +30,25 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path)
 		return -1;
 	}
 	
-	if (memcmp(mem, "\x7f\x45\x4c\x46", 4) != 0)
+	if (memcmp(mem, "\x7f\x45\x4c\x46", 4) != 0) {
+		this->m_errmsg = xfmtstrdup("File: %s is not an ELF executable", path);
+		this->error = true;
 		return -1;
+	}
 	
 	ehdr = (Ehdr *)mem;
 	
-	if (ehdr->e_type != ET_NONE && ehdr->e_type != ET_CORE) 
+	if (ehdr->e_type != ET_NONE && ehdr->e_type != ET_CORE) {
+		this->m_errmsg = xfmtstrdup("File: %s does not appear to be an ECFS file (marked by ET_NONE or ET_CORE)", path);
+		this->error = true;
 		return -1;
+	}
 	
-	if (ehdr->e_shoff == 0 || ehdr->e_shnum == 0 || ehdr->e_shstrndx == SHN_UNDEF) 
+	if (ehdr->e_shoff == 0 || ehdr->e_shnum == 0 || ehdr->e_shstrndx == SHN_UNDEF) {
+		this->m_errmsg = xfmtstrdup("File: %s has a section header table that is out of bounds or undefined\n");
+		this->error = true;
 		return -1;
+	}
 	
 	phdr = (Phdr *)(mem + ehdr->e_phoff);
 	shdr = (Shdr *)(mem + ehdr->e_shoff);
@@ -147,15 +161,60 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path)
 	 * Now that we have assigned all of the private pointers and variables
 	 * lets set the internal vectors.
 	 */
-	this->get_fdinfo(this->m_fdinfo);
-	this->get_pltgot_info(this->m_pltgot);
-	this->get_dynamic_symbols(this->m_dynsym);
-	this->get_local_symbols(this->m_symtab);
-	this->get_prstatus(this->m_prstatus);
-	this->get_auxv(this->m_auxv);
-	this->get_shlib_maps(this->m_shlib);
-	this->get_phdrs(this->m_phdr);
-	this->get_shdrs(this->m_shdr);
+	if (this->get_fdinfo(this->m_fdinfo) == -1) {
+		this->m_errmsg = xstrdup("Unable to load .fdinfo section");
+		this->error = true;
+		return -1;
+	}
+
+	if (this->get_pltgot_info(this->m_pltgot) == -1) {
+		this->m_errmsg = xstrdup("Unable to load .got.plt section");
+		this->error = true;
+		return -1;
+	}
+
+	if (this->get_dynamic_symbols(this->m_dynsym) == -1) {
+		this->m_errmsg = xstrdup("Unable to load .dynsym symbol table");
+		this->error = true;
+		return -1;
+	}
+	
+	if (this->get_local_symbols(this->m_symtab) == -1) {
+		this->m_errmsg = xstrdup("Unable to load .symtab symbol table");
+		this->error = true;
+		return -1;
+	}
+
+	if (this->get_prstatus(this->m_prstatus) == -1) {
+		this->m_errmsg = xstrdup("Unable to load .prstatus section");
+		this->error = true;
+		return -1;
+	}
+	
+	if (this->get_auxv(this->m_auxv) == -1) {
+		this->m_errmsg = xstrdup("Unable to load .auxv section");
+		this->error = true;
+		return -1;
+	}
+
+	if (this->get_shlib_maps(this->m_shlib) == -1) {
+		this->m_errmsg = xstrdup("Unable to load shared library mappings");
+		this->error = true;
+		return -1;
+	}
+
+	if (this->get_phdrs(this->m_phdr) == -1) {
+		this->m_errmsg = xstrdup("Unable to load program headers");
+		this->error = true;
+		return -1;
+	}
+
+	if (this->get_shdrs(this->m_shdr) == -1) {
+		this->m_errmsg = xstrdup("Unable to load section headers");
+		this->error = true;
+		return -1;
+	}
+
 
 	/*
 	 * set argv
