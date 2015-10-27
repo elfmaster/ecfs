@@ -1,0 +1,14 @@
+main/test.c: In function ‘int main(int, char**)’:
+main/test.c:133:54: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘size_t {aka long unsigned int}’ [-Wformat=]
+  printf("text size: %d bytes\n", ecfs.get_text_size());
+                                                      ^
+main/test.c:141:43: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘uint64_t {aka long unsigned int}’ [-Wformat=]
+   printf("auxv type: %d\n", auxv[i].a_type);
+                                           ^
+In file included from main/test.c:2:0:
+main/../src/libecfs.hpp: In instantiation of ‘int Ecfs<ecfs_type>::load(const char*) [with ecfs_type = ecfs_type64]’:
+main/../src/libecfs.hpp:410:23:   required from ‘Ecfs<ecfs_type>::Ecfs(const char*) [with ecfs_type = ecfs_type64]’
+main/test.c:50:32:   required from here
+main/../src/libecfs.hpp:653:36: error: ‘class Ecfs<ecfs_type64>’ has no member named ‘ac’
+  this->argv.assign(*argvp, *(argvp + this->ac)); 
+                                    ^
