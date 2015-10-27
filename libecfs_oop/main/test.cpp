@@ -45,13 +45,13 @@ int main(int argc, char **argv)
 		printf("%s file\n", argv[0]);
 		exit(0);
 	}
-	unsigned int i;
+	uint32_t i;
 	
 	printf("Creating ecfs object on %s\n", argv[1]);
 	Ecfs <ecfs_type64>ecfs(argv[1]);
 	
 	if (ecfs.fail()) {
-		fprintf(stderr, "ECFS failed: %s\n", ecfs.errmsg);
+		fprintf(stderr, "ECFS failed: %s\n", ecfs.m_errmsg);
 		exit(-1);
 	}
 	Ecfs <ecfs_type64> *obj = new Ecfs<ecfs_type64>(argv[1]);

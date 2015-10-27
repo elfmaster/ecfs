@@ -6,6 +6,8 @@ template <class ecfs_type> bool Ecfs<ecfs_type>::fail(void)
 	return this->error ? true : false;
 }
 
+template bool Ecfs<ecfs_type32>::fail(void);
+template bool Ecfs<ecfs_type64>::fail(void);
 	
 /*
  * Is invoked in the constructor, or can be called by itself

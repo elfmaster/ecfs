@@ -502,5 +502,17 @@ static inline char * xstrdup(const char *s)
         return p;
 }
 
+static inline char * xfmtstrdup(const char *fmt, ...)
+{
+        char *s, buf[512];
+        va_list va;
+        
+        va_start (va, fmt);
+        vsnprintf (buf, sizeof(buf), fmt, va);
+        s = xstrdup(buf);
+        
+        return s;
+}
+
 		
 		
