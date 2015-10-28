@@ -826,7 +826,7 @@ template unsigned long Ecfs<ecfs_type64>::get_fault_location(void);
 template <class ecfs_type>
 int Ecfs<ecfs_type>::get_argv(char ***argv)
 {
-        int i, argc, c, j;
+        int i, argc, c;
         Ecfs::Ehdr *ehdr = this->ehdr;
         Ecfs::Shdr *shdr = this->shdr;
         uint8_t *mem = this->mem;
