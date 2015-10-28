@@ -17,10 +17,16 @@ template <class ecfs_type> bool Ecfs<ecfs_type>::active(void)
 template bool Ecfs<ecfs_type32>::active(void);
 template bool Ecfs<ecfs_type64>::active(void);
 
+/* 
+ * Used to help prevent bugs
+ */
+#define EXCEEDS_FILESZ(x) (x > this->filesize) 
+#define EXCEEDS_OFFSET(x, y) (x > y) 
 /*
  * load() is invoked by the Ecfs constructor if a pathname is passed
  * otherwise load() must be invoked manually:
  */
+
 template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path, lflag_t type)
 {	
 	Ecfs *ecfs = this;
@@ -31,6 +37,17 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path, lflag_t t
 	Ecfs::Phdr *phdr;
 	Ecfs::Shdr *shdr;
 	
+/*
+ * XXX
+ * Currently in order to add an error msg and fail out we do this each time:
+ *    this->m_errmsg = xfmtstrdup("File: %s, has an invalid section header index",path);
+ *    this->error = true;
+ *    return -1;
+ *
+ * In the future lets add a function like do_error(char *fmt, ...);
+ * that does everything.
+ */
+
 	this->error = false;
 	this->loaded = false;
 	this->m_errmsg = NULL;
@@ -87,27 +104,78 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path, lflag_t t
 	}
 	
 	if (ehdr->e_shoff == 0 || ehdr->e_shnum == 0 || ehdr->e_shstrndx == SHN_UNDEF) {
-		this->m_errmsg = xfmtstrdup("File: %s has a section header table that is out of bounds or undefined\n");
+		this->m_errmsg = xfmtstrdup("File: %s has a section header table that is out of bounds or undefined");
 		this->error = true;
 		return -1;
 	}
 	
+	if (EXCEEDS_FILESZ(ehdr->e_phoff)) {
+		this->m_errmsg = xfmtstrdup("File: %s, has an invalid phdr table offset", path);
+		this->error = true;
+		return -1;
+	}
+	if (EXCEEDS_FILESZ(ehdr->e_shoff)) {
+		this->m_errmsg = xfmtstrdup("File: %s, has an invalid shdr table offset", path);
+		this->error = true;
+		return -1;
+	}
+	
+	/*
+	 * Set pointers for program headers and section headers
+	 */
 	phdr = (Phdr *)(mem + ehdr->e_phoff);
 	shdr = (Shdr *)(mem + ehdr->e_shoff);
 	
+	if (EXCEEDS_OFFSET(ehdr->e_shstrndx, ehdr->e_shnum)) {
+		this->m_errmsg = xfmtstrdup("File: %s, has an invalid section header index",path);
+		this->error = true;
+		return -1;
+	}
 	/*
-	 * setup section header string table
+	 * VALIDATE BOUNDARIES
+	 */
+	if (EXCEEDS_FILESZ(shdr[ehdr->e_shstrndx].sh_offset)) {
+		this->m_errmsg = xfmtstrdup("File: %s, has an out of bounds string table",path);
+		this->error = true;
+		return -1;
+	}
+	/*
+	 * Setup section header string table
 	 */
 	ecfs->shstrtab = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
 	ecfs->m_shstrtab = ecfs->shstrtab;
 	/*
 	 * setup .dynsym symbols, .symtab symbols, and .dynstr and .strtab string table
 	 */
+	/*
+	 * XXX - Important note
+	 * As we loop through each section, we take special care to validate that every
+	 * section header has a valid offset. This will prevent possible vulnerabilities
+	 * or crashes that would otherwise transpire when loading a file with invalid 
+	 * section header offsets. In some cases this feature may be undesirable for people
+	 * who want to load a file irregardless of whether or not one or two sections have
+	 * incorrect offsets. 
+	 * So in the future lets move the code from here (Even though this is the easiest
+	 * place to add it. And move it to the functions that do the actual lookup of a
+	 * given section. So in every function that looks up a section, such as get_prstatus
+	 * get_fdinfo, get_args, etc. we will do a check to make sure the offset its about 
+	 * to access is valid. Until that point in time we will check every single section
+	 * at the initial loading phase right here...
+	 */
 	for (ecfs->dynstr = NULL, i = 0; i < ehdr->e_shnum; i++) {
+		/*
+	 	 * VALIDATE SHDR OFFSET
+		 */
+		if (EXCEEDS_FILESZ(shdr[i].sh_offset)) {
+			this->m_errmsg = xfmtstrdup("File: %s, has an out of bounds section header", path);
+			this->error = true;
+			return -1;
+		}
+			
 		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".dynstr")) 
 			ecfs->dynstr = (char *)&mem[shdr[i].sh_offset];
 		else
-		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".strtab"))
+		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".strtab")) 
 			ecfs->strtab = (char *)&mem[shdr[i].sh_offset];
 		else
 		if (!strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".dynsym")) 
@@ -117,6 +185,13 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path, lflag_t t
 			ecfs->symtab = (Ecfs::Sym *)&mem[shdr[i].sh_offset];
 	}
 	
+	/*
+	 * NOTE: We could have included the next 5 loops into the one loop
+	 * above. The only reason we do not is for code readability and to 
+	 * segregate the way we handle certain sections. In the loop above
+	 * we are handling symbol tables, in the next loop we are handling
+	 * the sections that we want the address,size, and offset for, etc.
+	 */
 	
 	/*
 	 * Find .dynamic, .text, and .data segment/section
