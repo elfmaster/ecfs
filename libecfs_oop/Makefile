@@ -1,7 +1,7 @@
 V = dev
 B = 64
 
-dev_CFLAGS = -DDEBUG -g -D_GNU_SOURCE -Wall -m${B}
+dev_CFLAGS = -std=c++11 -DDEBUG -g -D_GNU_SOURCE -Wall -m${B}
 dev_LDFLAGS = -ldwarf -lelf
 dev_TGT = ${BINS}
 dev_CC = clang++
@@ -16,7 +16,7 @@ perf_LDFLAGS = -ldwarf -lelf
 perf_TGT = ${BINS}
 perf_CC = g++
 
-prod_CFLAGS = -O3 -Wall -DNDEBUG -D_FORTIFY_SOURCE=2 -fPIC -m${B}
+prod_CFLAGS = -std=c++11 -O3 -Wall -DNDEBUG -D_FORTIFY_SOURCE=2 -fPIC -m${B}
 prod_LDFLAGS = -ldwarf -lelf -pie
 prod_TGT = ${BINS}
 prod_CC = g++

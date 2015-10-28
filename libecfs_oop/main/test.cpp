@@ -38,18 +38,151 @@ static void print_registers(struct user_regs_struct *reg)
 /* must add 32bit support */
 }
 
+/*
+ * This is a COMPLETE_LOAD instantiation of an ECFS object.
+ * It will automatically load every part of the ecfs file
+ * into the Ecfs object. This is often desirable but in some
+ * cases it can pose problems, such as when an ecfs file has
+ * missing section headers, which could cause the complete_load
+ * to fail and prevent the user from accessing any sections
+ * at all just because, say the fdinfo() wasn't able to be
+ * retrieved.
+ */
+int example_1(const char *path)
+{
+	int i;
+	Ecfs <ecfs_type64>ecfs(path); // defaults to COMPLETE_LOAD
+	if (ecfs.fail()) {
+		printf("ecfs loading failed- %s\n", ecfs.m_errmsg);
+		return -1;
+	}
+	/*
+	 * After a complete load, there are many public members
+	 * that are already available for access
+	 */
 
+	for (i = 0; i < ecfs.m_phdr.size(); i++)
+		switch(ecfs.m_phdr[i].p_type) {
+			case PT_LOAD:
+				printf("PT_LOAD: %lx\n", ecfs.m_phdr[i].p_vaddr);
+				break;
+			case PT_NOTE:
+				printf("PT_NOTE: %lx\n", ecfs.m_phdr[i].p_vaddr);
+				break;
+		}
+	
+	/*
+         * read the section headers and print each address
+         */
+        for (i = 0; i < ecfs.m_shdr.size(); i++)
+                printf("section: %s: %lx\n", &ecfs.m_shstrtab[ecfs.m_shdr[i].sh_name], ecfs.m_shdr[i].sh_addr);
+
+        /*
+         * Read fdinfo
+         */
+        vector <fdinfo_64> fdinfo = ecfs.m_fdinfo;
+        for (i = 0; i < fdinfo.size(); i++)
+                printf("fd path: %s\n", fdinfo[i].path);
+
+
+        /*
+         * Read local symbols (from .symtab)
+         */
+        vector <ecfs_sym_t> symtab = ecfs.m_symtab;
+        for (i = 0; i < symtab.size(); i++)
+                printf("symbol name: %s value: %lx\n", symtab[i].name, symtab[i].symval);
+	
+	/*
+	 * etc. etc.
+	 */
+	return 0;
+}
+	
+/*
+ * A SIMPLE_LOAD loads only the basic ELF attributes (mostly private) into the
+ * object, but does not load any of the public vectors or pointers that
+ * relate to specific ECFS sections.
+ */
+int example_2(const char *path)
+{
+	int ret, i;
+	Ecfs<ecfs_type64>ecfs;
+	ret = ecfs.load(path, SIMPLE_LOAD);
+	if (ret < 0) { // could also use if (ecfs.fail())
+		printf("failed - %s\n", ecfs.m_errmsg);
+		return -1;
+	}
+
+	/*
+	 * Must now manually invoke functions to get vectors and other
+	 * info. This can be nice for users who want granular access
+	 * to an ecfs file without loading everything 
+	 */
+	
+	/*
+	 * Get process info 
+	 */
+	printf("Threads (pids): \n");
+	vector <prstatus_64> prstatus;
+	if (ecfs.get_prstatus(prstatus) < 0) {
+		printf("Unable to load .prstatus section\n");
+		return -1;
+	}
+	for (auto &e : prstatus)
+		cout << e.pr_pid << endl;
+	
+	/*
+	 * Get fdinfo
+	 */
+	printf("Open files:\n");
+	vector <fdinfo_64> fdinfo;
+	if (ecfs.get_fdinfo(fdinfo) < 0) {
+		printf("Unable to load .fdinfo section\n");
+		return -1;
+	}
+	for (auto &e : fdinfo)
+		cout << e.path << endl;
+	
+	/*
+	 * Get heap data
+	 * NOTE: get_heap_ptr(uint8_t *&); 
+	 */
+	uint8_t *heap;
+	ssize_t heap_len;
+	if ((heap_len = ecfs.get_heap_ptr(heap)) < 0) {
+		printf("Unable to load .heap section\n");
+		return -1;
+	}
+	printf("heap is %d bytes\n", heap_len);
+	for (i = 0; i < 16; i++)
+		printf("%02x ", heap[i]);
+	printf("\n");
+	return 0;
+
+}
+
+/*	
+ * In this example we instantiate ECFS and do a COMPLETE_LOAD
+ * Therefore it will automatically fill in many public members
+ */
 int main(int argc, char **argv)
 {
-	if (argc < 2) {
-		printf("%s file\n", argv[0]);
+	if (argc < 3) {
+		printf("%s <file> #example_number\n", argv[0]);
 		exit(0);
 	}
-	uint32_t i;
-	
+	if (atoi(argv[2]) == 1)
+		example_1(argv[1]);
+	else
+	if (atoi(argv[2]) == 2)
+		example_2(argv[1]);
+	else
+	printf("Valid example #'s 1, 2\n");
+	exit(0);
+#if 0
 	Ecfs <ecfs_type64>ecfs; // this will never fail
 	ecfs.load(argv[1], COMPLETE_LOAD);
-	//ecfs.load(argv[1], COMPLETE_LOAD);
+	
 	// may also check return value, -1 means failure
 	if (ecfs.fail()) {
 		fprintf(stderr, "ECFS failed: %s\n", ecfs.m_errmsg);
@@ -188,6 +321,8 @@ int main(int argc, char **argv)
 	ssize_t dlen = ecfs.get_section_pointer(".data", data_ptr);
 	for (i = 0; i < dlen; i++)
 		printf("%02x", data_ptr[i]);
+
+#endif
 
 }	
 

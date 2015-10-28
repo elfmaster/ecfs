@@ -58,6 +58,28 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path, lflag_t t
 	
 	ehdr = (Ehdr *)mem;
 	
+	switch(ehdr->e_machine) {
+		case EM_X86_64:
+			if (sizeof(*ehdr) == sizeof(Elf32_Ehdr)) {
+				this->m_errmsg = xfmtstrdup("File: %s is 32bit architecture and incompatible with ecfs_type64\n", path);
+				this->error = true;
+				return -1;
+			}
+			break;
+		case EM_386:
+			if (sizeof(*ehdr) == sizeof(Elf64_Ehdr)) {
+				this->m_errmsg = xfmtstrdup("File: %s is 64bit architecture and incompatible with ecfs_type32\n", path);
+				this->error = true;
+				return -1;
+			}
+			break;
+		default:
+			this->m_errmsg = xfmtstrdup("File: %s has unsupported architecture\n");
+			this->error = true;
+			return -1;
+
+	}
+				
 	if (ehdr->e_type != ET_NONE && ehdr->e_type != ET_CORE) {
 		this->m_errmsg = xfmtstrdup("File: %s does not appear to be an ECFS file (marked by ET_NONE or ET_CORE)", path);
 		this->error = true;
