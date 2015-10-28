@@ -9,11 +9,19 @@ template <class ecfs_type> bool Ecfs<ecfs_type>::fail(void)
 template bool Ecfs<ecfs_type32>::fail(void);
 template bool Ecfs<ecfs_type64>::fail(void);
 	
+template <class ecfs_type> bool Ecfs<ecfs_type>::active(void)
+{
+	return this->loaded ? true : false;
+}
+
+template bool Ecfs<ecfs_type32>::active(void);
+template bool Ecfs<ecfs_type64>::active(void);
+
 /*
- * Is invoked in the constructor, or can be called by itself
- *
+ * load() is invoked by the Ecfs constructor if a pathname is passed
+ * otherwise load() must be invoked manually:
  */
-template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path)
+template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path, lflag_t type)
 {	
 	Ecfs *ecfs = this;
 	uint8_t *mem;
@@ -22,8 +30,18 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path)
 	Ecfs::Ehdr *ehdr;
 	Ecfs::Phdr *phdr;
 	Ecfs::Shdr *shdr;
+	
+	this->error = false;
+	this->loaded = false;
+	this->m_errmsg = NULL;
 
-	fd = xopen(path, O_RDONLY);
+	fd = open(path, O_RDONLY);
+	if (fd < 0) {
+		this->m_errmsg = xfmtstrdup("File: %s, %s", path, strerror(errno));
+		this->error = true;
+		return -1;
+	}
+
 	xfstat(fd, &st);
 	ecfs->filesize = st.st_size;
 	mem = (uint8_t *)mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
@@ -160,9 +178,39 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path)
 	ecfs->mem = mem;
 	
 	/*
-	 * Now that we have assigned all of the private pointers and variables
-	 * lets set the internal vectors.
+	 * If we are doing a simple load, then exit here
+	 * and allow the user to load the vectors manually
 	 */
+	if (type == SIMPLE_LOAD) 
+		return 0;
+	
+	/*
+	 * Now that we have assigned all of the private pointers and variables
+	 * lets set the public vectors and pointers
+	 */
+	if (this->get_heap_ptr(this->m_heap) == -1) {
+		this->m_errmsg = xstrdup("Unable to load .heap section");
+		this->error = true;
+		return -1;
+	}
+
+	if (this->get_stack_ptr(this->m_stack) == -1) {
+		this->m_errmsg = xstrdup("Unable to load .stack section");
+		this->error = true;
+		return -1;
+	}
+	
+	if (this->get_section_pointer("._TEXT", this->m_text) == -1) {
+		this->m_errmsg = xstrdup("Unable to load ._TEXT section");
+		this->error = true;
+		return -1;
+	}
+	
+	if (this->get_section_pointer("._DATA", this->m_data) == -1) {
+		this->m_errmsg = xstrdup("Unable to load ._DATA section");
+		this->error = true;
+		return -1;
+	}
 	if (this->get_fdinfo(this->m_fdinfo) == -1) {
 		this->m_errmsg = xstrdup("Unable to load .fdinfo section");
 		this->error = true;
@@ -216,19 +264,23 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path)
 		this->error = true;
 		return -1;
 	}
-
+	printf("Finished loading vectors\n");
 
 	/*
 	 * set argv
 	 */
 	char **argvp;
-	this->m_argc = this->get_argv(&argvp);
+	if ((this->m_argc = this->get_argv(&argvp)) == -1) {
+		this->m_errmsg = xstrdup("Unable to load .args section");
+		this->error = true;
+		return -1;
+	}
 	this->m_argv.assign(argvp, (argvp + this->m_argc)); 
 	return 0;
 }	
 
-template int Ecfs<ecfs_type32>::load(const char *);
-template int Ecfs<ecfs_type64>::load(const char *);
+template int Ecfs<ecfs_type32>::load(const char *, lflag_t);
+template int Ecfs<ecfs_type64>::load(const char *, lflag_t);
 
 
 

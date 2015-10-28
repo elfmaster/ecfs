@@ -330,6 +330,7 @@ typedef pltgotinfo_t pltgot_info_t; // for backwards compatibility
  ****************<elfmaster>******************************
  */
 
+typedef enum{SIMPLE_LOAD, COMPLETE_LOAD}lflag_t;
 template <class ecfs_type> 
 class Ecfs {
 		typedef typename ecfs_type::Ehdr Ehdr;
@@ -406,13 +407,24 @@ class Ecfs {
 		std::vector <shlibmap_t> m_shlib;
 		std::vector <Phdr> m_phdr;
 		std::vector <Shdr> m_shdr;
+		uint8_t *m_heap;
+		uint8_t *m_data;
+		uint8_t *m_text;
+		uint8_t *m_stack;
 		/*
-		 * Constructor
+		 * Constructor defaults to complete load if no load type
+	 	 * is specified.
 		 */
 		Ecfs(const char *path) {
-			if (Ecfs::load(path) < 0) 
-				fprintf(stderr, "Unable to load ecfs-core file '%s' into Ecfs object\n", path);
+			Ecfs::load(path, COMPLETE_LOAD);
 		}
+		Ecfs(const char *path, lflag_t type) {
+			Ecfs::load(path, type);
+		}
+		/*
+	 	 * Nothing is initialized until a filepath
+		 * is loaded with load()
+		 */
 		Ecfs(void) {
 			/*
 			 * Does nothing, requires manual call to load now
@@ -424,9 +436,10 @@ class Ecfs {
 			m_prstatus.clear();
 			m_dynsym.clear();
 		}
-		
+				
+		bool active(void); // is the object active with a loaded file?
 		bool fail(void); // did ecfs object instantiation fail?
-		int load (const char *); // invokes all other primary methods
+		int load (const char *, lflag_t); // invokes all other primary methods
 		void unload(void);	// free up all data structures of ecfs object
 		
 		int get_fdinfo(std::vector<fdinfo>&);	// get vector of fdinfo structs

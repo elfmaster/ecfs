@@ -47,9 +47,10 @@ int main(int argc, char **argv)
 	}
 	uint32_t i;
 	
-	printf("Creating ecfs object on %s\n", argv[1]);
-	Ecfs <ecfs_type64>ecfs(argv[1]);
-	
+	Ecfs <ecfs_type64>ecfs; // this will never fail
+	ecfs.load(argv[1], COMPLETE_LOAD);
+	//ecfs.load(argv[1], COMPLETE_LOAD);
+	// may also check return value, -1 means failure
 	if (ecfs.fail()) {
 		fprintf(stderr, "ECFS failed: %s\n", ecfs.m_errmsg);
 		exit(-1);
@@ -116,13 +117,20 @@ int main(int argc, char **argv)
 		printf("Reloc offset: %lx value: %lx expected shlib: %lx pltstub: %lx\n",
 			pltgot[i].got_site, pltgot[i].got_entry_va, pltgot[i].shl_entry_va, pltgot[i].plt_entry_va);
 
-	
+	/*
+	 * Get command args
+	 * XXX ecfs-handler itself does this in a way that is NOT
+	 * as close to the original argv as I thought. I will fix this
+	 */
 	vector <string> args = ecfs.m_argv;
 	printf("argc: %d\n", ecfs.m_argc);
 	for (i = 0; i < ecfs.m_argc; i++) {
 		printf("%s", args[i].c_str());
 	}
 	
+	/*
+	 * Grab auxiliary vector
+	 */
 	vector <Elf64_auxv_t> auxv = ecfs.m_auxv;
 	for (i = 0; i < auxv.size(); i++) {
 		printf("auxv a_type: %lx a_val: %lx\n", auxv[i].a_type, auxv[i].a_un.a_val);
