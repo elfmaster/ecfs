@@ -1035,6 +1035,14 @@ char * Ecfs<ecfs_type>::get_section_name_by_addr(unsigned long addr)
 template char * Ecfs<ecfs_type32>::get_section_name_by_addr(unsigned long);
 template char * Ecfs<ecfs_type64>::get_section_name_by_addr(unsigned long);
 
+template <class ecfs_type>
+char * Ecfs<ecfs_type>::get_section_name(Ecfs::Shdr &shdr)
+{
+	return &this->m_shstrtab[shdr.sh_name];
+}
+
+template char * Ecfs<ecfs_type32>::get_section_name(Ecfs::Shdr&);
+template char * Ecfs<ecfs_type64>::get_section_name(Ecfs::Shdr&);
 /*
  * Example:
  * vector <Elf64_Phdr> phdr;

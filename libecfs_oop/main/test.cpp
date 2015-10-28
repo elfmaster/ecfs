@@ -74,10 +74,20 @@ int example_1(const char *path)
 	/*
          * read the section headers and print each address
          */
+	/*
+	 * OLD WAY 
+	 */
+#if 0
         for (i = 0; i < ecfs.m_shdr.size(); i++)
-                printf("section: %s: %lx\n", &ecfs.m_shstrtab[ecfs.m_shdr[i].sh_name], ecfs.m_shdr[i].sh_addr);
+       		 printf("section: %s: %lx\n", &ecfs.m_shstrtab[ecfs.m_shdr[i].sh_name], ecfs.m_shdr[i].sh_addr);
+#endif
+	/*
+	 * NEW WAY with get_section_name !
+	 */
+	for (auto &e :  ecfs.m_shdr) 
+		printf("section: %s: %lx\n", ecfs.get_section_name(e), e.sh_addr);
 
-        /*
+	/*
          * Read fdinfo
          */
         vector <fdinfo_64> fdinfo = ecfs.m_fdinfo;
