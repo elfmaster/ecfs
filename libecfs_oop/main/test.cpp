@@ -103,8 +103,6 @@ int main(int argc, char **argv)
 	/*
 	 * Read prstatus
 	 */
-	printf("prstatus_64: %d bytes\n", sizeof(prstatus_64));
-	printf("elf_prstatus: %d bytes\n", sizeof(struct elf_prstatus));
 	vector <prstatus_64> prstatus = ecfs.m_prstatus;
 	for (i = 0; i < prstatus.size(); i++)
 		printf("pid: %d\n", prstatus[i].pr_pid);

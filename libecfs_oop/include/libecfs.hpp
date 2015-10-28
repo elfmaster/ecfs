@@ -411,6 +411,7 @@ class Ecfs {
 		uint8_t *m_data;
 		uint8_t *m_text;
 		uint8_t *m_stack;
+		siginfo_t m_siginfo;
 		/*
 		 * Constructor defaults to complete load if no load type
 	 	 * is specified.

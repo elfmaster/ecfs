@@ -276,6 +276,16 @@ template <class ecfs_type> int Ecfs<ecfs_type>::load(const char *path, lflag_t t
 		return -1;
 	}
 	this->m_argv.assign(argvp, (argvp + this->m_argc)); 
+	
+	/*
+	 * Get siginfo
+	 */
+	if (this->get_siginfo(this->m_siginfo) == -1) {
+		this->m_errmsg = xstrdup("Unable to load .siginfo section");
+		this->error = true;
+		return -1;
+	}
+
 	return 0;
 }	
 
