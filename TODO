@@ -31,6 +31,9 @@ that it also marks the data segment as INJECTED.
 
 B.6. Add support for reconstruction .init_array and .fini_array sections
 
+B.7. Symbol resolution is currently done with linear lookups, instead we should
+switch to using the .gnu.hash.
+
 -- Easy
 
 C.1 Add feature to readecfs so that in the -g option it prints out the relocation
@@ -39,6 +42,10 @@ name that is associated with each listed GOT entry.
 C.2. Fix libecfs bug where it adds a base to the pltVaddr resulting in an incorrect
 address
 
+C.3. Add code so that each anonymous and file mapping has its own section header.
+What if for instance we know some data was stored in mmap.rwx.1 and we wanted to
+readecfs -O (or objcopy) it onto disk? Currently there is no way to access just that
+memory mapping, unless the phdr's are used.
 
 -- Bugs of unknown difficulty
 
@@ -48,5 +55,6 @@ Jul 26 17:45:46 elfmaster kernel: [23122.882602] ecfs64[17306]: segfault at 3280
 0]
 
 check_segments_for_elf_objects() is the function that is segfaulting
+
 
 
