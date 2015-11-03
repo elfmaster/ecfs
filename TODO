@@ -21,6 +21,8 @@ data segment. This is especially important for injected executables
 or shared objects, since often we want to extract these for
 analysis after the fact.
 
+A.4. Stack discprenecy between ecfs file and ecfs-core file
+
 -- Medium issues
 
 B.4. Add code to readecfs so that it builds section headers on extracted
@@ -31,6 +33,9 @@ that it also marks the data segment as INJECTED.
 
 B.6. Add support for reconstruction .init_array and .fini_array sections
 
+b.7. Some symbols aren't being resolved and therefore have an address of 0.
+
+
 -- Easy
 
 C.1 Add feature to readecfs so that in the -g option it prints out the relocation
@@ -39,6 +44,8 @@ name that is associated with each listed GOT entry.
 C.2. Fix libecfs bug where it adds a base to the pltVaddr resulting in an incorrect
 address
 
+C.3. Feature - Add symbol resolution taken from original executable, and then fallback
+to .eh_frame if that doesn't exist.
 
 -- Bugs of unknown difficulty
 
@@ -49,4 +56,25 @@ Jul 26 17:45:46 elfmaster kernel: [23122.882602] ecfs64[17306]: segfault at 3280
 
 check_segments_for_elf_objects() is the function that is segfaulting
 
+
+D.2. ecfs either crashes on C++ apps, or leaves the symbol table mangled.
+
+Example with nmap which is C++ app:
+
+Oct 29 13:30:45 secretenergy ecfs64: merge_text_image(): renaming /tmp/ecfs_ramdisk/.tmp_merging_shlibs back to /tmp/ecfs_ramdisk/.tmp_core [line: 318]
+Oct 29 13:30:45 secretenergy ecfs64: parsing original phdr's in memory [line: 400]
+Oct 29 13:30:45 secretenergy ecfs64: exe_path: /usr/bin/nmap [line: 116]
+Oct 29 13:30:45 secretenergy ecfs64: calling xref_phdrs_for_offsets() [line: 414]
+Oct 29 13:30:45 secretenergy ecfs64: noteOffset: 12d8#012 [line: 299]
+Oct 29 13:30:45 secretenergy ecfs64: interpOffset: 3238#012 [line: 305]
+Oct 29 13:30:45 secretenergy ecfs64: ehframeOffset: f3360#012 [line: 323]
+Oct 29 13:30:45 secretenergy ecfs64: textOffset: 3000 [line: 339]
+Oct 29 13:30:45 secretenergy ecfs64: dynOffset: 111d98#012 [line: 311]
+Oct 29 13:30:45 secretenergy ecfs64: bssVaddr is: 84ab18#012 [line: 347]
+Oct 29 13:30:45 secretenergy ecfs64: bssOffset: 24eb18 dataOffset: 111000#012 [line: 351]
+Oct 29 13:30:45 secretenergy ecfs64: calling lookup_lib_maps() [line: 433]
+Oct 29 13:30:45 secretenergy ecfs64: filepath: /usr/bin/nmap [line: 58]
+Oct 29 13:30:45 secretenergy ecfs64: message repeated 2 times: [ filepath: /usr/bin/nmap [line: 58]]
+Oct 29 13:30:45 secretenergy ecfs64: filepath: socket:[51789] [line: 58]
+Oct 29 13:30:45 secretenergy kernel: [13601.542256] ecfs64[12700]: segfault at 1 ip 00007f2d446de27d sp 00007ffe4d1aeaf8 error 4 in libc-2.19.so[7f2d4463d000+1bb000]
 

@@ -1,4 +1,4 @@
-V = dev
+V = asan
 B = 64
 
 dev_CFLAGS = -std=c++11 -DDEBUG -g -D_GNU_SOURCE -Wall -m${B}

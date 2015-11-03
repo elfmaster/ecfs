@@ -93,7 +93,8 @@ int example_1(const char *path)
         vector <fdinfo_64> fdinfo = ecfs.m_fdinfo;
         for (i = 0; i < fdinfo.size(); i++)
                 printf("fd path: %s\n", fdinfo[i].path);
-
+	
+	
 
         /*
          * Read local symbols (from .symtab)
@@ -152,7 +153,13 @@ int example_2(const char *path)
 	}
 	for (auto &e : fdinfo)
 		cout << e.path << endl;
-	
+	vector <fdinfo_64> &fdinfo2 = fdinfo;
+	  for (auto &e : fdinfo2)
+		cout << e.path << endl;
+	vector <fdinfo_64> *fdinfo3 = new vector<fdinfo_64>;
+	*fdinfo3 = fdinfo;
+	for (i = 0; i < fdinfo3->size(); i++)
+		printf("%s\n", (*fdinfo3)[i].path);
 	/*
 	 * Get heap data
 	 * NOTE: get_heap_ptr(uint8_t *&); 
