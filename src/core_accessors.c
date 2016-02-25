@@ -1,12 +1,12 @@
 /*
  * Copyright (c) 2015, Ryan O'Neill
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
  * 1. Redistributions of source code must retain the above copyright notice, this
- * list of conditions and the following disclaimer. 
+ * list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  * this list of conditions and the following disclaimer in the documentation
  * and/or other materials provided with the distribution.
@@ -185,13 +185,13 @@ int mark_preloaded_libs(handle_t *handle, struct lib_mappings *lm)
 		return -1;
 	}
 	/*
-	 * XXX 
+	 * XXX
 	 * we need to add code that properly handles multiple shared library
 	 * paths being passed to LD_PRELOAD. Currently we handle:
 	 * LD_PRELOAD=./some_lib.so
-	 * 
+	 *
 	 * but we fail to handle
-	 * LD_PRELOAD=./some_lib.so /lib/x86_64/libvid.so.2 
+	 * LD_PRELOAD=./some_lib.so /lib/x86_64/libvid.so.2
 	 *
 	 */
 	for (j = 0; j < lm->libcount; j++) {
@@ -241,6 +241,7 @@ ssize_t check_segments_for_elf_objects(handle_t *handle, struct lib_mappings *lm
 			 * Is this dynamic object the main program itself? Such as with a PIE
 			 * compiled program like sshd. If so we're not interested
 			 */
+			
 			if (phdr[i].p_vaddr == elfdesc->textVaddr)
 				continue;
 			/*

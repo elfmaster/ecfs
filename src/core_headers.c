@@ -168,10 +168,16 @@ int parse_orig_phdrs(elfdesc_t *elfdesc, memdesc_t *memdesc, notedesc_t *notedes
 				 * notes so we don't fill these in at this point, hence the comments
 				 *
 				 */
-				//elfdesc->noteVaddr = phdr[i].p_vaddr + (elfdesc->pie ? text_base : 0);
-				//elfdesc->noteSize = phdr[i].p_filesz;
 				break;
+			/*
+			 * (NOTE: Regarding TODO D.1)
+			 * On UPX packed executables and other such species of ELF, we will not find
+			 * a PT_INTERP program header, and therefore we will not mark the program as
+			 * being dynamically linked (When it is) which then results in a failure to
+			 * call lookup_lib_maps(), leading to a final segfault in check_segments_for_elf_objects()
+			 */
 			case PT_INTERP:
+				log_msg(__LINE__, "%s is dynamically linked\n", memdesc->exe_path);
 				elfdesc->dynlinked++;
 				elfdesc->interpVaddr = phdr[i].p_vaddr;
 				elfdesc->interpSize = phdr[i].p_memsz ? phdr[i].p_memsz : phdr[i].p_filesz; 

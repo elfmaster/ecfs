@@ -304,7 +304,6 @@ int main(int argc, char **argv)
 	 * load the core file from stdin (Passed by the kernel via core_pattern)
 	 */
 	elfdesc = load_core_file_stdin(&corefile);
-	
 #if DEBUG
 	log_msg(__LINE__, "Successfully read core from stdin and created temporary corefile path: %s", corefile);
 #endif
@@ -494,16 +493,17 @@ int main(int argc, char **argv)
 			mark_dll_injection(notedesc, memdesc, elfdesc);
 		}
 	
-	memset(handle->arglist, 0xff, ELF_PRARGSZ);
+	memset(handle->arglist, 0x00, ELF_PRARGSZ);
 	memcpy(handle->arglist, (char *)notedesc->psinfo->pr_psargs, ELF_PRARGSZ);
 	
 	/*
 	 * Get ELF object mappings
 	 */
-	handle->elfmap_count = check_segments_for_elf_objects(handle, notedesc->lm_files, &handle->elfmaps);
-	if (handle->elfmap_count < 0) 
-		log_msg(__LINE__, "check_segments_for_elf_objects() has failed");
-	
+	if (elfdesc->dynlinked && notedesc->lm_files) { // THIS CHECK IS THE FIX for TODO D.1
+		handle->elfmap_count = check_segments_for_elf_objects(handle, notedesc->lm_files, &handle->elfmaps);
+		if (handle->elfmap_count < 0) 
+			log_msg(__LINE__, "check_segments_for_elf_objects() has failed");
+	}
 	/*
 	 * Mark preloaded libraries (LD_PRELOAD)
 	 */
