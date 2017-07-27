@@ -66,13 +66,12 @@ clean:
 	$(MAKE) -C libecfs/ clean
 
 .PHONY: install
-install: ${BIN_DIR}/prod/64/ecfs_handler 
+install: ${BIN_DIR}/${V}/${B}/ecfs_handler 
 ifeq ($(USERID),0)
 	@mkdir -p /opt/ecfs/bin/
 	@mkdir -p /opt/ecfs/cores
-	cp $(BIN_DIR)/prod/32/ecfs /opt/ecfs/bin/ecfs32
-	cp $(BIN_DIR)/prod/64/ecfs /opt/ecfs/bin/ecfs64
-	cp $(BIN_DIR)/prod/64/ecfs_handler /opt/ecfs/bin/
+	cp $(BIN_DIR)/${V}/${B}/ecfs /opt/ecfs/bin/ecfs${B}
+	cp $(BIN_DIR)/${V}/${B}/ecfs_handler /opt/ecfs/bin/
 	@echo '|/opt/ecfs/bin/ecfs_handler -t -e %e -p %p -o /opt/ecfs/cores/%e.%p' > /proc/sys/kernel/core_pattern
 	@echo "Installed ECFS successfully" 
 else
