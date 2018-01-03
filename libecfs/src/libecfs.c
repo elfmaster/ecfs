@@ -17,19 +17,19 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 	mem = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
 	if (mem == MAP_FAILED) {
 		perror("mmap");
-		return NULL;
+		goto fail;
 	}
 	
 	if (memcmp(mem, "\x7f\x45\x4c\x46", 4) != 0)
-		return NULL;
+		goto fail;
 	
 	ehdr = (ElfW(Ehdr) *)mem;
 	
 	if (ehdr->e_type != ET_NONE && ehdr->e_type != ET_CORE) 
-		return NULL;
+		goto fail;
 	
 	if (ehdr->e_shoff == 0 || ehdr->e_shnum == 0 || ehdr->e_shstrndx == SHN_UNDEF) 
-		return NULL;
+		goto fail;
 	
 	phdr = (ElfW(Phdr) *)(mem + ehdr->e_phoff);
 	shdr = (ElfW(Shdr) *)(mem + ehdr->e_shoff);
@@ -137,7 +137,29 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 	ecfs->phdr = phdr;
 	ecfs->shdr = shdr;
 	ecfs->mem = mem;
+
+	SLIST_INIT(&ecfs->slists.phdrs);
+	for (i = 0; i < ehdr->e_phnum; i++) {
+		struct elf_phdr_node *n;
+
+		n = malloc(sizeof(*n));
+		if (n == NULL)
+			goto fail;
+
+		n->type = phdr[i].p_type;
+		n->flags = phdr[i].p_flags;
+		n->offset = phdr[i].p_offset;
+		n->vaddr = phdr[i].p_vaddr;
+		n->paddr = phdr[i].p_paddr;
+		n->filesz = phdr[i].p_filesz;
+		n->memsz = phdr[i].p_memsz;
+
+		SLIST_INSERT_HEAD(&ecfs->slists.phdrs, n, _linkage);
+	}
 	return ecfs;
+fail:
+	free(ecfs);
+	return NULL;
 }	
 
 int unload_ecfs_file(ecfs_elf_t *desc)
@@ -252,7 +274,7 @@ int get_siginfo(ecfs_elf_t *desc, siginfo_t *siginfo)
 	return -1;
 }
 
-ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr)
+ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr, uint64_t *addr) 
 {
 	char *StringTable = desc->shstrtab;
 	ElfW(Shdr) *shdr = desc->shdr;
@@ -260,6 +282,7 @@ ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr)
 
 	for (i = 0; i < desc->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".stack")) {
+			*addr = shdr[i].sh_addr;
 			*ptr = &desc->mem[shdr[i].sh_offset];
 			return shdr[i].sh_size;
 		}
@@ -269,7 +292,7 @@ ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr)
 	return -1;
 }
 
-ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr)
+ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr, uint64_t *addr)
 {
 	char *StringTable = desc->shstrtab;
 	ElfW(Shdr) *shdr = desc->shdr;
@@ -277,11 +300,12 @@ ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr)
 
 	for (i = 0; i < desc->ehdr->e_shnum; i++) {
 		if (!strcmp(&StringTable[shdr[i].sh_name], ".heap")) {
+			*addr = shdr[i].sh_addr;
 			*ptr = &desc->mem[shdr[i].sh_offset];
 			return shdr[i].sh_size;
 		}
 	}
-	
+
 	*ptr = NULL;
 	return -1;
 }
@@ -569,3 +593,22 @@ char * get_section_name_by_addr(ecfs_elf_t *desc, unsigned long addr)
 			return &shstrtab[shdr[i].sh_name];
 	return NULL;
 }
+
+void ecfs_phdr_iterator_init(ecfs_elf_t *obj, ecfs_phdr_iter_t *iter)
+{
+
+	iter->current = SLIST_FIRST(&obj->slists.phdrs);
+	return;
+}
+
+ecfs_iter_t
+ecfs_phdr_iterator_next(ecfs_phdr_iter_t *iter, struct elf_phdr *entry)
+{
+
+	if (iter->current == NULL)
+		return ECFS_ITER_DONE;
+	memcpy(entry, iter->current, sizeof(*entry));
+	iter->current = SLIST_NEXT(iter->current, _linkage);
+	return ECFS_ITER_OK;
+}
+

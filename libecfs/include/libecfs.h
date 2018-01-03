@@ -23,6 +23,7 @@
 #include <stdio.h>
 
 #include <sys/socket.h>
+#include <sys/queue.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
@@ -50,6 +51,35 @@ typedef struct elf_stats {
 #define ELF_STRIPPED_SHDRS (1 << 8)
 	unsigned int personality; // if (personality & ELF_STATIC)
 } elf_stat_t;
+
+typedef enum ecfs_iter {
+	ECFS_ITER_OK,
+	ECFS_ITER_DONE,
+	ECFS_ITER_ERROR
+} ecfs_iter_t;
+
+typedef struct elf_phdr {
+	uint32_t type;
+	uint32_t flags;
+	ElfW(Off) offset;
+	ElfW(Addr) vaddr;
+	ElfW(Addr) paddr;
+	size_t filesz;
+	size_t memsz;
+	ElfW(Word) align;
+} elf_phdr_t;
+
+typedef struct elf_phdr_node {
+	uint32_t type;
+	uint32_t flags;
+	ElfW(Off) offset;
+	ElfW(Addr) vaddr;
+	ElfW(Addr) paddr;
+	size_t filesz;
+	size_t memsz;
+	ElfW(Word) align;
+	SLIST_ENTRY(elf_phdr_node) _linkage;
+} elf_phdr_node_t;
 
 typedef struct ecfs_elf {
 	uint8_t *mem;          /* raw memory pointer */
@@ -83,7 +113,16 @@ typedef struct ecfs_elf {
 	int fd;                /* A copy of the file descriptor to the file */
 	int pie;		/* is the process from a PIE executable? */
 	elf_stat_t *elfstats;
+	struct {
+		SLIST_HEAD(elf_phdr_list, elf_phdr_node) phdrs;
+		//TODO SLIST_HEAD(elf_shdr_list, elf_shdr_node) shdrs;
+	} slists;
 } ecfs_elf_t;
+
+typedef struct ecfs_phdr_iter {
+	struct elf_phdr_node *current;
+        ecfs_elf_t *obj;
+} ecfs_phdr_iter_t;
 
 #define MAX_SYM_LEN 255
 
@@ -130,8 +169,8 @@ int get_thread_count(ecfs_elf_t *desc);
 int get_prstatus_structs(ecfs_elf_t *desc, struct elf_prstatus **prstatus);
 int get_dynamic_symbols(ecfs_elf_t *desc, ecfs_sym_t **);
 int get_siginfo(ecfs_elf_t *desc, siginfo_t *siginfo);
-ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr);
-ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr);
+ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr, uint64_t *);
+ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr, uint64_t *);
 int get_local_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms);
 ssize_t get_ptr_for_va(ecfs_elf_t *desc, unsigned long vaddr, uint8_t **ptr);
 ssize_t get_section_pointer(ecfs_elf_t *desc, const char *name, uint8_t **ptr);
@@ -143,7 +182,8 @@ unsigned long get_fault_location(ecfs_elf_t *desc);
 int get_arg_list(ecfs_elf_t *desc, char ***argv);
 unsigned long get_section_va(ecfs_elf_t *desc, const char *name);
 char * get_section_name_by_addr(ecfs_elf_t *desc, unsigned long addr);
-
+void ecfs_phdr_iterator_init(ecfs_elf_t *, ecfs_phdr_iter_t *);
+ecfs_iter_t ecfs_phdr_iterator_next(ecfs_phdr_iter_t *, elf_phdr_t *);
 #ifdef __cplusplus
 }
 #endif
