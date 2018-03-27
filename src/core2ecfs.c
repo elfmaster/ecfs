@@ -143,7 +143,7 @@ static int build_local_symtab_and_finalize(const char *outfile, handle_t *handle
 	StringTable = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
 	/* Write section hdr string table */
 	uint64_t stloff = lseek(fd, 0, SEEK_CUR);
-	if( write(fd, strtab, symstroff) == -1) {
+	if (write(fd, strtab, symstroff) == -1) {
 		log_msg(__LINE__, "write %s", strerror(errno));
 		exit_failure(-1);
 	}
@@ -193,7 +193,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	ssize_t elfmap_count = handle->elfmap_count;
 	struct stat st;
 	unsigned int stoffset = 0;
-	int scount = 0, dynsym_index;
+	int scount = 0, dynsym_index, dynstr_index;
 	int i, dynamic;
 
 	dynamic = !(handle->elfstat.personality & ELF_STATIC);
@@ -302,11 +302,11 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 		shdr[scount].sh_name = stoffset;
 		strcpy(&StringTable[stoffset], ".dynstr");
 		stoffset += strlen(".dynstr") + 1;
-		scount++;
+		dynstr_index = scount++;
 
-	   /*
-		* rela.dyn
-		*/
+		/*
+		 * rela.dyn
+		 */
 		shdr[scount].sh_type = (__ELF_NATIVE_CLASS == 64) ? SHT_RELA : SHT_REL;
 		shdr[scount].sh_offset = (__ELF_NATIVE_CLASS == 64) ? smeta->relaOff : smeta->relOff;
 		shdr[scount].sh_addr = (__ELF_NATIVE_CLASS == 64) ? smeta->relaVaddr : smeta->relVaddr;
@@ -543,7 +543,8 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 		shdr[scount].sh_addr = elfdesc->dynVaddr;
 		shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
 		shdr[scount].sh_info = 0;
-		shdr[scount].sh_link = 0;
+		log_msg(__LINE__, "dynamic section sh_link: %d\n", dynstr_index);
+		shdr[scount].sh_link = dynstr_index;
 		shdr[scount].sh_entsize = (__ELF_NATIVE_CLASS == 64) ? 16 : 8;
 		shdr[scount].sh_size = elfdesc->dynSize;
 		shdr[scount].sh_addralign = sizeof(long);
@@ -655,11 +656,11 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 		shdr[scount].sh_addr = elfmaps[i].addr;
 		shdr[scount].sh_offset = elfmaps[i].offset;
 		shdr[scount].sh_size = elfmaps[i].size;
-		
+
 		shdr[scount].sh_flags |= ((elfmaps[i].prot & PF_X) ? SHF_EXECINSTR : 0);
 		shdr[scount].sh_flags |= ((elfmaps[i].prot & PF_W) ? SHF_WRITE : 0);
 		shdr[scount].sh_flags |= SHF_ALLOC;
-		
+
 		shdr[scount].sh_info = 0;
 		shdr[scount].sh_link = 0;
 		shdr[scount].sh_entsize = 0;

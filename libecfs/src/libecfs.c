@@ -138,6 +138,9 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 	ecfs->shdr = shdr;
 	ecfs->mem = mem;
 
+	/*
+	 * Create the phdr list.
+	 */
 	SLIST_INIT(&ecfs->slists.phdrs);
 	for (i = 0; i < ehdr->e_phnum; i++) {
 		struct elf_phdr_node *n;

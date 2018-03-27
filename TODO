@@ -47,6 +47,9 @@ What if for instance we know some data was stored in mmap.rwx.1 and we wanted to
 readecfs -O (or objcopy) it onto disk? Currently there is no way to access just that
 memory mapping, unless the phdr's are used.
 
+C.4. sh_link properly set for .dynamic, .rela.dyn, .rela.plt all need to point to either
+.dynstr or .dynsym depending on which section.
+
 -- Bugs of unknown difficulty
 
 D.1 When trying to create an ecfs-core from a UPX packed sshd process
@@ -55,6 +58,4 @@ Jul 26 17:45:46 elfmaster kernel: [23122.882602] ecfs64[17306]: segfault at 3280
 0]
 
 check_segments_for_elf_objects() is the function that is segfaulting
-
-
 
