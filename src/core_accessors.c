@@ -154,8 +154,8 @@ char * get_envp_strval(handle_t *handle, const char *envname)
 		         */
 			stack_ptr = (uint8_t *)&mem[phdr[i].p_offset + phdr[i].p_memsz - (STACK_CHUNK_SIZE)];			
 			for (i = 0; i < STACK_CHUNK_SIZE; i++) {
-				if (!strncmp(&stack_ptr[i], envname, envlen)) {
-					p = &stack_ptr[i + envlen + 1];
+				if (!strncmp((char *)&stack_ptr[i], envname, envlen)) {
+					p = (char *)&stack_ptr[i + envlen + 1];
 					retval = (char *)heapAlloc(currsize);
 					for (c = 0; *p != '\0'; p++) {
 						if (c > currsize - 1) 
@@ -173,12 +173,8 @@ char * get_envp_strval(handle_t *handle, const char *envname)
 
 int mark_preloaded_libs(handle_t *handle, struct lib_mappings *lm)
 {
-        elfdesc_t *elfdesc = handle->elfdesc;
-        memdesc_t *memdesc = handle->memdesc;
-        ElfW(Phdr) *phdr = elfdesc->phdr;
-        uint8_t *mem = elfdesc->mem;
 	char *value, *base;
-	int len, i, j, c;
+	int j;
 
 	if ((value = get_envp_strval(handle, "LD_PRELOAD")) == NULL) {
 		log_msg(__LINE__, "get_envp_strval() failed");

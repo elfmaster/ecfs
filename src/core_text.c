@@ -25,11 +25,13 @@
 
 #include "../include/ecfs.h"
 #include "../include/util.h"
+#include "../include/ptrace.h"
 
 /*
  * This function will probably never be used
  */
-static ssize_t ptrace_read_mem(pid_t pid, uint8_t *ptr, unsigned long vaddr, size_t len)
+static ssize_t __attribute__((unused))
+ptrace_read_mem(pid_t pid, uint8_t *ptr, unsigned long vaddr, size_t len)
 {
 #if DEBUG
 	log_msg(__LINE__, "pid_read(%d, %p, %lx, %d)", pid, ptr, vaddr, len);
@@ -103,7 +105,6 @@ int merge_exe_text_into_core(const char *path, memdesc_t *memdesc)
 	uint8_t *mem;
 	struct stat st;
 	int in, out, i = 0;
-	int data_index;
 
 	in = xopen(path, O_RDWR);
 	xfstat(in, &st);

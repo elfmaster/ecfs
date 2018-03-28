@@ -495,15 +495,24 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	strcpy(&StringTable[stoffset], ".eh_frame");
 	stoffset += strlen(".eh_frame") + 1;
 	scount++;
-	
-	if (global_hacks.ctors_vaddr != 0) {
+
+	/*
+	 * If we cannot find the original section in the original binary (/proc/self/exe)
+	 * then its likely stripped, so we should go on to using smeta.ctorVaddr
+	 * and smeta.dtorVaddr which were pulled from the dynamic segment's
+	 * DT_INIT_ARRAY/DT_FINI_ARRAY.
+	 */
+	if (global_hacks.ctors_vaddr != 0 || smeta->ctors_vaddr != 0) {
 		/*
 		* .ctors (.init_array)
 		*/
+		uint64_t ctors_vaddr = global_hacks.ctors_vaddr == 0 ? smeta->ctors_vaddr : global_hacks.ctors_vaddr;
+		size_t ctors_size = global_hacks.ctors_size == 0 ? smeta->ctors_size : global_hacks.ctors_size;
+
 		shdr[scount].sh_type = SHT_PROGBITS;
-		shdr[scount].sh_offset = elfdesc->dataOffset + global_hacks.ctors_vaddr - elfdesc->dataVaddr;
-		shdr[scount].sh_addr = global_hacks.ctors_vaddr;
-		shdr[scount].sh_size = global_hacks.ctors_size;
+		shdr[scount].sh_offset = elfdesc->dataOffset + ctors_vaddr - elfdesc->dataVaddr;
+		shdr[scount].sh_addr = ctors_vaddr;
+		shdr[scount].sh_size = ctors_size == 0 ? sizeof(uintptr_t) : ctors_size;
 		shdr[scount].sh_flags = SHF_ALLOC;
 		shdr[scount].sh_link = 0;
 		shdr[scount].sh_info = 0;
@@ -515,14 +524,17 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 		scount++;
 	}
 
-	if (global_hacks.dtors_vaddr != 0) {
+	if (global_hacks.dtors_vaddr != 0 || smeta->ctors_vaddr != 0) {
 		/*
 		* .dtors (.fini_array)
 		*/
+		uint64_t dtors_vaddr = global_hacks.dtors_vaddr == 0 ? smeta->dtors_vaddr : global_hacks.dtors_vaddr;
+		size_t dtors_size = global_hacks.dtors_size == 0 ? smeta->dtors_size : global_hacks.dtors_size;
+
 		shdr[scount].sh_type = SHT_PROGBITS;
-		shdr[scount].sh_offset = elfdesc->dataOffset + global_hacks.dtors_vaddr - elfdesc->dataVaddr;
-		shdr[scount].sh_addr = global_hacks.dtors_vaddr;
-		shdr[scount].sh_size = global_hacks.dtors_size;
+		shdr[scount].sh_offset = elfdesc->dataOffset + dtors_vaddr - elfdesc->dataVaddr;
+		shdr[scount].sh_addr = dtors_vaddr;
+		shdr[scount].sh_size = dtors_size == 0 ? sizeof(uintptr_t) : dtors_size;
 		shdr[scount].sh_flags = SHF_ALLOC;
 		shdr[scount].sh_link = 0;
 		shdr[scount].sh_info = 0;
@@ -559,6 +571,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 		shdr[scount].sh_type = SHT_PROGBITS;
 		shdr[scount].sh_offset = smeta->gotOff;
 		shdr[scount].sh_addr = smeta->gotVaddr;
+		log_msg(__LINE__, "got.plt: %lx\n", smeta->gotVaddr);
 		shdr[scount].sh_flags = SHF_ALLOC|SHF_WRITE;
 		shdr[scount].sh_info = 0;
 		shdr[scount].sh_link = 0;

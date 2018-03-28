@@ -198,7 +198,7 @@ struct section_meta {
 	ElfW(Addr) bssVaddr, dynVaddr, relVaddr, relaVaddr, ehframeVaddr,
 		textVaddr, o_textVaddr, dataVaddr, o_dataVaddr, gotVaddr, noteVaddr,
 		hashVaddr, initVaddr, finiVaddr, pltVaddr, dsymVaddr, dstrVaddr,
-		interpVaddr, tlsVaddr, plt_relaVaddr, plt_relVaddr, ctorVaddr, dtorVaddr;
+		interpVaddr, tlsVaddr, plt_relaVaddr, plt_relVaddr, ctors_vaddr, dtors_vaddr;
 
 	ElfW(Off) bssOff, dynOff, relOff, relaOff, noteOff, ehframeOff,
 		textOffset, dataOffset, gotOff, hashOff, initOff, finiOff, pltOff,
@@ -206,7 +206,7 @@ struct section_meta {
 	
 	ElfW(Word) bssSiz, dynSiz, hashSiz, ehframeSiz, textfSize, textSize,
 		dataSize, strSiz, pltSiz, interpSiz, tlsSiz, noteSiz, dsymSiz,
-		dstrSiz, plt_relaSiz, plt_relSiz, ctorSiz, dtorSiz;
+		dstrSiz, plt_relaSiz, plt_relSiz, ctors_size, dtors_size;
 };
 
 struct elf_thread_core_info {
@@ -486,7 +486,7 @@ struct needed_libs {
 	char *libname; // just the name of the library
 	char *libpath; // path to a library 
 	char *master; // the library or executable that depends on libpath/libname
-	int count;
+	uint32_t count;
 };
 
 /*

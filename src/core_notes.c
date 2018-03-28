@@ -102,7 +102,7 @@ static void print_nt_files(struct nt_file_struct *file_maps)
 notedesc_t * parse_notes_area(elfdesc_t *elfdesc)
 {
 	notedesc_t *notedesc = (notedesc_t *)heapAlloc(sizeof(notedesc_t));
-	size_t i, j, len;
+	size_t i, len;
 	int tc, fpregset_count = 0, fpxregset_count = 0;
 	uint8_t *desc;
 	struct nt_file_struct *nt_files; // for parsing NT_FILE in corefile

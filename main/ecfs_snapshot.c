@@ -256,10 +256,10 @@ static int strip_section_header_table(const char *corefile)
 		perror("2nd. mmap");
 		return -1;
 	}
-	printf("Copying from mem to copy %d bytes from %p to %p\n", ehdr->e_shoff, mem, copy);
+	printf("Copying from mem to copy %lu bytes from %p to %p\n", ehdr->e_shoff, mem, copy);
 	memcpy(copy, mem, ehdr->e_shoff);
 	//unlink(corefile);
-	printf("Writing %d bytes\n", ehdr->e_shoff);
+	printf("Writing %lu bytes\n", ehdr->e_shoff);
 	if (write(tfd, copy, ehdr->e_shoff) < 0) {
 		perror("write");
 		return -1;
@@ -282,7 +282,7 @@ int main(int argc, char **argv)
 	notedesc_t *notedesc = NULL;
 	handle_t *handle = alloca(sizeof(handle_t));
 	pid_t pid = 0;
-	int i, j, ret, c, pie = 0;
+	int i, ret, c, pie = 0;
 	char *corefile = NULL;
 	char *outfile = NULL;
 	list_t *list_head;

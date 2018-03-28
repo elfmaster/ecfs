@@ -193,7 +193,7 @@ int extract_dyntag_info(handle_t *handle)
 	ElfW(Off) dataOffset = elfdesc->dataOffset; // this was filled in from xref_phdrs_for_offsets
 	elfdesc->dyn = NULL;
 	struct section_meta smeta;
-	
+
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
 		if (phdr[i].p_vaddr == elfdesc->dataVaddr) {
 			elfdesc->dyn = (ElfW(Dyn) *)&elfdesc->mem[phdr[i].p_offset + (elfdesc->dynVaddr - elfdesc->dataVaddr)];
@@ -208,6 +208,14 @@ int extract_dyntag_info(handle_t *handle)
 	dyn = elfdesc->dyn;
 	for (j = 0; dyn[j].d_tag != DT_NULL; j++) {
 		switch(dyn[j].d_tag) {
+			case DT_HASH:
+				smeta.hashVaddr = dyn[j].d_un.d_val;
+				smeta.hashOff = elfdesc->textOffset + smeta.hashVaddr - elfdesc->textVaddr;
+#if DEBUG
+				log_msg(__LINE__, "HASH: hashVaddr: %#lx hashOff: #%lx",
+				    smeta.hashVaddr, smeta.hashOff);
+#endif
+				break;
 			case DT_REL:
 				smeta.relVaddr = dyn[j].d_un.d_val;
 				smeta.relOff = elfdesc->textOffset + smeta.relVaddr - elfdesc->textVaddr;
@@ -246,18 +254,32 @@ int extract_dyntag_info(handle_t *handle)
 #endif
 				break;
 			case DT_INIT: 
-					smeta.initVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
-					smeta.initOff = elfdesc->textOffset + smeta.initVaddr - elfdesc->textVaddr;
+				smeta.initVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
+				smeta.initOff = elfdesc->textOffset + smeta.initVaddr - elfdesc->textVaddr;
 #if DEBUG
 				log_msg(__LINE__, "DYNSEGMENT: initVaddr: %lx initOff: %lx", smeta.initVaddr, smeta.initOff);
 #endif
 				break;
 			case DT_FINI:
-					smeta.finiVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
-					smeta.finiOff = elfdesc->textOffset + smeta.finiVaddr - elfdesc->textVaddr;
+				smeta.finiVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
+				smeta.finiOff = elfdesc->textOffset + smeta.finiVaddr - elfdesc->textVaddr;
 #if DEBUG
 				log_msg(__LINE__, "DYNSEGMENT: finiVaddr: %lx finiOff: %lx", smeta.finiVaddr, smeta.finiOff);
 #endif
+				break;
+			case DT_INIT_ARRAY:
+				smeta.ctors_vaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
+				log_msg(__LINE__, "CTORS: %lx\n", smeta.ctors_vaddr);
+				break;
+			case DT_INIT_ARRAYSZ:
+				log_msg(__LINE__, "CTORSSZ: %lx\n", smeta.ctors_size);
+				smeta.ctors_size = dyn[j].d_un.d_val;
+				break;
+			case DT_FINI_ARRAY:
+				smeta.dtors_vaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
+				break;
+			case DT_FINI_ARRAYSZ:
+				smeta.dtors_size = dyn[j].d_un.d_val;
 				break;
 			case DT_STRSZ:
 				smeta.strSiz = dyn[j].d_un.d_val;

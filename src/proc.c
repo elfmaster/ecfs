@@ -340,7 +340,7 @@ char * get_executable_path(int pid)
 	char *ret2 = (char *)heapAlloc(MAX_PATH);
 	
 	memset(ret, 0, MAX_PATH); // for null termination padding
-	if( readlink(path, ret, MAX_PATH) == -1) {
+	if (readlink(path, ret, MAX_PATH) == -1) {
 		log_msg(__LINE__, "readlink %s", strerror(errno));
 		exit(-1);
 	}
@@ -375,10 +375,11 @@ ssize_t snapshot_procfs(memdesc_t *memdesc, uint8_t **zlib_blob)
 {
 	uint8_t *mem;
 	char *tar, *cmd, *proc_path, *tmp_path, *args[5];
-	int ret, in, out, rval, status, pid;
 	struct timeval tv;
 	struct stat st;
-	
+	uint32_t rval = 0;
+	int pid, status, in;
+
 	*zlib_blob = NULL;
 	asprintf(&proc_path, "/proc/%d", memdesc->task.pid);
 	if (opts.use_ramdisk) {
@@ -388,9 +389,9 @@ ssize_t snapshot_procfs(memdesc_t *memdesc, uint8_t **zlib_blob)
 		// XXX in future check to make sure this
 		// file doesn't already exist with do while
 		// loop
-		asprintf(&tmp_path, "%s/.proc_snapshot.%d.tgz", ECFS_RAMDISK_DIR, rval);
+		asprintf(&tmp_path, "%s/.proc_snapshot.%u.tgz", ECFS_RAMDISK_DIR, rval);
 	} else {
-		asprintf(&tmp_path, "/tmp/.proc_snapshot.%d.tgz", rval);
+		asprintf(&tmp_path, "/tmp/.proc_snapshot.%u.tgz", rval);
 	}
 	if (access("/bin/tar", F_OK) == 0)
 		tar = "/bin/tar";

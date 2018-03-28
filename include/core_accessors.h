@@ -73,7 +73,7 @@ void fill_global_hacks(int pid, memdesc_t *memdesc);
  * mapped in such as ET_REL, ET_EXEC, and ET_DYN (Another way to
  * detect object injection.
  */
-ssize_t check_segments_for_elf_objects(elfdesc_t *elfdesc, struct lib_mappings *lm, struct elfmap **elfmaps);
+ssize_t check_segments_for_elf_objects(handle_t *, struct lib_mappings *, struct elfmap **);
 
 int mark_preloaded_libs(handle_t *handle, struct lib_mappings *lm);
 #endif
