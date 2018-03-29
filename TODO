@@ -1,11 +1,12 @@
 
 -- Difficult issues
 
-A.1. Fix heuristics.c so that code injection detection from 
+A.1. Fix heuristics.c so that code injection detection yields less
 false positives. This detects shared libraries that were
 injected in some way other than dlopen() and LD_PRELOAD.
 probably with mmap() or __libc_dlopen_mode() or ptrace
-shellcode. 
+shellcode. We need to switch over to some code that uses
+ld.so.cache for speed.
 
 A.2. Currently in libecfs when retrieving the GOT info there
 are GOT entries that are filled with addresses other than
