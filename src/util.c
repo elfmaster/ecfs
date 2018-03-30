@@ -30,6 +30,7 @@
 struct opts opts;
 
 void log_msg(unsigned int lineno, char *fmt, ...);
+void log_msg2(uint32_t lineno, char *file, char *fmt, ...);
 
 void deliver_signal(int pid, int signo)
 {
@@ -146,6 +147,18 @@ void log_msg(unsigned int lineno, char *fmt, ...)
 	va_end(va);
 	syslog(LOG_MAKEPRI(LOG_USER, LOG_WARNING), "%s [line: %i]", buf, lineno);
 
+}
+
+void log_msg2(unsigned int lineno, char *file, char *fmt, ...)
+{
+	char buf[1024];
+	va_list va;
+	va_start(va, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, va);
+	va_end(va);
+	syslog(LOG_MAKEPRI(LOG_USER, LOG_WARNING), "%s [%s:%u]",
+	    buf, file, lineno);
+	return;
 }
 
 void xsystem(char *str, ...)

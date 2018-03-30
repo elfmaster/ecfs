@@ -25,6 +25,7 @@
 #ifndef _ECFS_H
 #define _ECFS_H
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -49,6 +50,7 @@
 #include <sys/prctl.h>
 #include <sys/mount.h>
 #include <sys/socket.h>
+#include <sys/queue.h>
 #include <sys/wait.h>
 #include <math.h>
 #include "dwarf.h"
@@ -334,6 +336,9 @@ typedef struct elfdesc {
 	size_t text_filesz;
 	int dynlinked;
 	int pie;
+	struct {
+		LIST_HEAD(elf_shared_object_list, elf_shared_object_node) shared_objects;
+	} list;
 } elfdesc_t;
 
 typedef struct mappings {
@@ -528,5 +533,12 @@ struct {
 
 ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int type);
 ElfW(Addr) get_original_ep(int);
+
+typedef enum elf_iterator_res {
+	ELF_ITER_OK,
+	ELF_ITER_DONE,
+	ELF_ITER_ERROR,
+	ELF_ITER_NOTFOUND
+} elf_iterator_res_t;
 
 #endif
