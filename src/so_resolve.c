@@ -1,5 +1,6 @@
 /*
- * NOTE: This code was adapted from my other project libelfmaster.
+ * NOTE: This code was adapted from libelfmaster's ldso resolution
+ * iterator.
  */
 #include "../include/ecfs.h"
 #include "../include/ldso_cache.h"
@@ -12,6 +13,341 @@
 #define ALIGN_CACHE(addr)                               \
 	(((addr) + __alignof__ (struct cache_file_new) -1)      \
 	    & (~(__alignof__ (struct cache_file_new) - 1)))
+
+static void ldso_parse_dynamic_segment(elfdesc_t *);
+
+static bool
+ldso_elf_open_object(char *path, elfdesc_t *elfdesc)
+{
+	int fd, i;
+	char *StringTable;
+	ElfW(Ehdr) *ehdr;
+	ElfW(Phdr) *phdr;
+	struct stat st;
+	uint8_t *mem;
+	ElfW(Dyn) *dyn;
+
+	memset(elfdesc, 0, sizeof(*elfdesc));
+
+	fd = xopen(path, O_RDONLY);
+	xfstat(fd, &st);
+
+	mem = elfdesc->mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (elfdesc->mem == MAP_FAILED) {
+		log_msg2(__LINE__, __FILE__, "mmap: %s\n", strerror(errno));
+		return false;
+	}
+
+	ehdr = elfdesc->ehdr = (ElfW(Ehdr) *)mem;
+	phdr = elfdesc->phdr = (ElfW(Phdr) *)&mem[ehdr->e_phoff];
+
+	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
+		if (elfdesc->phdr[i].p_type == PT_DYNAMIC) {
+			dyn = elfdesc->dyn = (ElfW(Dyn) *)&mem[elfdesc->phdr[i].p_offset];
+		}
+	}
+	for (i = 0; dyn[i].d_tag != DT_NULL; i++) {
+		if (dyn[i].d_tag != DT_STRTAB)
+			continue;
+		elfdesc->dynstr = (char *)&mem[dyn[i].d_un.d_val];
+	}
+	return true;
+}
+
+static void
+ldso_parse_dynamic_segment(elfdesc_t *obj)
+{
+	elfdesc_t *elfdesc = obj;
+	struct elf_shared_object_node *so;
+	ElfW(Phdr) *phdr = obj->phdr;
+	ElfW(Dyn) *dyn = obj->dyn;
+	int i, j;
+
+	LIST_INIT(&obj->list.shared_objects);
+
+	/*
+	 * This should already be filled in by extract_dyntag_info
+	 * but just incase lets perform a sanity check because we
+	 * might use this code in other places within the state of
+	 * the ECFS software. Such as with ecfs exec.
+	 */
+	if (elfdesc->dyn == NULL) {
+		for (i = 0; i < obj->ehdr->e_phnum; i++) {
+			elfdesc->dyn = (ElfW(Dyn) *)&elfdesc->mem[phdr[i].p_offset +
+			    (elfdesc->dynVaddr - elfdesc->dataVaddr)];
+			break;
+		}
+	}
+	for (j = 0, dyn = elfdesc->dyn; dyn[j].d_tag != DT_NULL; j++) {
+		if (dyn[j].d_tag != DT_NEEDED)
+			continue;
+		so = heapAlloc(sizeof(*so));
+		so->basename = (char *)&iter->dynstr[dyn[j].d_un.d_val];
+		LIST_INSERT_HEAD(&obj->list.shared_objects, so, _linkage);
+		break;
+	}
+	return;
+}
+
+static int
+ldso_cache_cmp(const char *p1, const char *p2)
+{
+
+	while (*p1) {
+		if (isdigit(*p1) && isdigit(*p2)) {
+			int v1, v2;
+
+			v1 = strtoul(p1, (char **)&p1, 10);
+			v2 = strtoul(p2, (char **)&p2, 10);
+			if (v1 != v2)
+				return v1 - v2;
+		}
+		else if (isdigit(*p1) && !isdigit(*p2)) {
+			return 1;
+		} else if (!isdigit(*p1) && isdigit(*p2)) {
+			return -1;
+		} else if (*p1 != *p2) {
+			return *p1 - *p2;
+		} else {
+			p1++, p2++;
+		}
+	}
+	return *p1 - *p2;
+}
+
+#define ldso_cache_verify_offset(offset) (offset < iter->cache_size)
+
+static inline bool
+ldso_cache_check_flags(struct elf_shared_object_iterator *iter,
+    uint32_t flags)
+{
+	if (iter->obj->arch == i386) {
+		if (flags == 0x803)
+			return true;
+	} else if (iter->obj->arch == x64) {
+		if (flags == 0x303)
+			return true;
+	}
+	return false;
+}
+
+const char *
+ldso_cache_bsearch(struct elf_shared_object_iterator *iter,
+    const char *name)
+{
+	int ret;
+	uint64_t value;
+	uint32_t middle, flags;
+	uint32_t left = 0;
+	uint32_t right = (iter->cache_flags & ELF_LDSO_CACHE_NEW) ?
+	    iter->cache_new->nlibs - 1 : iter->cache->nlibs - 1;
+	const char *best = NULL;
+
+	while (left <= right) {
+		uint32_t key;
+
+		middle = (left + right) / 2;
+		if (iter->cache_flags & ELF_LDSO_CACHE_NEW) {
+			key = iter->cache_new->libs[middle].key;
+		} else {
+			key = iter->cache->libs[middle].key;
+		}
+		ret = ldso_cache_cmp(name, iter->cache_data + key);
+		if (unlikely(ret == 0)) {
+			left = middle;
+			while (middle > 0) {
+				if (iter->cache_flags & ELF_LDSO_CACHE_NEW) {
+					key = iter->cache_new->libs[middle - 1].key;
+				} else {
+					key = iter->cache->libs[middle - 1].key;
+				}
+				if (ldso_cache_cmp(name,
+				    iter->cache_data + key) != 0) {
+					break;
+				}
+				--middle;
+			}
+			do {
+				uint32_t new_key;
+
+				if (iter->cache_flags & ELF_LDSO_CACHE_NEW) {
+					new_key = iter->cache_new->libs[middle].key;
+					value = iter->cache_new->libs[middle].value;
+					flags = iter->cache_new->libs[middle].flags;
+				} else {
+					new_key = iter->cache->libs[middle].key;
+					value = iter->cache->libs[middle].value;
+					flags = iter->cache->libs[middle].flags;
+				}
+				if (middle > left && (ldso_cache_cmp(name,
+				    iter->cache_data + new_key) != 0))
+					break;
+				if (ldso_cache_check_flags(iter, flags) &&
+				    ldso_cache_verify_offset(value)) {
+					if (best == NULL) {
+						best = iter->cache_data + value;
+						break;
+					}
+				}
+			} while (++middle <= right);
+			break;
+		}
+		if (ret < 0) {
+			left = middle + 1;
+		} else {
+			right = middle - 1;
+		}
+	}
+	return best;
+}
+
+static void *
+ldso_malloc(struct elf_shared_object_iterator *iter, size_t size)
+{
+	void *p;
+	struct elf_malloc_node *n;
+
+	p = malloc(size);
+	if (p == NULL)
+		return NULL;
+	n = malloc(sizeof(*n));
+	if (n == NULL)
+		return NULL;
+	n->ptr = p;
+	LIST_INSERT_HEAD(&iter->malloc_list, n, _linkage);
+	return n->ptr;
+}
+
+void
+ldso_free_malloc_list(struct elf_shared_object_iterator *iter)
+{
+	struct elf_malloc_node *next, *current;
+
+	LIST_FOREACH_SAFE(current, &iter->malloc_list, _linkage, next) {
+		free(current->ptr);
+		free(current);
+	}
+	return;
+}
+
+void
+ldso_cleanup(struct elf_shared_object_iterator *iter)
+{
+
+	ldso_free_malloc_list(iter);
+	if (iter->flags & ELF_SO_RESOLVE_ALL_F)
+		hdestroy_r(&iter->yield_cache);
+	(void) munmap(iter->mem, iter->st.st_size);
+}
+
+
+static char *
+ldso_strdup(struct elf_shared_object_iterator *iter, const char *s)
+{
+
+        char *string;
+
+	string = ldso_malloc(iter, strlen(s) + 1);
+	if (string == NULL)
+		return NULL;
+	strcpy(string, s);
+	return string;
+}
+
+static bool
+ldso_insert_yield_entry(struct elf_shared_object_iterator *iter,
+    const char *path)
+{
+	struct elf_shared_object_node *so = malloc(sizeof(*so));
+	ENTRY e = {(char *)path, (char *)path}, *ep;
+
+	if (so == NULL)
+		return false;
+	/*
+	 * If we find the item in the cache then don't add it
+	 * to the list again.
+	 */
+	if (hsearch_r(e, FIND, &ep, &iter->yield_cache) != 0) {
+		free(so);
+		return true;
+	}
+	/*
+	 * Add path to cache.
+	 */
+	if (hsearch_r(e, ENTER, &ep, &iter->yield_cache) == 0)
+		return false;
+	/*
+	 * Add path to yield list.
+	 */
+	so->path = (char *)path;
+	so->basename = strrchr(path, '/') + 1;
+	LIST_INSERT_HEAD(&iter->yield_list, so, _linkage);
+	iter->yield = LIST_FIRST(&iter->yield_list);
+	return true;
+}
+
+bool
+ldso_insert_yield_cache(struct elf_shared_object_iterator *iter,
+    const char *path)
+{
+        ENTRY e = {(char *)path, (char *)path}, *ep;
+
+        if (hsearch_r(e, FIND, &ep, &iter->yield_cache) != 0)
+                return true;
+        if (hsearch_r(e, ENTER, &ep, &iter->yield_cache) == 0)
+                return false;
+        return true;
+}
+
+bool
+ldso_recursive_cache_resolve(struct elf_shared_object_iterator *iter,
+    const char *bname)
+{
+        const char *path = ldso_cache_bsearch(iter, bname);
+        struct elf_shared_object_node *current;
+        elfdesc_t obj;
+        elf_error_t error;
+
+        if (path == NULL) {
+                return true;
+        }
+        if (ldso_elf_open_object(path, &obj) == false) {
+                return false;
+        }
+        if (LIST_EMPTY(&obj.list.shared_objects))
+                goto done;
+
+        LIST_FOREACH(current, &obj.list.shared_objects, _linkage) {
+                if (current->basename == NULL) {
+                        goto err;
+                }
+                path = (char *)ldso_cache_bsearch(iter, current->basename);
+                if (path == NULL) {
+                        DEBUG_LOG("cannot resolve %s\n", current->basename);
+                        goto err;
+                }
+                /*
+                 * We update the existing object list to now contain the
+                 * full path. That way any subsequent calls to the shared
+                 * object iterator will use the linked list cache.
+                 */
+                current->path = ldso_strdup(iter, path);
+                if (current->path == NULL) {
+                        goto err;
+                }
+                if (ldso_insert_yield_entry(iter, current->path) == false)
+                        goto err;
+		if (ldso_recursive_cache_resolve(iter, current->basename) == false)
+			goto err;
+
+        }
+done:
+        elf_close_object(&obj);
+        return true;
+err:
+        elf_close_object(&obj);
+        return false;
+}
 
 bool
 elf_shared_object_iterator_init(elfdesc_t *obj, struct elf_shared_object_iterator *iter,

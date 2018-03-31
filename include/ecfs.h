@@ -298,9 +298,23 @@ struct coredump_params {
 	unsigned long limit;
 	unsigned long mm_flags;
 };
+typedef enum elf_arch {
+	i386,
+	x64,
+	unsupported
+} elf_arch_t;
 
+/*
+ * elfdesc use to only describe the new ecfs file
+ * being written. But it is also used to open other
+ * ELF objects in so_resolve.c code for parsing
+ * shared library deps. So it can be used to represent
+ * more than one ELF object. See so_resolve.c:ldso_elf_open_object()
+ */
 typedef struct elfdesc {
+	int fd;
 	uint8_t *mem;
+	elf_arch_t arch;
 	ElfW(Ehdr) * ehdr;
 	ElfW(Phdr) * phdr;
 	ElfW(Shdr) * shdr;
@@ -321,7 +335,9 @@ typedef struct elfdesc {
 	ElfW(Off) interpOffset;
 	ElfW(Off) noteOffset;
 	char *StringTable;
-	char *path;
+	char *dynstr; /* Points to dynamic string table of original executable */
+	char *path;   /* path to ECFS file being written in tmp ramdisk at first */
+	char *exe_path; /* path to original executable */
 	size_t size;
 	size_t noteSize;
 	size_t gnu_noteSize;
@@ -341,6 +357,10 @@ typedef struct elfdesc {
 	} list;
 } elfdesc_t;
 
+/*
+ * TODO change int's in below struct to a single
+ * 64bit int for flags that denote each mapping type.
+ */
 typedef struct mappings {
 	uint8_t *mem;
 	uint8_t *text_image; // allocated mapping containing text segment (only if shlib)

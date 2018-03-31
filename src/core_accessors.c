@@ -36,7 +36,7 @@ elfdesc_t * load_core_file(const char *path)
 	uint8_t *mem = NULL;
 	struct stat st;
 	int i, fd;
-	
+
 	elfdesc->path = xstrdup(path);
 	
 	if ((fd = open(path, O_RDONLY)) < 0) {

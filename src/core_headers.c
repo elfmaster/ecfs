@@ -208,98 +208,106 @@ int extract_dyntag_info(handle_t *handle)
 	dyn = elfdesc->dyn;
 	for (j = 0; dyn[j].d_tag != DT_NULL; j++) {
 		switch(dyn[j].d_tag) {
-			case DT_HASH:
-				smeta.hashVaddr = dyn[j].d_un.d_val;
-				smeta.hashOff = elfdesc->textOffset + smeta.hashVaddr - elfdesc->textVaddr;
+		case DT_HASH:
+			smeta.hashVaddr = dyn[j].d_un.d_val;
+			smeta.hashOff = elfdesc->textOffset + smeta.hashVaddr - elfdesc->textVaddr;
 #if DEBUG
-				log_msg(__LINE__, "HASH: hashVaddr: %#lx hashOff: #%lx",
-				    smeta.hashVaddr, smeta.hashOff);
+			log_msg(__LINE__, "HASH: hashVaddr: %#lx hashOff: #%lx",
+			smeta.hashVaddr, smeta.hashOff);
 #endif
-				break;
-			case DT_REL:
-				smeta.relVaddr = dyn[j].d_un.d_val;
-				smeta.relOff = elfdesc->textOffset + smeta.relVaddr - elfdesc->textVaddr;
+			break;
+		case DT_REL:
+			smeta.relVaddr = dyn[j].d_un.d_val;
+			smeta.relOff = elfdesc->textOffset + smeta.relVaddr - elfdesc->textVaddr;
 #if DEBUG
-				log_msg(__LINE__, "DYNSEGMENT: relVaddr: %lx relOff: %lx", smeta.relVaddr, smeta.relOff);
+			log_msg(__LINE__, "DYNSEGMENT: relVaddr: %lx relOff: %lx", smeta.relVaddr, smeta.relOff);
 #endif
-				break;
-			case DT_RELA:
-				smeta.relaVaddr = dyn[j].d_un.d_val;
-				smeta.relaOff = elfdesc->textOffset + smeta.relaVaddr - elfdesc->textVaddr; 
+			break;
+		case DT_RELA:
+			smeta.relaVaddr = dyn[j].d_un.d_val;
+			smeta.relaOff = elfdesc->textOffset + smeta.relaVaddr - elfdesc->textVaddr; 
 #if DEBUG
-				log_msg(__LINE__, "DYNSEGMENT: %lx relaOffset: %lx", smeta.relaVaddr, smeta.relaOff);
+			log_msg(__LINE__, "DYNSEGMENT: %lx relaOffset: %lx", smeta.relaVaddr, smeta.relaOff);
 #endif
-				break;
-			case DT_JMPREL:
-				smeta.plt_relaVaddr = dyn[j].d_un.d_val;
-				smeta.plt_relaOff = elfdesc->textOffset + smeta.plt_relaVaddr - elfdesc->textVaddr;
+			break;
+		case DT_JMPREL:
+			smeta.plt_relaVaddr = dyn[j].d_un.d_val;
+			smeta.plt_relaOff = elfdesc->textOffset + smeta.plt_relaVaddr - elfdesc->textVaddr;
 #if DEBUG
-				log_msg(__LINE__, "DYNSEGMENT: relaOffset = %lx + %lx - %lx", elfdesc->textOffset, smeta.plt_relaVaddr, elfdesc->textVaddr);
-				log_msg(__LINE__, "DYNSEGMENT: plt_relaVaddr: %lx plt_relaOffset: %lx", smeta.plt_relaVaddr, smeta.plt_relaOff);
+			log_msg(__LINE__, "DYNSEGMENT: relaOffset = %lx + %lx - %lx",
+			    elfdesc->textOffset, smeta.plt_relaVaddr, elfdesc->textVaddr);
+			log_msg(__LINE__, "DYNSEGMENT: plt_relaVaddr: %lx plt_relaOffset: %lx",
+			    smeta.plt_relaVaddr, smeta.plt_relaOff);
 #endif
-				break;
-			case DT_PLTGOT:
-				smeta.gotVaddr = dyn[j].d_un.d_val;
-				smeta.gotOff = dyn[j].d_un.d_val - elfdesc->dataVaddr;
-				smeta.gotOff += (ElfW(Off))dataOffset;
+			break;
+		case DT_PLTGOT:
+			smeta.gotVaddr = dyn[j].d_un.d_val;
+			smeta.gotOff = dyn[j].d_un.d_val - elfdesc->dataVaddr;
+			smeta.gotOff += (ElfW(Off))dataOffset;
 #if DEBUG
-				log_msg(__LINE__, "DYNSEGMENT: gotVaddr: %lx gotOffset: %lx", smeta.gotVaddr, smeta.gotOff);
+			log_msg(__LINE__, "DYNSEGMENT: gotVaddr: %lx gotOffset: %lx",
+			    smeta.gotVaddr, smeta.gotOff);
 #endif
-				break;
-			case DT_GNU_HASH:
-				smeta.hashVaddr = dyn[j].d_un.d_val;
-				smeta.hashOff = elfdesc->textOffset + smeta.hashVaddr - elfdesc->textVaddr;
+			break;
+		case DT_GNU_HASH:
+			smeta.hashVaddr = dyn[j].d_un.d_val;
+			smeta.hashOff = elfdesc->textOffset + smeta.hashVaddr - elfdesc->textVaddr;
 #if DEBUG
-				log_msg(__LINE__, "DYNSEGMENT: hashVaddr: %lx hashOff: %lx", smeta.hashVaddr, smeta.hashOff);
+			log_msg(__LINE__, "DYNSEGMENT: hashVaddr: %lx hashOff: %lx",
+			    smeta.hashVaddr, smeta.hashOff);
 #endif
-				break;
-			case DT_INIT: 
-				smeta.initVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
-				smeta.initOff = elfdesc->textOffset + smeta.initVaddr - elfdesc->textVaddr;
+			break;
+		case DT_INIT: 
+			smeta.initVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
+			smeta.initOff = elfdesc->textOffset + smeta.initVaddr - elfdesc->textVaddr;
 #if DEBUG
-				log_msg(__LINE__, "DYNSEGMENT: initVaddr: %lx initOff: %lx", smeta.initVaddr, smeta.initOff);
+			log_msg(__LINE__, "DYNSEGMENT: initVaddr: %lx initOff: %lx",
+			    smeta.initVaddr, smeta.initOff);
 #endif
-				break;
-			case DT_FINI:
-				smeta.finiVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
-				smeta.finiOff = elfdesc->textOffset + smeta.finiVaddr - elfdesc->textVaddr;
+			break;
+		case DT_FINI:
+			smeta.finiVaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
+			smeta.finiOff = elfdesc->textOffset + smeta.finiVaddr - elfdesc->textVaddr;
 #if DEBUG
-				log_msg(__LINE__, "DYNSEGMENT: finiVaddr: %lx finiOff: %lx", smeta.finiVaddr, smeta.finiOff);
+			log_msg(__LINE__, "DYNSEGMENT: finiVaddr: %lx finiOff: %lx",
+			    smeta.finiVaddr, smeta.finiOff);
 #endif
+			break;
+		case DT_INIT_ARRAY:
+			smeta.ctors_vaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
+			log_msg(__LINE__, "CTORS: %lx\n", smeta.ctors_vaddr);
 				break;
-			case DT_INIT_ARRAY:
-				smeta.ctors_vaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
-				log_msg(__LINE__, "CTORS: %lx\n", smeta.ctors_vaddr);
-				break;
-			case DT_INIT_ARRAYSZ:
-				log_msg(__LINE__, "CTORSSZ: %lx\n", smeta.ctors_size);
-				smeta.ctors_size = dyn[j].d_un.d_val;
-				break;
-			case DT_FINI_ARRAY:
-				smeta.dtors_vaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
-				break;
-			case DT_FINI_ARRAYSZ:
-				smeta.dtors_size = dyn[j].d_un.d_val;
-				break;
-			case DT_STRSZ:
-				smeta.strSiz = dyn[j].d_un.d_val;
-				break;  
-			case DT_PLTRELSZ:
-				smeta.pltSiz = dyn[j].d_un.d_val;
-				break;
-			case DT_SYMTAB:
-				smeta.dsymVaddr = dyn[j].d_un.d_ptr;
-				smeta.dsymOff = elfdesc->textOffset + smeta.dsymVaddr - elfdesc->textVaddr;
-#if DEBUG
-				log_msg(__LINE__, "DYNSEGMENT: .dynsym addr: %lx offset: %lx", smeta.dsymVaddr, smeta.dsymOff);
+		case DT_INIT_ARRAYSZ:
+			log_msg(__LINE__, "CTORSSZ: %lx\n", smeta.ctors_size);
+			smeta.ctors_size = dyn[j].d_un.d_val;
+			break;
+		case DT_FINI_ARRAY:
+			smeta.dtors_vaddr = dyn[j].d_un.d_val + (memdesc->pie ? elfdesc->textVaddr : 0);
+			break;
+		case DT_FINI_ARRAYSZ:
+			smeta.dtors_size = dyn[j].d_un.d_val;
+			break;
+		case DT_STRSZ:
+			smeta.strSiz = dyn[j].d_un.d_val;
+			break;
+		case DT_PLTRELSZ:
+			smeta.pltSiz = dyn[j].d_un.d_val;
+			break;
+		case DT_SYMTAB:
+			smeta.dsymVaddr = dyn[j].d_un.d_ptr;
+			smeta.dsymOff = elfdesc->textOffset + smeta.dsymVaddr - elfdesc->textVaddr;
+#if DEBG
+			log_msg(__LINE__, "DYNSEGMENT: .dynsym addr: %lx offset: %lx",
+			    smeta.dsymVaddr, smeta.dsymOff);
 #endif
-				break;
-			case DT_STRTAB:
-					smeta.dstrVaddr = dyn[j].d_un.d_ptr;
-					smeta.dstrOff = elfdesc->textOffset + smeta.dstrVaddr - elfdesc->textVaddr;
+			break;
+		case DT_STRTAB:
+			smeta.dstrVaddr = dyn[j].d_un.d_ptr;
+			smeta.dstrOff = elfdesc->textOffset + smeta.dstrVaddr - elfdesc->textVaddr;
 #if DEBUG
-				log_msg(__LINE__, "DYNSEGMENT: .dynstr addr: %lx  offset: %lx (%lx + (%lx - %lx)", smeta.dstrVaddr, smeta.dstrOff,
-				elfdesc->textOffset, smeta.dstrVaddr, elfdesc->textVaddr); 
+			log_msg(__LINE__, "DYNSEGMENT: .dynstr addr: %lx  offset: %lx (%lx + (%lx - %lx)",
+			    smeta.dstrVaddr, smeta.dstrOff, elfdesc->textOffset, smeta.dstrVaddr,
+			    elfdesc->textVaddr); 
 #endif
 			break;
 		}
