@@ -235,7 +235,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	}
 
 	/*
-	 *.note
+	 *.note.corefile (Original corefile notes, not exefile)
 	 */
 	shdr[scount].sh_type = SHT_NOTE;
 	shdr[scount].sh_offset = elfdesc->noteOffset;
@@ -247,8 +247,8 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	shdr[scount].sh_size = elfdesc->noteSize;
 	shdr[scount].sh_addralign = 4;
 	shdr[scount].sh_name = stoffset;
-	strcpy(&StringTable[stoffset], ".note");
-	stoffset += strlen(".note") + 1;
+	strcpy(&StringTable[stoffset], ".note.core");
+	stoffset += strlen(".note.core") + 1;
 	scount++;
 
 	if (dynamic) {
@@ -260,7 +260,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 		shdr[scount].sh_addr = smeta->hashVaddr;
 		shdr[scount].sh_flags = SHF_ALLOC;
 		shdr[scount].sh_info = 0;
-		shdr[scount].sh_link = 0;
+		shdr[scount].sh_link = scount + 1; /* References dynsym symbol table */
 		shdr[scount].sh_entsize = 0;
 		shdr[scount].sh_size = global_hacks.hash_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.hash_size;
 		shdr[scount].sh_addralign = 4;
@@ -333,7 +333,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 		shdr[scount].sh_offset = (__ELF_NATIVE_CLASS == 64) ? smeta->plt_relaOff : smeta->plt_relOff;
 		shdr[scount].sh_addr = (__ELF_NATIVE_CLASS == 64) ? smeta->plt_relaVaddr : smeta->plt_relVaddr;
 		shdr[scount].sh_flags = SHF_ALLOC;
-		shdr[scount].sh_info = 0;
+		shdr[scount].sh_info = scount + 2; /* NOTE: References .plt */
 		shdr[scount].sh_link = dynsym_index;
 		shdr[scount].sh_entsize = (__ELF_NATIVE_CLASS == 64) ? sizeof(Elf64_Rela) : sizeof(Elf32_Rel);
 		shdr[scount].sh_size = global_hacks.plt_rela_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.plt_rela_size;
@@ -710,14 +710,15 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	 * libc.so.data, .libc.so.relro, etc. (approx 3 mappings/sections for each lib)
 	 */
 		for (i = 0; i < notedesc->lm_files->libcount; i++) {
-			if (notedesc->lm_files->libs[i].preloaded) 
+			if (notedesc->lm_files->libs[i].preloaded) {
 				shdr[scount].sh_type = SHT_PRELOADED;
-			else
-			if (notedesc->lm_files->libs[i].injected)
+			} else if (notedesc->lm_files->libs[i].injected) {
 				shdr[scount].sh_type = SHT_INJECTED;
-			else
+			} else if (notedesc->lm_files->libs[i].dlopen) {
+				shdr[scount].sh_type = SHT_DLOPEN;
+			} else {
 				shdr[scount].sh_type = SHT_SHLIB;
-			//shdr[scount].sh_type = notedesc->lm_files->libs[i].injected ? SHT_INJECTED : SHT_SHLIB;
+			}
 			shdr[scount].sh_offset = notedesc->lm_files->libs[i].offset;
 			shdr[scount].sh_addr = notedesc->lm_files->libs[i].addr;
 			shdr[scount].sh_flags = SHF_ALLOC;

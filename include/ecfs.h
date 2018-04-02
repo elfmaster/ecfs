@@ -77,6 +77,8 @@
  */
 #define SHT_INJECTED 0x200000 
 #define SHT_PRELOADED 0x300000
+#define SHT_DLOPEN 0x400000
+
 #define HEAP 0
 #define STACK 1
 #define VDSO 2
@@ -261,14 +263,18 @@ struct nt_file_struct {
 	int page_size;
 };
 
+/*
+ * TODO, should be stored in linked list along with dlopen, needed, and shared object list.
+ */
 struct lib_mappings {
 	struct {
 		unsigned long addr;
 		unsigned long offset;
 		size_t size;
 		uint32_t flags; // PF_W|PF_R etc.
-		int injected; // to signify that the file was an injected dll
-		int preloaded; // to signify that the file was a preloaded dll
+		bool dlopen; // to signify it was dlopen'd with dlopen@DLFCN or was possibly injected
+		bool injected; // to signify that the file was an injected dll
+		bool preloaded; // to signify that the file was a preloaded dll
 		char name[MAX_LIB_NAME + 1];
 		char path[MAX_LIB_PATH + 1];
 	} libs[4096];
@@ -300,14 +306,12 @@ struct coredump_params {
 	unsigned long limit;
 	unsigned long mm_flags;
 };
+
 typedef enum elf_arch {
 	i386,
 	x64,
 	unsupported
 } elf_arch_t;
-
-typedef struct ldso_dlopen_node ldso_dlopen_node_t;
-typedef struct ldso_needed_node ldso_needed_node_t;
 
 /*
  * elfdesc use to only describe the new ecfs file
@@ -361,8 +365,8 @@ typedef struct elfdesc {
 	int pie;
 	struct {
 		LIST_HEAD(elf_shared_object_list, elf_shared_object_node) shared_objects; /* DT_NEEDED basenames only */
-		LIST_HEAD(ldso_dlopen_list, ldso_dlopen_node) dlopen; /* dlopen'ed libs */
-		LIST_HEAD(ldso_needed_list, ldso_needed_node) needed; /* all .so deps */
+		LIST_HEAD(ldso_dlopen_list, elf_shared_object_node) dlopen; /* dlopen'ed libs */
+		LIST_HEAD(ldso_needed_list, elf_shared_object_node) needed; /* all .so deps */
 	} list;
 } elfdesc_t;
 

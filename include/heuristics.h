@@ -33,15 +33,10 @@
 
 int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size);
 
-/* 
- * From DT_NEEDED (We pass the executable and each shared library to this function)
- */
-int get_dt_needed_libs(const char *bin_path, struct needed_libs **needed_libs);
 /*
- * Get dlopen libs
+ * Marks a library as either dlopen'd or injected, depending on whether or not
+ * dlopen is even being used.
  */
-int get_dlopen_libs(const char *exe_path, struct dlopen_libs **dl_libs);
-
-void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elfdesc);
+bool mark_dlopen_libs(notedesc_t *notedesc, elfdesc_t *elfdesc);
 
 #endif

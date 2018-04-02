@@ -491,12 +491,13 @@ int main(int argc, char **argv)
 #if DEBUG
 			log_msg(__LINE__, "calling mark_dll_injection()");
 #endif
-			mark_dll_injection(notedesc, memdesc, elfdesc);
+			if (mark_dlopen_libs(notedesc, elfdesc) == false)
+				log_msg2(__LINE__, __FILE__, "non fatal: mark_dlopen_libs failed\n");
 		}
-	
+
 	memset(handle->arglist, 0xff, ELF_PRARGSZ);
 	memcpy(handle->arglist, (char *)notedesc->psinfo->pr_psargs, ELF_PRARGSZ);
-	
+
 	/*
 	 * Get ELF object mappings
 	 */

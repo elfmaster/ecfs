@@ -33,19 +33,24 @@
  */
 #include "../include/ecfs.h"
 #include "../include/util.h"
+#include "../include/ldso_cache.h"
 
 #define OFFSET_2_PUSH 6 // # of bytes int PLT entry where push instruction begins
 #define MAX_NEEDED_LIBS 512
 #define MAX_STRINGS 1024
 
-int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
+/*
+ * Build an array of pointers to strings for each string in .rodata
+ */
+static int __attribute__((unused))
+build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
 {
 	int i, j, index = 0;
 	*stra = (char **)heapAlloc(sizeof(char *) * MAX_STRINGS); 
 	char *string = alloca(8192 * 2);
 	char *p;
 	size_t cursize = MAX_STRINGS;
-	
+
 	for (p = (char *)rodata_ptr, j = 0, i = 0; i < rodata_size; i++) {
 		if (p[i] != '\0') {
 			string[j++] = p[i];
@@ -68,342 +73,146 @@ int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
 	return index;
 }
 
-/* 
- * From DT_NEEDED (We pass the executable and each shared library to this function)
- */
-static int get_dt_needed_libs(const char *bin_path, struct needed_libs *needed_libs, int index)
-{
-	ElfW(Ehdr) *ehdr = NULL;
-	ElfW(Phdr) *phdr = NULL;
-	ElfW(Dyn) *dyn = NULL;
-	ElfW(Shdr) *shdr = NULL;
-	int fd, i,  needed_count;
-	uint8_t *mem;
-	struct stat st;
-	char *dynstr = NULL;
-
-	fd = xopen(bin_path, O_RDONLY);
-	fstat(fd, &st);
-	mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-	if (mem == MAP_FAILED) {
-		perror("mmap");
-		return 0;
-	}
-	ehdr = (ElfW(Ehdr) *)mem;
-	phdr = (ElfW(Phdr) *)&mem[ehdr->e_phoff];
-	shdr = (ElfW(Shdr) *)&mem[ehdr->e_shoff];
-	char *shstrtab = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
-	
-	for (i = 0; i < ehdr->e_shnum; i++) {
-		if (!strcmp(&shstrtab[shdr[i].sh_name], ".dynstr")) {
-			dynstr = (char *)&mem[shdr[i].sh_offset];
-			break;
-		}
-	}
-
-	if (dynstr == NULL)
-		return 0;
-
-	for (i = 0; i < ehdr->e_phnum; i++) { 
-		if (phdr[i].p_type == PT_DYNAMIC) {	
-			dyn = (ElfW(Dyn) *)&mem[phdr[i].p_offset];
-			break;
-		}
-	}
-	if (dyn == NULL)
-		return 0;
-	
-	for (needed_count = 0, i = 0; dyn[i].d_tag != DT_NULL; i++) {
-		switch(dyn[i].d_tag) {
-			case DT_NEEDED:
-				needed_libs[index + needed_count].libname = xstrdup(&dynstr[dyn[i].d_un.d_val]);
-				needed_libs[index + needed_count].libpath = get_real_lib_path(needed_libs[index + needed_count].libname);
-				needed_libs[index + needed_count].master = xstrdup(bin_path);
-				needed_count++;
-				break;
-			default:
-				break;
-		}
-	}
-	return needed_count;
-}
-
-/*
- * If you pass libc.so and libdl.so
- * the strings "libc" and "libdl" will be
- * compared.
- * if you pass libc.test.so and libdl.hello.so
- * the string "libc.test" and "libdl.hello" will
- * be compared.
- */
-static int cmp_till_dot(const char *lib1, const char *lib2)
-{
-	char *p;
-	char *s1 = xstrdup(lib1);
-	char *s2 = xstrdup(lib2);
-	int i;
-
-	for (i = 0, p = s1; p[i] != '\0'; i++) {
-		if (p[i] == '.' && p[i + 1] == 's' && p[i + 2] == 'o') {
-			p[i] = '\0';	
-			break;
-		}
-	}
-	for (i = 0, p = s2; p[i] != '\0'; i++) {
-		if (p[i] == '.' && p[i + 1] == 's' && p[i + 2] == 'o') {
-			p[i] = '\0';
-			break;
-		}
-	}
-	
-	return strcmp(s1, s2);
-}
-
-static int qsort_cmp_by_str(const void *a, const void *b)
-{ 
-	struct needed_libs *ia = (struct needed_libs *)a;
-	struct needed_libs *ib = (struct needed_libs *)b;
-	return strcmp(ia->libpath, ib->libpath);
-} 
-
 /*
  * The elfdesc_t is usually for describing the ECFS file, but it also contains a pointer
  * to the corresponding executable path. We use this path to open the original executable
- * 
+ */
 bool resolve_so_deps(elfdesc_t *obj)
 {
-	
+	elf_shared_object_iterator_t iter;
+	struct elf_shared_object entry;
 
+	LIST_INIT(&obj->list.needed);
 
-}
-/*
- * This function transitively enumerates a list
- * of all needed dependencies in the process as
- * marked by DT_NEEDED in the executable and its
- * shared libraries.
- */
-int get_dt_needed_libs_all(memdesc_t *memdesc, struct needed_libs **needed_libs)
-{
-	int i, init_count;
-	size_t currsize = 8192 * sizeof(struct needed_libs);
-	struct needed_libs *all_libs = heapAlloc(currsize);
-	struct needed_libs *initial_libs = heapAlloc(512 * sizeof(struct needed_libs));
-	
-	int total_needed = get_dt_needed_libs(memdesc->exe_path, all_libs, 0);
-	if (total_needed == 0)
-		return 0;
-	/*
-	 * Create initial dependencies then transitively check the other dependencies
-	 * of those.
-	 */
-	init_count = total_needed;
-	memcpy(initial_libs, all_libs, (total_needed * sizeof(struct needed_libs)));
-	
-	for (i = 0; i < init_count; i++) {
-		if (i >= 1) {
-			if (!strcmp(initial_libs[i].libpath, initial_libs[i - 1].libpath))
-				continue;
-		}
-		if ((total_needed * sizeof(struct needed_libs)) >= currsize) {// just to be safe
-			currsize <<= 1;
-			all_libs = (struct needed_libs *)realloc(all_libs, currsize);
-		}
-		total_needed += get_dt_needed_libs(initial_libs[i].libpath, all_libs, total_needed);
-
+	if (elf_shared_object_iterator_init(obj, &iter, NULL,
+	    ELF_SO_RESOLVE_ALL_F) == false) {
+		log_msg2(__LINE__, __FILE__, "elf_shared_object_iterator_init failed\n");
+		return false;
 	}
-	
-	qsort(all_libs, total_needed, sizeof(struct needed_libs), qsort_cmp_by_str);
-#if DEBUG
-	for (i = 0; i < total_needed; i++) {
-		if (i >= 1) 
-			if (!strcmp(all_libs[i].libpath, all_libs[i - 1].libpath))
-				continue;
-		log_msg(__LINE__, "[%s] needs dependency: %s", all_libs[i].master, all_libs[i].libpath);
+	for (;;) {
+		elf_iterator_res_t res;
+		struct elf_shared_object_node *so;
+
+		res = elf_shared_object_iterator_next(&iter, &entry);
+		if (res == ELF_ITER_DONE)
+			break;
+		if (res == ELF_ITER_ERROR) {
+			log_msg2(__LINE__, __FILE__, "elf_shared_object_iterator_next error\n");
+			return false;
+		}
+		if (res == ELF_ITER_NOTFOUND)
+			continue;
+		so = heapAlloc(sizeof(*so));
+		/*
+		 * NOTE: elf_shared_object and elf_shared_object_node
+		 * are nearly identical, but the one with '_node' has
+		 * linkage to a list as its last member of the struct.
+		 * so memcpy sizeof(elf_shared_object_t) into the
+		 * into the elf_shared_object_node_t and then we add
+		 * the linkage by inserting it.
+		 */
+		memcpy(so, &entry, sizeof(entry));
+		LIST_INSERT_HEAD(&obj->list.needed, so, _linkage);
 	}
-#endif
-	*needed_libs = all_libs;
-	return total_needed;
+	return true;
 }
+
 /*
- * Get dlopen libs
+ * See if dlopen is even being used.
  */
-int get_dlopen_libs(const char *exe_path, struct dlopen_libs *dl_libs, int index)
+static bool dlopen_symbol_found(elfdesc_t *obj)
 {	
 	ElfW(Ehdr) *ehdr = NULL;
 	ElfW(Shdr) *shdr = NULL;
 	ElfW(Phdr) *phdr = NULL;
-	ElfW(Rela) *rela = NULL;
 	ElfW(Sym) *symtab = NULL;
 	uint8_t *mem = NULL;
-	uint8_t *text_ptr = NULL, *rodata_ptr = NULL;
-	size_t rodata_size = 0, i; 
-	int ret, fd, scount = 0, symcount = 0, found_dlopen = 0;
-	char **strings, *dynstr, tmp[512];
+	char *dynstr, *shstrtab;
 	struct stat st;
-	
-	/*
-	 * If there are is no dlopen() symbol then obviously
-	 * no libraries were legally loaded with dlopen. However
-	 * its possible __libc_dlopen_mode() was called by an
-	 * attacker
-	 */
-	
+	char *exe_path = obj->exe_path;
+	int i, fd;
+	int symcount = 0;
+
 	fd = xopen(exe_path, O_RDONLY);
 	xfstat(fd, &st);
 	mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (mem == MAP_FAILED) {
-		perror("mmap");
+		log_msg2(__LINE__, __FILE__, "mmap: %s\n", strerror(errno));
 		exit(-1);
 	}
+
 	ehdr = (ElfW(Ehdr) *)mem;
 	shdr = (ElfW(Shdr) *)&mem[ehdr->e_shoff];
 	phdr = (ElfW(Phdr) *)&mem[ehdr->e_phoff];
-	
-	char *shstrtab = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
-	
+	shstrtab = (char *)&mem[shdr[ehdr->e_shstrndx].sh_offset];
+
 	for (i = 0; i < ehdr->e_shnum; i++) {
-		if (!strcmp(&shstrtab[shdr[i].sh_name], ".text")) {
-			text_ptr = (uint8_t *)&mem[shdr[i].sh_offset];
-		} else
-		if (!strcmp(&shstrtab[shdr[i].sh_name], ".rela.plt")) {
-			rela = (ElfW(Rela) *)&mem[shdr[i].sh_offset];
-			symtab = (ElfW(Sym) *)&mem[shdr[shdr[i].sh_link].sh_offset];
-		} else
-		if (!strcmp(&shstrtab[shdr[i].sh_name], ".rodata")) {
-			rodata_ptr = (uint8_t *)&mem[shdr[i].sh_offset];
-			rodata_size = shdr[i].sh_size;
-		} else
-		if (!strcmp(&shstrtab[shdr[i].sh_name], ".dynstr")) 
+		if (!strcmp(&shstrtab[shdr[i].sh_name], ".dynstr")) {
 			dynstr = (char *)&mem[shdr[i].sh_offset];
-		else
-		if (!strcmp(&shstrtab[shdr[i].sh_name], ".dynsym"))
-			symcount = shdr[i].sh_size / sizeof(ElfW(Sym));
-	}
-	if (text_ptr == NULL || rela == NULL || symtab == NULL) {
-#if DEBUG
-		log_msg(__LINE__, "get_dlopen_libs() failing for path: %s", exe_path);
-#endif
-		return -1;
-	}
-	
-	for (found_dlopen = 0, i = 0; i < symcount; i++) {
-		if (!strcmp(&dynstr[symtab[i].st_name], "dlopen")) {
-			found_dlopen++;
-			break;
+		} else {
+			if (!strcmp(&shstrtab[shdr[i].sh_name], ".dynsym")) {
+				symcount = shdr[i].sh_size / sizeof(ElfW(Sym));
+				symtab = (ElfW(Sym) *)&mem[shdr[i].sh_offset];
+			}
 		}
 	}
-	if (!found_dlopen) {
+	if (symtab == NULL) {
 #if DEBUG
-		log_msg(__LINE__, "no calls to dlopen found in %s", exe_path);
+		log_msg2(__LINE__, __FILE__,
+		    "dlopen_symbol_found() failing for path: %s", exe_path);
 #endif
-		return 0;			
-	}
-	/*
-	 * For now (until we have integrated a disassembler in)
-	 * I am not going to check each individual dlopen call.	
-	 * instead just check .rodata to see if any strings for 
-	 * shared libraries exist. This combined with the knowledge
-	 * that dlopen is used at all in the program, is decent
-	 * enough hueristic.
-	 */
-	scount = build_rodata_strings(&strings, rodata_ptr, rodata_size);
-	if (scount == 0)
-		return 0;
-	for (i = 0; i < scount; i++) {
-		ret = readlink(strings[i], tmp, 512);
-		dl_libs[index + i].libpath = ret < 0 ? xstrdup(strings[i]) : xstrdup(tmp);
-		free(strings[i]);
+		return false;
 	}
 	
-#if DEBUG
-	for (i = 0; i < scount; i++)
-		printf("dlopen lib: %s\n", dl_libs[index + i].libpath);
-#endif
-	return scount;
+	for (i = 0; i < symcount; i++) {
+		if (strcmp(&dynstr[symtab[i].st_name], "dlopen") == 0)
+			return true;
+	}
+	return false;
+}
+
+static bool lookup_so_path(elfdesc_t *obj, char *lookup_path)
+{
+	struct elf_shared_object_node *current;
+
+	LIST_FOREACH(current, &obj->list.needed, _linkage) {
+		log_msg2(__LINE__, __FILE__, "comparing %s and %p\n", lookup_path, current->path);
+		if (strcmp(lookup_path, current->path) == 0)
+			return true;
+	}
+	return false;
 }
 
 /*
- * This should be called after all needed libs have been found.
+ * Mark libraries as either dlopen'd or injected.
  */
-int get_dlopen_libs_all(memdesc_t *memdesc, struct needed_libs *needed_libs, int needed_count, struct dlopen_libs **dlopen_libs)
-{
-	int dlopen_count, i;
-	size_t currsize = sizeof(struct dlopen_libs) * 8192;
-	struct dlopen_libs *all_libs = heapAlloc(sizeof(struct dlopen_libs) * 8192);
-	
-	dlopen_count = get_dlopen_libs(memdesc->exe_path, all_libs, 0);
-	for (i = 0; i < needed_count; i++) {
-		if (i >= 1) 
-			if (!strcmp(needed_libs[i].libpath, needed_libs[i - 1].libpath))
-				continue;
-		if ((dlopen_count * sizeof(struct dlopen_libs)) >= currsize) {
-			currsize <<= 1;
-			all_libs = (struct dlopen_libs *)realloc(all_libs, currsize);
-		}		
-		dlopen_count += get_dlopen_libs(needed_libs[i].libpath, all_libs, dlopen_count);
-	}
-	*dlopen_libs = all_libs;
-	return dlopen_count;
-}
-
-void mark_dll_injection(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elfdesc)
+bool mark_dlopen_libs(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elfdesc)
 {
 	struct lib_mappings *lm_files = notedesc->lm_files;
-	struct needed_libs *needed_libs;
-	struct dlopen_libs *dlopen_libs;
-	int needed_count;
-	int dlopen_count;
-	int valid;
-	int i, j, c;
-	
-	/*
-	 * Get all dependencies from executable and its shared libraries
-	 * DT_NEEDED entries. Also get any shared library paths found in
-	 * the .rodata section of binaries that are calling dlopen()
-	 */
-	needed_count = get_dt_needed_libs_all(memdesc, &needed_libs);
-	dlopen_count = get_dlopen_libs_all(memdesc, needed_libs, needed_count, &dlopen_libs);
-#if DEBUG
-	for (i = 0; i < dlopen_count; i++)
-		log_msg(__LINE__, "dlopen lib from .rodata: %s", dlopen_libs[i]);
-#endif
-	for (i = 0; i < lm_files->libcount; i++) {
-		for (j = 0; j < needed_count; j++) {
-			if (lm_files->libs[i].path[0] == '\0') { // empty string, no paths.
-				break;
-			}
-			if (needed_libs[j].libpath == NULL) {
-				/* Compare by name since full path couldn't be found */
-				if (!cmp_till_dot(needed_libs[j].libname, lm_files->libs[i].name)) {
-					valid++;
-					break;	
-				}
-			}	
-			if (j >= 1) // avoid duplicates
-				if (!strcmp(needed_libs[j].libpath, needed_libs[j - 1].libpath))
-					continue;
-#if DEBUG
-			log_msg(__LINE__, "mark_dll_injection(): Comparing %s and %s", lm_files->libs[i].path, needed_libs[j].libpath);
-#endif
-			if (!strcmp(lm_files->libs[i].path, needed_libs[j].libpath) || !strncmp(lm_files->libs[i].name, "ld-", 3)) {
-				valid++;
-				break;
-			} else { 
-				for (c = 0; c < dlopen_count; c++) {
-					if (!strcmp(lm_files->libs[i].path, dlopen_libs[c].libpath)) {
-						valid++;
-						break;
-					}
-				}
-			}
-		}
-		if (valid == 0) {
-			lm_files->libs[i].injected++;
-#if DEBUG
-			log_msg(__LINE__, "mark_dll_injection(): injected library found: %s", lm_files->libs[i].name);
-#endif
-		}
-		else
-			valid = 0;
+	int i;
+
+	log_msg2(__LINE__, __FILE__, "calling resolve_so_deps(%s)\n", elfdesc->exe_path);
+
+	if (resolve_so_deps(elfdesc) == false) {
+		log_msg2(__LINE__, __FILE__, "resolve_so_deps failed\n");
+		return false;
 	}
+	/*
+	 * Are there any shared library mappings listed in the NT_FILES area of the core
+	 * file, that are NOT listed in the transitive DT_NEEDED search? If so then this
+	 * is a shared library that has either been dlopen'd or injected maliciously.
+	 * For now we will mark this type as SHT_DLOPEN, unless the dlopen symbol doesn't
+	 * exist in which case we will call it SHT_INJECTED; indicating it was either
+	 * manually injected, or injected using __libc_dlopen_mode.
+	 */
+	for (i = 0; i < lm_files->libcount; i++) {
+		if (lookup_so_path(elfdesc, lm_files->libs[i].path) == false) {
+			if (dlopen_symbol_found(elfdesc) == false) {
+				lm_files->libs[i].injected = true;
+			} else {
+				lm_files->libs[i].dlopen = true;
+			}
+		}
+	}
+	return true;
 }
