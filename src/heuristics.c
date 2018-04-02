@@ -68,111 +68,6 @@ int build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
 	return index;
 }
 
-
-/* 
- * Find the actual path to DT_NEEDED libraries
- * and take possible symlinks into consideration 
- * XXX this function will not work if the path is
- * a symlink to a file in a different directory.
- * fix this bug by seeing if readlink returns a
- * totally different file path as the resultant link
- * or if it returns just the base name (Which means
- * that the linked file is in the same dir as the
- * symlink.
- */
-static char * get_real_lib_path(char *name)
-{
-	char tmp[512] = {0};
-	char real[512] = {0};
-	char *ptr;
-
-	int ret;
-	
-	/*
-	 * Since this function is recursive and since there are
-	 * times when 'name' is passed as a path (As the result of
-	 * some readlink() calls, we must handle that specially since
-	 * we don't want to append a path to a path which will be
-	 * incorrect.
-	 */
-	if (strchr(name, '/') != NULL) {
-		ret = readlink(name, real, 512);
-		if (ret > 0) {
-			if (strchr(real, '/') != NULL)
-				return xstrdup(real);
-			else {
-				ptr = get_real_lib_path(real);
-				return xstrdup(ptr);
-			}
-		}
-		return xstrdup(name);
-	}
-	/*
-	 * Check most common paths
-	 */
-
-	snprintf(tmp, 512, "/usr/lib/x86_64-linux-gnu/%s", name);
-	if (access(tmp, F_OK) == 0) {
-		ret = readlink(tmp, real, 512);
-		if (ret > 0) {
-			ptr = get_real_lib_path(real);
-			return xstrdup(ptr);
-		}
-		else
-			return xstrdup(tmp);
-	}
-
-	snprintf(tmp, 512, "/lib/x86_64-linux-gnu/%s", name);
-	if (access(tmp, F_OK) == 0) {
-		ret = readlink(tmp, real, 512);
-		if (ret > 0) {
-			ptr = get_real_lib_path(real);
-			return xstrdup(ptr);
-		}
-		else
-			return xstrdup(tmp);
-	}
-
-	snprintf(tmp, 512, "/usr/lib/%s", name);
-	if (access(tmp, F_OK) == 0) {
-		ret = readlink(tmp, real, 512);
-		if (ret > 0) {
-			ptr = get_real_lib_path(real);
-			return xstrdup(ptr);
-		}
-		else
-			return xstrdup(tmp);
-	}
-
-	snprintf(tmp, 512, "/lib/%s", name);
-	
-	if (access(tmp, F_OK) == 0) {
-		ret = readlink(tmp, real, 512);
-		if (ret > 0) {
-			ptr = get_real_lib_path(real);
-			return xstrdup(ptr);
-		}
-		else
-			return xstrdup(tmp);
-	}
-	
-	snprintf(tmp, 512, "/usr/lib/x86_64-linux-gnu/gio/modules/%s", name);
-	if (access(tmp, F_OK) == 0) {
-		ret = readlink(tmp, real, 512);
-		if (ret > 0) {
-			ptr = get_real_lib_path(real);
-			return xstrdup(ptr);
-		}
-		else
-			return xstrdup(tmp);
-	}
-
-	/*
-	 * If we get here then lets try directly from ld.so.cache
-	 */
-	return NULL;
-}
-
 /* 
  * From DT_NEEDED (We pass the executable and each shared library to this function)
  */
@@ -271,6 +166,16 @@ static int qsort_cmp_by_str(const void *a, const void *b)
 	return strcmp(ia->libpath, ib->libpath);
 } 
 
+/*
+ * The elfdesc_t is usually for describing the ECFS file, but it also contains a pointer
+ * to the corresponding executable path. We use this path to open the original executable
+ * 
+bool resolve_so_deps(elfdesc_t *obj)
+{
+	
+
+
+}
 /*
  * This function transitively enumerates a list
  * of all needed dependencies in the process as

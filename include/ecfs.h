@@ -60,6 +60,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include "../include/ldso_cache.h"
+
 #define CMDLINE_LEN 512
 
 #define ECFS_EXCEPTION 0x13 // to be returned in case of strange exceptions
@@ -304,16 +306,21 @@ typedef enum elf_arch {
 	unsupported
 } elf_arch_t;
 
+typedef struct ldso_dlopen_node ldso_dlopen_node_t;
+typedef struct ldso_needed_node ldso_needed_node_t;
+
 /*
  * elfdesc use to only describe the new ecfs file
- * being written. But it is also used to open other
- * ELF objects in so_resolve.c code for parsing
+ * being written. But it is as of recent also used to open other
+ * ELF object's in so_resolve.c code for parsing
  * shared library deps. So it can be used to represent
- * more than one ELF object. See so_resolve.c:ldso_elf_open_object()
+ * more than one ELF object and of multiple kinds.
+ * See so_resolve.c:ldso_elf_open_object()
  */
 typedef struct elfdesc {
 	int fd;
 	uint8_t *mem;
+	size_t mmap_size;
 	elf_arch_t arch;
 	ElfW(Ehdr) * ehdr;
 	ElfW(Phdr) * phdr;
@@ -353,7 +360,9 @@ typedef struct elfdesc {
 	int dynlinked;
 	int pie;
 	struct {
-		LIST_HEAD(elf_shared_object_list, elf_shared_object_node) shared_objects;
+		LIST_HEAD(elf_shared_object_list, elf_shared_object_node) shared_objects; /* DT_NEEDED basenames only */
+		LIST_HEAD(ldso_dlopen_list, ldso_dlopen_node) dlopen; /* dlopen'ed libs */
+		LIST_HEAD(ldso_needed_list, ldso_needed_node) needed; /* all .so deps */
 	} list;
 } elfdesc_t;
 
@@ -500,19 +509,6 @@ typedef struct symentry {
 	char *library; //libname
 	
 } symentry_t;
-
-struct dlopen_libs {
-	char *libname;
-	char *libpath;
-	int count;
-};
-
-struct needed_libs {
-	char *libname; // just the name of the library
-	char *libpath; // path to a library 
-	char *master; // the library or executable that depends on libpath/libname
-	uint32_t count;
-};
 
 /*
  * These structs are used to store information about memory mappings

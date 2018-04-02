@@ -5,6 +5,7 @@
 #include "../include/ecfs.h"
 #include "../include/ldso_cache.h"
 #include "../include/util.h"
+#include "../include/misc.h"
 
 #define MAX_SO_COUNT 1024
 #define CACHE_FILE "/etc/ld.so.cache"
@@ -14,13 +15,12 @@
 	(((addr) + __alignof__ (struct cache_file_new) -1)      \
 	    & (~(__alignof__ (struct cache_file_new) - 1)))
 
-static void ldso_parse_dynamic_segment(elfdesc_t *);
+static bool ldso_parse_dynamic_segment(elfdesc_t *);
 
 static bool
 ldso_elf_open_object(char *path, elfdesc_t *elfdesc)
 {
 	int fd, i;
-	char *StringTable;
 	ElfW(Ehdr) *ehdr;
 	ElfW(Phdr) *phdr;
 	struct stat st;
@@ -31,6 +31,7 @@ ldso_elf_open_object(char *path, elfdesc_t *elfdesc)
 
 	fd = xopen(path, O_RDONLY);
 	xfstat(fd, &st);
+	elfdesc->mmap_size = st.st_size;
 
 	mem = elfdesc->mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (elfdesc->mem == MAP_FAILED) {
@@ -51,13 +52,25 @@ ldso_elf_open_object(char *path, elfdesc_t *elfdesc)
 			continue;
 		elfdesc->dynstr = (char *)&mem[dyn[i].d_un.d_val];
 	}
+	/*
+	 * Setup the first pass of basenames for DT_NEEDED entries
+	 * in a linked list.
+	 */
+	return ldso_parse_dynamic_segment(elfdesc);
+}
+
+static bool
+ldso_elf_close_object(elfdesc_t *elfdesc)
+{
+
+	if (munmap(elfdesc->mem, elfdesc->mmap_size) < 0)
+		return false;
 	return true;
 }
 
-static void
+static bool
 ldso_parse_dynamic_segment(elfdesc_t *obj)
 {
-	elfdesc_t *elfdesc = obj;
 	struct elf_shared_object_node *so;
 	ElfW(Phdr) *phdr = obj->phdr;
 	ElfW(Dyn) *dyn = obj->dyn;
@@ -71,22 +84,26 @@ ldso_parse_dynamic_segment(elfdesc_t *obj)
 	 * might use this code in other places within the state of
 	 * the ECFS software. Such as with ecfs exec.
 	 */
-	if (elfdesc->dyn == NULL) {
+	if (obj->dyn == NULL) {
 		for (i = 0; i < obj->ehdr->e_phnum; i++) {
-			elfdesc->dyn = (ElfW(Dyn) *)&elfdesc->mem[phdr[i].p_offset +
-			    (elfdesc->dynVaddr - elfdesc->dataVaddr)];
+			if (phdr[i].p_type != PT_DYNAMIC)
+				continue;
+			obj->dyn = (ElfW(Dyn) *)&obj->mem[phdr[i].p_offset];
 			break;
 		}
 	}
-	for (j = 0, dyn = elfdesc->dyn; dyn[j].d_tag != DT_NULL; j++) {
+	if (obj->dyn == NULL)
+		return false;
+	for (j = 0, dyn = obj->dyn; dyn[j].d_tag != DT_NULL; j++) {
 		if (dyn[j].d_tag != DT_NEEDED)
 			continue;
 		so = heapAlloc(sizeof(*so));
-		so->basename = (char *)&iter->dynstr[dyn[j].d_un.d_val];
+		so->basename = (char *)&obj->dynstr[dyn[j].d_un.d_val];
+		log_msg(__LINE__, __FILE__, "Inserting: %s\n", so->basename);
 		LIST_INSERT_HEAD(&obj->list.shared_objects, so, _linkage);
 		break;
 	}
-	return;
+	return true;
 }
 
 static int
@@ -306,12 +323,11 @@ ldso_recursive_cache_resolve(struct elf_shared_object_iterator *iter,
         const char *path = ldso_cache_bsearch(iter, bname);
         struct elf_shared_object_node *current;
         elfdesc_t obj;
-        elf_error_t error;
 
         if (path == NULL) {
                 return true;
         }
-        if (ldso_elf_open_object(path, &obj) == false) {
+        if (ldso_elf_open_object((char *)path, &obj) == false) {
                 return false;
         }
         if (LIST_EMPTY(&obj.list.shared_objects))
@@ -323,7 +339,8 @@ ldso_recursive_cache_resolve(struct elf_shared_object_iterator *iter,
                 }
                 path = (char *)ldso_cache_bsearch(iter, current->basename);
                 if (path == NULL) {
-                        DEBUG_LOG("cannot resolve %s\n", current->basename);
+                        log_msg2(__LINE__, __FILE__,
+			    "cannot resolve %s\n", current->basename);
                         goto err;
                 }
                 /*
@@ -342,10 +359,10 @@ ldso_recursive_cache_resolve(struct elf_shared_object_iterator *iter,
 
         }
 done:
-        elf_close_object(&obj);
+        ldso_elf_close_object(&obj);
         return true;
 err:
-        elf_close_object(&obj);
+        ldso_elf_close_object(&obj);
         return false;
 }
 

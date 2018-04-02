@@ -304,7 +304,7 @@ int main(int argc, char **argv)
 	 * load the core file from stdin (Passed by the kernel via core_pattern)
 	 */
 	elfdesc = load_core_file_stdin(&corefile);
-	
+	elfdesc->exe_path = memdesc->exe_path; /* not the best abstractions */
 #if DEBUG
 	log_msg(__LINE__, "Successfully read core from stdin and created temporary corefile path: %s", corefile);
 #endif
