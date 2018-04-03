@@ -54,7 +54,7 @@ void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_file_stru
 	memset(lm, 0, sizeof(struct lib_mappings));
 
 	for (i = 0; i < fmaps->fcount; i++) {
-#if DEBUG	
+#if 0
 		log_msg(__LINE__, "filepath: %s", fmaps->files[i].path);
 #endif
 		p = strrchr(fmaps->files[i].path, '/') + 1;
@@ -69,7 +69,7 @@ void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_file_stru
 		 */
 		strncpy(lm->libs[lm->libcount].path, fmaps->files[i].path, MAX_LIB_PATH);
 		strncpy(lm->libs[lm->libcount].name, tmp, MAX_LIB_NAME);
-#if DEBUG
+#if 0
 		log_msg(__LINE__, "libname: %s", lm->libs[lm->libcount].name);
 #endif
 		lm->libs[lm->libcount].addr = fmaps->files[i].addr;

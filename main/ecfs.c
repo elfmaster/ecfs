@@ -304,7 +304,9 @@ int main(int argc, char **argv)
 	 * load the core file from stdin (Passed by the kernel via core_pattern)
 	 */
 	elfdesc = load_core_file_stdin(&corefile);
-	elfdesc->exe_path = memdesc->exe_path; /* not the best abstractions */
+	elfdesc->exe_path = xstrdup(memdesc->exe_path); /* not the best abstractions */
+	log_msg2(__LINE__, __FILE__, "elfdesc->exe_path: %s\n", elfdesc->exe_path);
+
 #if DEBUG
 	log_msg(__LINE__, "Successfully read core from stdin and created temporary corefile path: %s", corefile);
 #endif
@@ -489,8 +491,11 @@ int main(int argc, char **argv)
 	 if (!(handle->elfstat.personality & ELF_STATIC))
 		if (opts.heuristics) {
 #if DEBUG
-			log_msg(__LINE__, "calling mark_dll_injection()");
+			log_msg2(__LINE__, __FILE__, "calling mark_dlopen_libs(%p, %p)",
+			    notedesc, elfdesc);
 #endif
+			elfdesc->exe_path = memdesc->exe_path;
+			log_msg2(__LINE__, __FILE__, "elfdesc->exe_path passed: %s\n", elfdesc->exe_path);
 			if (mark_dlopen_libs(notedesc, elfdesc) == false)
 				log_msg2(__LINE__, __FILE__, "non fatal: mark_dlopen_libs failed\n");
 		}

@@ -111,6 +111,7 @@ bool resolve_so_deps(elfdesc_t *obj)
 		 * into the elf_shared_object_node_t and then we add
 		 * the linkage by inserting it.
 		 */
+		log_msg2(__LINE__, __FILE__, "DT_NEEDED: %s\n", so->path);
 		memcpy(so, &entry, sizeof(entry));
 		LIST_INSERT_HEAD(&obj->list.needed, so, _linkage);
 	}
@@ -133,6 +134,7 @@ static bool dlopen_symbol_found(elfdesc_t *obj)
 	int i, fd;
 	int symcount = 0;
 
+	log_msg2(__LINE__, __FILE__, "opening %s\n", obj->exe_path);
 	fd = xopen(exe_path, O_RDONLY);
 	xfstat(fd, &st);
 	mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -186,10 +188,12 @@ static bool lookup_so_path(elfdesc_t *obj, char *lookup_path)
 /*
  * Mark libraries as either dlopen'd or injected.
  */
-bool mark_dlopen_libs(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elfdesc)
+bool mark_dlopen_libs(notedesc_t *notedesc, elfdesc_t *elfdesc)
 {
 	struct lib_mappings *lm_files = notedesc->lm_files;
+	struct elf_shared_object_node *current;
 	int i;
+	bool __dlopen = false;
 
 	log_msg2(__LINE__, __FILE__, "calling resolve_so_deps(%s)\n", elfdesc->exe_path);
 
@@ -197,6 +201,11 @@ bool mark_dlopen_libs(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elfde
 		log_msg2(__LINE__, __FILE__, "resolve_so_deps failed\n");
 		return false;
 	}
+
+	LIST_FOREACH(current, &elfdesc->list.needed, _linkage) {
+		log_msg2(__LINE__, __FILE__, "needed: %s\n", current->path);
+	}
+
 	/*
 	 * Are there any shared library mappings listed in the NT_FILES area of the core
 	 * file, that are NOT listed in the transitive DT_NEEDED search? If so then this
@@ -205,9 +214,14 @@ bool mark_dlopen_libs(notedesc_t *notedesc, memdesc_t *memdesc, elfdesc_t *elfde
 	 * exist in which case we will call it SHT_INJECTED; indicating it was either
 	 * manually injected, or injected using __libc_dlopen_mode.
 	 */
+	log_msg2(__LINE__, __FILE__, "comparing lm_files to dt_needed list\n");
+
+	if (dlopen_symbol_found(elfdesc) == true)
+		__dlopen = true;
+
 	for (i = 0; i < lm_files->libcount; i++) {
 		if (lookup_so_path(elfdesc, lm_files->libs[i].path) == false) {
-			if (dlopen_symbol_found(elfdesc) == false) {
+			if (__dlopen == false) {
 				lm_files->libs[i].injected = true;
 			} else {
 				lm_files->libs[i].dlopen = true;

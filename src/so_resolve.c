@@ -145,6 +145,7 @@ ldso_cache_check_flags(struct elf_shared_object_iterator *iter,
 		if (flags == 0x303)
 			return true;
 	}
+	log_msg2(__LINE__, __FILE__, "returing false\n");
 	return false;
 }
 
@@ -215,6 +216,7 @@ ldso_cache_bsearch(struct elf_shared_object_iterator *iter,
 			right = middle - 1;
 		}
 	}
+	log_msg2(__LINE__, __FILE__, "returning best: %s\n", best);
 	return best;
 }
 
@@ -324,6 +326,8 @@ ldso_recursive_cache_resolve(struct elf_shared_object_iterator *iter,
         struct elf_shared_object_node *current;
         elfdesc_t obj;
 
+	log_msg2(__LINE__, __FILE__, "basename: %s, path: %s\n", bname, path);
+
         if (path == NULL) {
                 return true;
         }
@@ -371,6 +375,7 @@ elf_shared_object_iterator_init(elfdesc_t *obj, struct elf_shared_object_iterato
     const char *cache_path, uint32_t flags)
 {
 	const char *cache_file = cache_path == NULL ? CACHE_FILE : cache_path;
+	elfdesc_t *nobj = heapAlloc(sizeof(*nobj));
 
 	LIST_INIT(&iter->yield_list);
 	LIST_INIT(&iter->malloc_list);
@@ -446,7 +451,13 @@ elf_shared_object_iterator_init(elfdesc_t *obj, struct elf_shared_object_iterato
 		    "using old cache size: %lu\n", iter->cache_size);
 	}
 finish:
-	iter->current = LIST_FIRST(&obj->list.shared_objects);
+	log_msg2(__LINE__, __FILE__, "calling ldso_elf_open_object\n");
+	if (ldso_elf_open_object(obj->exe_path, nobj) == false) {
+		log_msg2(__LINE__, __FILE__, "ldso_elf_open_object failed inside iterator init\n");
+		return false;
+	}
+	iter->current = LIST_FIRST(&nobj->list.shared_objects);
+	log_msg2(__LINE__, __FILE__, "current->basename: %s\n", iter->current->basename);
 	return true;
 }
 
@@ -466,6 +477,7 @@ elf_shared_object_iterator_next(struct elf_shared_object_iterator *iter,
 
         if (iter->flags & ELF_SO_RESOLVE_ALL_F) {
                 if (LIST_EMPTY(&iter->yield_list) == 0) {
+			log_msg2(__LINE__, __FILE__, "yield item: %s\n", iter->yield->path);
 			iter->yield = LIST_FIRST(&iter->yield_list);
 			entry->path = iter->yield->path;
 			entry->basename = iter->yield->basename;
@@ -473,6 +485,9 @@ elf_shared_object_iterator_next(struct elf_shared_object_iterator *iter,
 			free(iter->yield);
 			return ELF_ITER_OK;
 		}
+		log_msg2(__LINE__, __FILE__, "passing %s to ldso_recursive_cache_resolve()\n",
+		    iter->current->basename);
+
 		result = ldso_recursive_cache_resolve(iter, iter->current->basename);
 		if (!result) {
 			log_msg2(__LINE__, __FILE__,
