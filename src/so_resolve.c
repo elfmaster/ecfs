@@ -26,12 +26,20 @@ ldso_elf_open_object(char *path, elfdesc_t *elfdesc)
 	struct stat st;
 	uint8_t *mem;
 	ElfW(Dyn) *dyn;
-
-	memset(elfdesc, 0, sizeof(*elfdesc));
+	uint64_t text_base = elfdesc->runtime_base;
+	/*
+	 * NOTE:
+	 * I hate special casing like this. It was in order to adapt libelfmaster's
+	 * ldso iterator into ECFS.
+	 */
+	static bool first_pass = true;
 
 	fd = xopen(path, O_RDONLY);
 	xfstat(fd, &st);
 	elfdesc->mmap_size = st.st_size;
+
+	log_msg2(__LINE__, __FILE__, "calling ldso_elf_open_object: arch: %lx text_base: %lx\n",
+	    elfdesc->arch, text_base);
 
 	mem = elfdesc->mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (elfdesc->mem == MAP_FAILED) {
@@ -44,13 +52,18 @@ ldso_elf_open_object(char *path, elfdesc_t *elfdesc)
 
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
 		if (elfdesc->phdr[i].p_type == PT_DYNAMIC) {
+			log_msg2(__LINE__, __FILE__,
+			    "Setting dynamic segment: %lx\n", elfdesc->phdr[i].p_offset);
 			dyn = elfdesc->dyn = (ElfW(Dyn) *)&mem[elfdesc->phdr[i].p_offset];
 		}
 	}
+
 	for (i = 0; dyn[i].d_tag != DT_NULL; i++) {
 		if (dyn[i].d_tag != DT_STRTAB)
 			continue;
-		elfdesc->dynstr = (char *)&mem[dyn[i].d_un.d_val];
+		log_msg2(__LINE__, __FILE__, "d_val: %lx textVaddr: %lx text_base: %lx\n",
+		    dyn[i].d_un.d_val, elfdesc->textVaddr, text_base);
+		elfdesc->dynstr = (char *)&mem[dyn[i].d_un.d_val - elfdesc->textVaddr];
 	}
 	/*
 	 * Setup the first pass of basenames for DT_NEEDED entries
@@ -94,6 +107,7 @@ ldso_parse_dynamic_segment(elfdesc_t *obj)
 	}
 	if (obj->dyn == NULL)
 		return false;
+
 	for (j = 0, dyn = obj->dyn; dyn[j].d_tag != DT_NULL; j++) {
 		if (dyn[j].d_tag != DT_NEEDED)
 			continue;
@@ -138,12 +152,16 @@ static inline bool
 ldso_cache_check_flags(struct elf_shared_object_iterator *iter,
     uint32_t flags)
 {
+	log_msg2(__LINE__, __FILE__, "arch: %x flags: %lx\n", iter->obj->arch, flags);
 	if (iter->obj->arch == i386) {
 		if (flags == 0x803)
 			return true;
 	} else if (iter->obj->arch == x64) {
-		if (flags == 0x303)
+		log_msg2(__LINE__, __FILE__, "x64 bitch\n");
+		if (flags == 0x303) {
+			log_msg2(__LINE__, __FILE__, "returning true on x64\n");
 			return true;
+		}
 	}
 	log_msg2(__LINE__, __FILE__, "returing false\n");
 	return false;
@@ -171,7 +189,7 @@ ldso_cache_bsearch(struct elf_shared_object_iterator *iter,
 			key = iter->cache->libs[middle].key;
 		}
 		ret = ldso_cache_cmp(name, iter->cache_data + key);
-		if (unlikely(ret == 0)) {
+		if (ret == 0) {
 			left = middle;
 			while (middle > 0) {
 				if (iter->cache_flags & ELF_LDSO_CACHE_NEW) {
@@ -322,13 +340,14 @@ bool
 ldso_recursive_cache_resolve(struct elf_shared_object_iterator *iter,
     const char *bname)
 {
+	log_msg2(__LINE__, __FILE__, "about to call ldso_cache_bsearch with arch: %lx\n", iter->obj->arch);
         const char *path = ldso_cache_bsearch(iter, bname);
         struct elf_shared_object_node *current;
-        elfdesc_t obj;
+        elfdesc_t obj = { .exe_path = path, .arch = iter->obj->arch};
 
 	log_msg2(__LINE__, __FILE__, "basename: %s, path: %s\n", bname, path);
 
-        if (path == NULL) {
+	if (path == NULL) {
                 return true;
         }
         if (ldso_elf_open_object((char *)path, &obj) == false) {
@@ -385,6 +404,7 @@ elf_shared_object_iterator_init(elfdesc_t *obj, struct elf_shared_object_iterato
 	iter->index = 0;
 	iter->obj = obj;
 
+	log_msg2(__LINE__, __FILE__, "elf_shared_object_iterator_init, arch: %lx\n", iter->obj->arch);
 	if ((flags & ELF_SO_RESOLVE_F) == 0 &&
 	    (flags & ELF_SO_RESOLVE_ALL_F) == 0)
 		goto finish;
@@ -467,8 +487,12 @@ elf_shared_object_iterator_next(struct elf_shared_object_iterator *iter,
 {
 	bool result;
 
+	log_msg2(__LINE__, __FILE__, "x64 is: %lx arch: %d\n", x64,
+	    iter->obj->arch);
+
 	if (iter->current == NULL && LIST_EMPTY(&iter->yield_list)) {
 		ldso_cleanup(iter);
+		log_msg2(__LINE__, __FILE__, "iterator done\n");
 		return ELF_ITER_DONE;
 	}
 
@@ -480,6 +504,7 @@ elf_shared_object_iterator_next(struct elf_shared_object_iterator *iter,
 			log_msg2(__LINE__, __FILE__, "yield item: %s\n", iter->yield->path);
 			iter->yield = LIST_FIRST(&iter->yield_list);
 			entry->path = iter->yield->path;
+			log_msg2(__LINE__, __FILE__, "entry->path: %s\n", entry->path);
 			entry->basename = iter->yield->basename;
 			LIST_REMOVE(iter->yield, _linkage);
 			free(iter->yield);

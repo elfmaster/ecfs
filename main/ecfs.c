@@ -60,7 +60,7 @@ elfdesc_t * load_core_file_stdin(char **corefile)
 	int file;
 	
 	char *tmp_dir = opts.use_ramdisk ? ECFS_RAMDISK_DIR : ECFS_CORE_DIR;
-	
+
 	char *filepath = xfmtstrdup("%s/.tmp_core", tmp_dir);
 	do {
 		if (access(filepath, F_OK) == 0) {
@@ -304,7 +304,10 @@ int main(int argc, char **argv)
 	 * load the core file from stdin (Passed by the kernel via core_pattern)
 	 */
 	elfdesc = load_core_file_stdin(&corefile);
+	elfdesc->arch = elfdesc->ehdr->e_machine == EM_X86_64 ? x64 : i386;
+	log_msg2(__LINE__, __FILE__, "elfdesc->arch bitch: %d\n", elfdesc->arch);
 	elfdesc->exe_path = xstrdup(memdesc->exe_path); /* not the best abstractions */
+	elfdesc->runtime_base = memdesc->text.base;
 	log_msg2(__LINE__, __FILE__, "elfdesc->exe_path: %s\n", elfdesc->exe_path);
 
 #if DEBUG
@@ -496,6 +499,10 @@ int main(int argc, char **argv)
 #endif
 			elfdesc->exe_path = memdesc->exe_path;
 			log_msg2(__LINE__, __FILE__, "elfdesc->exe_path passed: %s\n", elfdesc->exe_path);
+			elfdesc->runtime_base = memdesc->text.base;
+			log_msg2(__LINE__, __FILE__, "elfdesc->runtime_base: %lx\n", elfdesc->runtime_base);
+			elfdesc->arch = elfdesc->ehdr->e_machine == EM_X86_64 ? x64 : i386;
+			log_msg2(__LINE__, __FILE__, "elfdesc->arch: %d\n", elfdesc->arch);
 			if (mark_dlopen_libs(notedesc, elfdesc) == false)
 				log_msg2(__LINE__, __FILE__, "non fatal: mark_dlopen_libs failed\n");
 		}

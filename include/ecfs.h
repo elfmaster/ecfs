@@ -345,6 +345,7 @@ typedef struct elfdesc {
 	ElfW(Off) bssOffset;
 	ElfW(Off) interpOffset;
 	ElfW(Off) noteOffset;
+	ElfW(Addr) runtime_base; /* text segment at runtime */
 	char *StringTable;
 	char *dynstr; /* Points to dynamic string table of original executable */
 	char *path;   /* path to ECFS file being written in tmp ramdisk at first */

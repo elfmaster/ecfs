@@ -41,6 +41,7 @@
 
 /*
  * Build an array of pointers to strings for each string in .rodata
+ * that appears to be a shared library.
  */
 static int __attribute__((unused))
 build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
@@ -68,6 +69,8 @@ build_rodata_strings(char ***stra, uint8_t *rodata_ptr, size_t rodata_size)
 #endif
 			cursize <<= 1;
 			*stra = (char **)realloc(*stra, sizeof(char *) * cursize);
+			if (*stra == NULL)
+				return -1;
 		}
 	}
 	return index;
@@ -83,6 +86,9 @@ bool resolve_so_deps(elfdesc_t *obj)
 	struct elf_shared_object entry;
 
 	LIST_INIT(&obj->list.needed);
+
+	//obj->runtime_base = memdesc->text.base;
+	log_msg2(__LINE__, __FILE__, "runtime_base: %lx\n", obj->runtime_base);
 
 	if (elf_shared_object_iterator_init(obj, &iter, NULL,
 	    ELF_SO_RESOLVE_ALL_F) == false) {
@@ -111,6 +117,7 @@ bool resolve_so_deps(elfdesc_t *obj)
 		 * into the elf_shared_object_node_t and then we add
 		 * the linkage by inserting it.
 		 */
+		memcpy(so, &entry, sizeof(entry));
 		log_msg2(__LINE__, __FILE__, "DT_NEEDED: %s\n", so->path);
 		memcpy(so, &entry, sizeof(entry));
 		LIST_INSERT_HEAD(&obj->list.needed, so, _linkage);
@@ -195,13 +202,14 @@ bool mark_dlopen_libs(notedesc_t *notedesc, elfdesc_t *elfdesc)
 	int i;
 	bool __dlopen = false;
 
-	log_msg2(__LINE__, __FILE__, "calling resolve_so_deps(%s)\n", elfdesc->exe_path);
+	log_msg2(__LINE__, __FILE__, "calling resolve_so_deps(%s) arch: %d\n", elfdesc->exe_path, elfdesc->arch);
 
 	if (resolve_so_deps(elfdesc) == false) {
 		log_msg2(__LINE__, __FILE__, "resolve_so_deps failed\n");
 		return false;
 	}
 
+	current = LIST_FIRST(&elfdesc->list.needed);
 	LIST_FOREACH(current, &elfdesc->list.needed, _linkage) {
 		log_msg2(__LINE__, __FILE__, "needed: %s\n", current->path);
 	}

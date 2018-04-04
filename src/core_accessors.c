@@ -92,7 +92,10 @@ elfdesc_t * load_core_file(const char *path)
 elfdesc_t * reload_core_file(elfdesc_t *old)
 {
 	char *path = xstrdup(old->path);
-	
+	char *exe_path = old->exe_path;
+	elf_arch_t arch = old->arch;
+	uint64_t text_base = old->runtime_base;
+
 	munmap(old->mem, old->size);
 	free(old);
 
@@ -101,6 +104,13 @@ elfdesc_t * reload_core_file(elfdesc_t *old)
 		log_msg(__LINE__, "reload_core_file(): internal call to load_core_file() failed");
 		return NULL;
 	}
+	/*
+	 * These must be reset, the ldso code, i.e. in so_resolve.c
+	 * is reliant on this ugly special casing code.
+	 */
+	new->exe_path = exe_path;
+	new->arch = arch;
+	new->runtime_base = text_base;
 	return new;
 }
 
