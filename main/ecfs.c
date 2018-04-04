@@ -438,6 +438,7 @@ int main(int argc, char **argv)
 		log_msg(__LINE__, "calling lookup_lib_maps()");
 #endif
 		notedesc->lm_files = (struct lib_mappings *)heapAlloc(sizeof(struct lib_mappings));
+		memset(notedesc->lm_files, 0, sizeof(struct lib_mappings));
 		lookup_lib_maps(elfdesc, memdesc, notedesc->nt_files, notedesc->lm_files);
 	
 #if DEBUG

@@ -103,8 +103,10 @@ bool resolve_so_deps(elfdesc_t *obj)
 			log_msg2(__LINE__, __FILE__, "elf_shared_object_iterator_next error\n");
 			return false;
 		}
-		if (res == ELF_ITER_NOTFOUND)
+		if (res == ELF_ITER_NOTFOUND) {
+			log_msg2(__LINE__, __FILE__, "ELF_ITER_NOT_FOUND\n");
 			continue;
+		}
 		so = (struct ldso_needed_node *)heapAlloc(sizeof(struct ldso_needed_node));
 		/*
 		 * NOTE: elf_shared_object and elf_shared_object_node
@@ -141,7 +143,6 @@ static bool dlopen_symbol_found(elfdesc_t *obj)
 	int i, fd;
 	int symcount = 0;
 
-	log_msg2(__LINE__, __FILE__, "opening %s\n", obj->exe_path);
 	fd = xopen(exe_path, O_RDONLY);
 	xfstat(fd, &st);
 	mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -182,13 +183,16 @@ static bool dlopen_symbol_found(elfdesc_t *obj)
 
 static bool lookup_so_path(elfdesc_t *obj, char *lookup_path)
 {
-	struct elf_shared_object_node *current;
+	struct ldso_needed_node *current;
 
 	LIST_FOREACH(current, &obj->list.needed, _linkage) {
 		log_msg2(__LINE__, __FILE__, "comparing %s and %s\n", lookup_path, current->path);
-		if (strcmp(lookup_path, current->path) == 0)
+		if (strcmp(lookup_path, current->path) == 0) {
+			log_msg2(__LINE__, __FILE__, "They compare\n");
 			return true;
+		}
 	}
+	log_msg2(__LINE__, __FILE__, "They don't compare\n");
 	return false;
 }
 
@@ -219,11 +223,21 @@ bool mark_dlopen_libs(notedesc_t *notedesc, elfdesc_t *elfdesc)
 	 */
 	log_msg2(__LINE__, __FILE__, "comparing lm_files to dt_needed list\n");
 
-	if (dlopen_symbol_found(elfdesc) == true)
+	if (dlopen_symbol_found(elfdesc) == true) {
+		log_msg2(__LINE__, __FILE__, "dlopen is being used\n");
 		__dlopen = true;
+	}
 
 	for (i = 0; i < lm_files->libcount; i++) {
-		if (lookup_so_path(elfdesc, lm_files->libs[i].path) == false) {
+		char *string;
+		char real_path[PATH_MAX];
+		ssize_t r;
+
+		r = readlink(lm_files->libs[i].path, real_path, PATH_MAX);
+		string = r > 0 ? real_path : lm_files->libs[i].path;
+		log_msg2(__LINE__, __FILE__, "string: %s\n", string);
+
+		if (lookup_so_path(elfdesc, string) == false) {
 			if (__dlopen == false) {
 				lm_files->libs[i].injected = true;
 			} else {
@@ -231,5 +245,6 @@ bool mark_dlopen_libs(notedesc_t *notedesc, elfdesc_t *elfdesc)
 			}
 		}
 	}
+	log_msg2(__LINE__, __FILE__, "Returning true\n");
 	return true;
 }

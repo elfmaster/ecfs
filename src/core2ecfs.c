@@ -725,6 +725,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 			shdr[scount].sh_info = 0;
 			shdr[scount].sh_link = 0;
 			shdr[scount].sh_entsize = 0;
+			log_msg2(__LINE__, __FILE__,"setting lib size: %lx\n", notedesc->lm_files->libs[i].size);
 			shdr[scount].sh_size = notedesc->lm_files->libs[i].size;
 			shdr[scount].sh_addralign = 8;
 			shdr[scount].sh_name = stoffset;

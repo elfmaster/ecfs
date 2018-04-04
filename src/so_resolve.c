@@ -153,7 +153,6 @@ ldso_cache_check_flags(struct elf_shared_object_iterator *iter,
 		if (flags == 0x803)
 			return true;
 	} else if (iter->obj->arch == x64) {
-		log_msg2(__LINE__, __FILE__, "x64 bitch\n");
 		if (flags == 0x303) {
 			log_msg2(__LINE__, __FILE__, "returning true on x64\n");
 			return true;
