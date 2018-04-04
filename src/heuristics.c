@@ -84,20 +84,17 @@ bool resolve_so_deps(elfdesc_t *obj)
 {
 	elf_shared_object_iterator_t iter;
 	struct elf_shared_object entry;
-
-	LIST_INIT(&obj->list.needed);
-
-	//obj->runtime_base = memdesc->text.base;
-	log_msg2(__LINE__, __FILE__, "runtime_base: %lx\n", obj->runtime_base);
+	struct ldso_needed_node *current = NULL;
 
 	if (elf_shared_object_iterator_init(obj, &iter, NULL,
 	    ELF_SO_RESOLVE_ALL_F) == false) {
 		log_msg2(__LINE__, __FILE__, "elf_shared_object_iterator_init failed\n");
 		return false;
 	}
+	LIST_INIT(&obj->list.needed);
 	for (;;) {
 		elf_iterator_res_t res;
-		struct elf_shared_object_node *so;
+		struct ldso_needed_node *so;
 
 		res = elf_shared_object_iterator_next(&iter, &entry);
 		if (res == ELF_ITER_DONE)
@@ -108,7 +105,7 @@ bool resolve_so_deps(elfdesc_t *obj)
 		}
 		if (res == ELF_ITER_NOTFOUND)
 			continue;
-		so = heapAlloc(sizeof(*so));
+		so = (struct ldso_needed_node *)heapAlloc(sizeof(struct ldso_needed_node));
 		/*
 		 * NOTE: elf_shared_object and elf_shared_object_node
 		 * are nearly identical, but the one with '_node' has
@@ -117,10 +114,13 @@ bool resolve_so_deps(elfdesc_t *obj)
 		 * into the elf_shared_object_node_t and then we add
 		 * the linkage by inserting it.
 		 */
-		memcpy(so, &entry, sizeof(entry));
-		log_msg2(__LINE__, __FILE__, "DT_NEEDED: %s\n", so->path);
-		memcpy(so, &entry, sizeof(entry));
+		so->path = xstrdup(entry.path);
+		so->basename = xstrdup(entry.basename);
+		log_msg2(__LINE__, __FILE__, "inserting so->path: %s\n", so->path);
 		LIST_INSERT_HEAD(&obj->list.needed, so, _linkage);
+	}
+	LIST_FOREACH(current, &obj->list.needed, _linkage) {
+		log_msg2(__LINE__, __FILE__, "path: %s basename: %s\n", current->path, current->basename);
 	}
 	return true;
 }
@@ -185,7 +185,7 @@ static bool lookup_so_path(elfdesc_t *obj, char *lookup_path)
 	struct elf_shared_object_node *current;
 
 	LIST_FOREACH(current, &obj->list.needed, _linkage) {
-		log_msg2(__LINE__, __FILE__, "comparing %s and %p\n", lookup_path, current->path);
+		log_msg2(__LINE__, __FILE__, "comparing %s and %s\n", lookup_path, current->path);
 		if (strcmp(lookup_path, current->path) == 0)
 			return true;
 	}
@@ -208,12 +208,7 @@ bool mark_dlopen_libs(notedesc_t *notedesc, elfdesc_t *elfdesc)
 		log_msg2(__LINE__, __FILE__, "resolve_so_deps failed\n");
 		return false;
 	}
-
-	current = LIST_FIRST(&elfdesc->list.needed);
-	LIST_FOREACH(current, &elfdesc->list.needed, _linkage) {
-		log_msg2(__LINE__, __FILE__, "needed: %s\n", current->path);
-	}
-
+	log_msg2(__LINE__, __FILE__, "elfdesc->exe_path: %s\n", elfdesc->exe_path);
 	/*
 	 * Are there any shared library mappings listed in the NT_FILES area of the core
 	 * file, that are NOT listed in the transitive DT_NEEDED search? If so then this

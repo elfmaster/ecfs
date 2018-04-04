@@ -17,6 +17,8 @@
 
 static bool ldso_parse_dynamic_segment(elfdesc_t *);
 
+list_t *needed_list;
+
 static bool
 ldso_elf_open_object(char *path, elfdesc_t *elfdesc)
 {
@@ -27,12 +29,6 @@ ldso_elf_open_object(char *path, elfdesc_t *elfdesc)
 	uint8_t *mem;
 	ElfW(Dyn) *dyn;
 	uint64_t text_base = elfdesc->runtime_base;
-	/*
-	 * NOTE:
-	 * I hate special casing like this. It was in order to adapt libelfmaster's
-	 * ldso iterator into ECFS.
-	 */
-	static bool first_pass = true;
 
 	fd = xopen(path, O_RDONLY);
 	xfstat(fd, &st);
@@ -113,7 +109,7 @@ ldso_parse_dynamic_segment(elfdesc_t *obj)
 			continue;
 		so = heapAlloc(sizeof(*so));
 		so->basename = (char *)&obj->dynstr[dyn[j].d_un.d_val];
-		log_msg(__LINE__, __FILE__, "Inserting: %s\n", so->basename);
+		log_msg2(__LINE__, __FILE__, "Inserting: %s\n", so->basename);
 		LIST_INSERT_HEAD(&obj->list.shared_objects, so, _linkage);
 		break;
 	}

@@ -367,7 +367,7 @@ typedef struct elfdesc {
 	struct {
 		LIST_HEAD(elf_shared_object_list, elf_shared_object_node) shared_objects; /* DT_NEEDED basenames only */
 		LIST_HEAD(ldso_dlopen_list, elf_shared_object_node) dlopen; /* dlopen'ed libs */
-		LIST_HEAD(ldso_needed_list, elf_shared_object_node) needed; /* all .so deps */
+		LIST_HEAD(ldso_needed_list, ldso_needed_node) needed; /* all .so deps */
 	} list;
 } elfdesc_t;
 
