@@ -365,9 +365,13 @@ typedef struct elfdesc {
 	int dynlinked;
 	int pie;
 	struct {
-		LIST_HEAD(elf_shared_object_list, elf_shared_object_node) shared_objects; /* DT_NEEDED basenames only */
-		LIST_HEAD(ldso_dlopen_list, elf_shared_object_node) dlopen; /* dlopen'ed libs */
-		LIST_HEAD(ldso_needed_list, ldso_needed_node) needed; /* all .so deps */
+		/*
+		 * This first list, shared_objects, contains the DT_NEEDED entries
+		 * for the base executable. Whereas the second list needed contains
+		 * every DT_NEEDED entry transitively accross all objects.
+		 */
+		LIST_HEAD(elf_shared_object_list, elf_shared_object_node) shared_objects;
+		LIST_HEAD(ldso_needed_list, elf_shared_object_node) needed; /* all .so deps */
 	} list;
 } elfdesc_t;
 

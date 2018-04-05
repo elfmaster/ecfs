@@ -19,6 +19,13 @@ static bool ldso_parse_dynamic_segment(elfdesc_t *);
 
 list_t *needed_list;
 
+/*
+ * NOTE: This function doesn't fill in an entire elfdesc_t. This is because
+ * the code in this file was adapted from libelfmaster, and so we had
+ * to do some hacks to get it working since ECFS doesn't use libelfmaster
+ * for parsing, and that is because libelfmaster only builds on x64 which
+ * diverts from our goals with building on 32bit systems.
+ */
 static bool
 ldso_elf_open_object(char *path, elfdesc_t *elfdesc)
 {
@@ -151,13 +158,11 @@ static inline bool
 ldso_cache_check_flags(struct elf_shared_object_iterator *iter,
     uint32_t flags)
 {
-	log_msg2(__LINE__, __FILE__, "arch: %x flags: %lx\n", iter->obj->arch, flags);
 	if (iter->obj->arch == i386) {
 		if (flags == 0x803)
 			return true;
 	} else if (iter->obj->arch == x64) {
 		if (flags == 0x303) {
-			log_msg2(__LINE__, __FILE__, "returning true on x64\n");
 			return true;
 		}
 	}
@@ -341,7 +346,7 @@ ldso_recursive_cache_resolve(struct elf_shared_object_iterator *iter,
 	log_msg2(__LINE__, __FILE__, "about to call ldso_cache_bsearch with arch: %lx\n", iter->obj->arch);
         const char *path = ldso_cache_bsearch(iter, bname);
         struct elf_shared_object_node *current;
-        elfdesc_t obj = { .exe_path = path, .arch = iter->obj->arch};
+        elfdesc_t obj = { .exe_path = (char *)path, .arch = iter->obj->arch};
 
 	log_msg2(__LINE__, __FILE__, "basename: %s, path: %s\n", bname, path);
 

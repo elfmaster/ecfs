@@ -156,8 +156,10 @@ void log_msg2(unsigned int lineno, char *file, char *fmt, ...)
 	va_start(va, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, va);
 	va_end(va);
+#ifdef DEBUG
 	syslog(LOG_MAKEPRI(LOG_USER, LOG_WARNING), "%s [%s:%u]",
 	    buf, file, lineno);
+#endif
 	return;
 }
 
