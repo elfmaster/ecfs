@@ -198,22 +198,27 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 	memset(&opts, 0, sizeof(opts));
+	opts.heuristics = 1; /* This is part of main-stream behavior now, not an option
+			      * Which is in-part due to an argument parsing bug with
+			      * core_pattners pipe feature. More looking into this later.
+			      */
 
 	while ((c = getopt(argc, argv, "th:o:p:e:")) != -1) {
 		switch(c) {
 			case 'o':
+				log_msg2(__LINE__, __FILE__, "outfile: %s\n", optarg);
 				outfile = xstrdup(optarg);
 				break;
 			case 'e':
+				log_msg2(__LINE__, __FILE__, "executable name: %s\n", optarg);
 				exename = xstrdup(optarg);
 				break;
 			case 'p':
+				log_msg2(__LINE__, __FILE__, "pid: %d\n", atoi(optarg));
 				pid = atoi(optarg);
 				break;
-			case 'h':
-				opts.heuristics = 1;
-				break;
 			case 't':
+				log_msg2(__LINE__, __FILE__, "text segments: on\n");
 				opts.text_all = 1;
 				break;
 			default:
@@ -221,11 +226,10 @@ int main(int argc, char **argv)
 				exit(0);
 		}
 	}
-	
+
 	/*
 	 * Don't allow itself to core in the event of a bug.
 	 */
-	
 	if (setrlimit(RLIMIT_CORE, &limit_core) < 0) {
 		log_msg(__LINE__, "setrlimit %s", strerror(errno));
 		exit(-1);
@@ -235,11 +239,10 @@ int main(int argc, char **argv)
 	 * Prevents ecfs from coring itself
 	 */
 	prctl(PR_SET_DUMPABLE, 0);
-	
-#if DEBUG
-	log_msg(__LINE__, "options: text_all: %d heuristics: %d outfile: %s exename: %s pid: %d", 
-			opts.text_all, opts.heuristics, outfile, exename, pid);
-#endif
+
+	log_msg2(__LINE__, __FILE__, "options: text_all: %d outfile: %s exename: %s pid: %d", 
+			opts.text_all, outfile, exename, pid);
+
 	if (opts.text_all) {
 		/*
 		 * text_all requires alot more disk operations and 
@@ -297,8 +300,10 @@ int main(int argc, char **argv)
 	handle->procfs_size = snapshot_procfs(memdesc, &handle->procfs_tarball);
 	memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
 	memdesc->o_entry = get_original_ep(pid);
-	if (opts.text_all)
+	if (opts.text_all) {
+		log_msg2(__LINE__, __FILE__, "full text segments enabled\n");
 		create_shlib_text_mappings(memdesc);
+	}
 
 	/*
 	 * load the core file from stdin (Passed by the kernel via core_pattern)

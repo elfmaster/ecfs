@@ -1073,11 +1073,11 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	fd = xopen(outfile, O_CREAT|O_TRUNC|O_RDWR);
 	chmod(outfile, S_IRWXU|S_IRWXG);
 	stat(elfdesc->path, &st); // stat the corefile
-	
+
 	ssize_t procfs_size = handle->procfs_size;
 	if (procfs_size < 0) 
 		log_msg(__LINE__, "ALERT: snapshotting procfs failed, section header .procfs.tgz will be empty");
-		
+
 	ecfs_file->prstatus_offset = st.st_size;
 	ecfs_file->prstatus_size = notedesc->thread_count * sizeof(struct elf_prstatus);
 	ecfs_file->fdinfo_offset = ecfs_file->prstatus_offset + notedesc->thread_count * sizeof(struct elf_prstatus);
@@ -1097,19 +1097,20 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	ecfs_file->procfs_offset = ecfs_file->fpregset_offset + ecfs_file->fpregset_size;
 	ecfs_file->procfs_size = (size_t)procfs_size;
 	ecfs_file->stb_offset = ecfs_file->procfs_offset + ecfs_file->procfs_size;
-	
+
 	/*
 	 * write original body of core file
 	 */	
 	/*
 	 * It is possible that a single write could be huge
 	 * i.e. larger than 2GB and will cause write to fail.
-	 * therefore lets do this in incremental writes.
+	 * therefore lets do this in incremental writes. Or
+	 * switch to IOV writes (i.e. writev). in the future.
 	 */	
 	const int CHUNK_SIZE = 0x100000;
 	size_t foffset = 0;
 	ssize_t len = st.st_size;
-	
+
 	do {
 		if (len < CHUNK_SIZE) {
 			if (write(fd, &elfdesc->mem[foffset], len) != len) {
