@@ -105,13 +105,16 @@ ldso_parse_dynamic_segment(elfdesc_t *obj)
 		return false;
 
 	for (j = 0, dyn = obj->dyn; dyn[j].d_tag != DT_NULL; j++) {
-		if (dyn[j].d_tag != DT_NEEDED)
-			continue;
-		so = heapAlloc(sizeof(*so));
-		so->basename = (char *)&obj->dynstr[dyn[j].d_un.d_val];
-		log_msg2(__LINE__, __FILE__, "Inserting: %s\n", so->basename);
-		LIST_INSERT_HEAD(&obj->list.shared_objects, so, _linkage);
-		break;
+		switch(dyn[j].d_tag) {
+		case DT_NEEDED:
+			so = heapAlloc(sizeof(*so));
+			so->basename = (char *)&obj->dynstr[dyn[j].d_un.d_val];
+			log_msg2(__LINE__, __FILE__, "Inserting: %s\n", so->basename);
+			LIST_INSERT_HEAD(&obj->list.shared_objects, so, _linkage);
+			break;
+		default:
+			break;
+		}
 	}
 	return true;
 }
@@ -352,7 +355,10 @@ ldso_recursive_cache_resolve(struct elf_shared_object_iterator *iter,
                 goto done;
 
         LIST_FOREACH(current, &obj.list.shared_objects, _linkage) {
-                if (current->basename == NULL) {
+                log_msg2(__LINE__, __FILE__, "YO basename: %s\n", current->basename);
+
+		if (current->basename == NULL) {
+			log_msg(__LINE__, "basename == NULL fail\n");
                         goto err;
                 }
                 path = (char *)ldso_cache_bsearch(iter, current->basename);

@@ -91,14 +91,19 @@ bool resolve_so_deps(elfdesc_t *obj)
 		log_msg2(__LINE__, __FILE__, "elf_shared_object_iterator_init failed\n");
 		return false;
 	}
+
 	LIST_INIT(&obj->list.needed);
 	for (;;) {
+		char buf[PATH_MAX + 1];
 		elf_iterator_res_t res;
 		struct ldso_needed_node *so;
+		ssize_t r;
 
 		res = elf_shared_object_iterator_next(&iter, &entry);
-		if (res == ELF_ITER_DONE)
+		if (res == ELF_ITER_DONE) {
+			log_msg2(__LINE__, __FILE__, "elf_shared_object_iterator DONE\n");
 			break;
+		}
 		if (res == ELF_ITER_ERROR) {
 			log_msg2(__LINE__, __FILE__, "elf_shared_object_iterator_next error\n");
 			return false;
@@ -116,13 +121,20 @@ bool resolve_so_deps(elfdesc_t *obj)
 		 * into the elf_shared_object_node_t and then we add
 		 * the linkage by inserting it.
 		 */
-		so->path = xstrdup(entry.path);
+#if 0
+		r = readlink(entry.path, buf, PATH_MAX + 1);
+		buf[r < 0 ? 0 : r] = '\0';
+		if (r > 0) {
+			log_msg2(__LINE__, __FILE__, "buf: %s\n");
+		}
+		so->path = r > 0 ? xstrdup(buf) : xstrdup(entry.path);
 		so->basename = xstrdup(entry.basename);
-		log_msg2(__LINE__, __FILE__, "inserting so->path: %s\n", so->path);
+#endif
+		log_msg2(__LINE__, __FILE__, "INSERTING %s\n", entry.path);
 		LIST_INSERT_HEAD(&obj->list.needed, so, _linkage);
 	}
 	LIST_FOREACH(current, &obj->list.needed, _linkage) {
-		log_msg2(__LINE__, __FILE__, "path: %s basename: %s\n", current->path, current->basename);
+		log_msg2(__LINE__, __FILE__, "HERE path: %s basename: %s\n", current->path, current->basename);
 	}
 	return true;
 }
@@ -131,7 +143,7 @@ bool resolve_so_deps(elfdesc_t *obj)
  * See if dlopen is even being used.
  */
 static bool dlopen_symbol_found(elfdesc_t *obj)
-{	
+{
 	ElfW(Ehdr) *ehdr = NULL;
 	ElfW(Shdr) *shdr = NULL;
 	ElfW(Phdr) *phdr = NULL;
@@ -186,7 +198,7 @@ static bool lookup_so_path(elfdesc_t *obj, char *lookup_path)
 	struct ldso_needed_node *current;
 
 	LIST_FOREACH(current, &obj->list.needed, _linkage) {
-		log_msg2(__LINE__, __FILE__, "comparing %s and %s\n", lookup_path, current->path);
+	//	log_msg2(__LINE__, __FILE__, "comparing %s and %s\n", lookup_path, current->path);
 		if (strcmp(lookup_path, current->path) == 0) {
 			log_msg2(__LINE__, __FILE__, "They compare\n");
 			return true;
@@ -233,11 +245,7 @@ bool mark_dlopen_libs(notedesc_t *notedesc, elfdesc_t *elfdesc)
 		char real_path[PATH_MAX];
 		ssize_t r;
 
-		r = readlink(lm_files->libs[i].path, real_path, PATH_MAX);
-		string = r > 0 ? real_path : lm_files->libs[i].path;
-		log_msg2(__LINE__, __FILE__, "string: %s\n", string);
-
-		if (lookup_so_path(elfdesc, string) == false) {
+		if (lookup_so_path(elfdesc, lm_files->libs[i].path) == false) {
 			if (__dlopen == false) {
 				lm_files->libs[i].injected = true;
 			} else {
