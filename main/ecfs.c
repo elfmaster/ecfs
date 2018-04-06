@@ -301,20 +301,19 @@ int main(int argc, char **argv)
 	memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
 	memdesc->o_entry = get_original_ep(pid);
 	if (opts.text_all) {
-		log_msg2(__LINE__, __FILE__, "full text segments enabled\n");
+		/*
+		 * This makes sure that the full text segments of each shared library
+		 * are included in the file. This dramatically increases file size.
+		 */
 		create_shlib_text_mappings(memdesc);
 	}
-
 	/*
 	 * load the core file from stdin (Passed by the kernel via core_pattern)
 	 */
 	elfdesc = load_core_file_stdin(&corefile);
 	elfdesc->arch = elfdesc->ehdr->e_machine == EM_X86_64 ? x64 : i386;
-	log_msg2(__LINE__, __FILE__, "elfdesc->arch bitch: %d\n", elfdesc->arch);
 	elfdesc->exe_path = xstrdup(memdesc->exe_path); /* not the best abstractions */
 	elfdesc->runtime_base = memdesc->text.base;
-	log_msg2(__LINE__, __FILE__, "elfdesc->exe_path: %s\n", elfdesc->exe_path);
-
 #if DEBUG
 	log_msg(__LINE__, "Successfully read core from stdin and created temporary corefile path: %s", corefile);
 #endif
@@ -499,10 +498,6 @@ int main(int argc, char **argv)
 	 */
 	 if (!(handle->elfstat.personality & ELF_STATIC))
 		if (opts.heuristics) {
-#if DEBUG
-			log_msg2(__LINE__, __FILE__, "calling mark_dlopen_libs(%p, %p)",
-			    notedesc, elfdesc);
-#endif
 			elfdesc->exe_path = memdesc->exe_path;
 			log_msg2(__LINE__, __FILE__, "elfdesc->exe_path passed: %s\n", elfdesc->exe_path);
 			elfdesc->runtime_base = memdesc->text.base;

@@ -55,8 +55,6 @@ ldso_elf_open_object(char *path, elfdesc_t *elfdesc)
 
 	for (i = 0; i < elfdesc->ehdr->e_phnum; i++) {
 		if (elfdesc->phdr[i].p_type == PT_DYNAMIC) {
-			log_msg2(__LINE__, __FILE__,
-			    "Setting dynamic segment: %lx\n", elfdesc->phdr[i].p_offset);
 			dyn = elfdesc->dyn = (ElfW(Dyn) *)&mem[elfdesc->phdr[i].p_offset];
 		}
 	}
@@ -64,8 +62,6 @@ ldso_elf_open_object(char *path, elfdesc_t *elfdesc)
 	for (i = 0; dyn[i].d_tag != DT_NULL; i++) {
 		if (dyn[i].d_tag != DT_STRTAB)
 			continue;
-		log_msg2(__LINE__, __FILE__, "d_val: %lx textVaddr: %lx text_base: %lx\n",
-		    dyn[i].d_un.d_val, elfdesc->textVaddr, text_base);
 		elfdesc->dynstr = (char *)&mem[dyn[i].d_un.d_val - elfdesc->textVaddr];
 	}
 	/*
@@ -237,7 +233,6 @@ ldso_cache_bsearch(struct elf_shared_object_iterator *iter,
 			right = middle - 1;
 		}
 	}
-	log_msg2(__LINE__, __FILE__, "returning best: %s\n", best);
 	return best;
 }
 
@@ -343,7 +338,6 @@ bool
 ldso_recursive_cache_resolve(struct elf_shared_object_iterator *iter,
     const char *bname)
 {
-	log_msg2(__LINE__, __FILE__, "about to call ldso_cache_bsearch with arch: %lx\n", iter->obj->arch);
         const char *path = ldso_cache_bsearch(iter, bname);
         struct elf_shared_object_node *current;
         elfdesc_t obj = { .exe_path = (char *)path, .arch = iter->obj->arch};
@@ -360,7 +354,6 @@ ldso_recursive_cache_resolve(struct elf_shared_object_iterator *iter,
                 goto done;
 
         LIST_FOREACH(current, &obj.list.shared_objects, _linkage) {
-                log_msg2(__LINE__, __FILE__, "YO basename: %s\n", current->basename);
 
 		if (current->basename == NULL) {
 			log_msg(__LINE__, "basename == NULL fail\n");
@@ -410,7 +403,6 @@ elf_shared_object_iterator_init(elfdesc_t *obj, struct elf_shared_object_iterato
 	iter->index = 0;
 	iter->obj = obj;
 
-	log_msg2(__LINE__, __FILE__, "elf_shared_object_iterator_init, arch: %lx\n", iter->obj->arch);
 	if ((flags & ELF_SO_RESOLVE_F) == 0 &&
 	    (flags & ELF_SO_RESOLVE_ALL_F) == 0)
 		goto finish;
@@ -477,13 +469,11 @@ elf_shared_object_iterator_init(elfdesc_t *obj, struct elf_shared_object_iterato
 		    "using old cache size: %lu\n", iter->cache_size);
 	}
 finish:
-	log_msg2(__LINE__, __FILE__, "calling ldso_elf_open_object\n");
 	if (ldso_elf_open_object(obj->exe_path, nobj) == false) {
 		log_msg2(__LINE__, __FILE__, "ldso_elf_open_object failed inside iterator init\n");
 		return false;
 	}
 	iter->current = LIST_FIRST(&nobj->list.shared_objects);
-	log_msg2(__LINE__, __FILE__, "current->basename: %s\n", iter->current->basename);
 	return true;
 }
 
@@ -492,9 +482,6 @@ elf_shared_object_iterator_next(struct elf_shared_object_iterator *iter,
     struct elf_shared_object *entry)
 {
 	bool result;
-
-	log_msg2(__LINE__, __FILE__, "x64 is: %lx arch: %d\n", x64,
-	    iter->obj->arch);
 
 	if (iter->current == NULL && LIST_EMPTY(&iter->yield_list)) {
 		ldso_cleanup(iter);
@@ -507,15 +494,14 @@ elf_shared_object_iterator_next(struct elf_shared_object_iterator *iter,
 
         if (iter->flags & ELF_SO_RESOLVE_ALL_F) {
                 if (LIST_EMPTY(&iter->yield_list) == 0) {
-			log_msg2(__LINE__, __FILE__, "yield item: %s\n", iter->yield->path);
 			iter->yield = LIST_FIRST(&iter->yield_list);
 			entry->path = iter->yield->path;
-			log_msg2(__LINE__, __FILE__, "entry->path: %s\n", entry->path);
 			entry->basename = iter->yield->basename;
 			LIST_REMOVE(iter->yield, _linkage);
 			free(iter->yield);
 			return ELF_ITER_OK;
 		}
+
 		log_msg2(__LINE__, __FILE__, "passing %s to ldso_recursive_cache_resolve()\n",
 		    iter->current->basename);
 
