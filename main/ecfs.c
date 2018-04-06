@@ -60,7 +60,7 @@ elfdesc_t * load_core_file_stdin(char **corefile)
 	int file;
 	
 	char *tmp_dir = opts.use_ramdisk ? ECFS_RAMDISK_DIR : ECFS_CORE_DIR;
-	
+
 	char *filepath = xfmtstrdup("%s/.tmp_core", tmp_dir);
 	do {
 		if (access(filepath, F_OK) == 0) {
@@ -198,22 +198,27 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 	memset(&opts, 0, sizeof(opts));
+	opts.heuristics = 1; /* This is part of main-stream behavior now, not an option
+			      * Which is in-part due to an argument parsing bug with
+			      * core_pattners pipe feature. More looking into this later.
+			      */
 
 	while ((c = getopt(argc, argv, "th:o:p:e:")) != -1) {
 		switch(c) {
 			case 'o':
+				log_msg2(__LINE__, __FILE__, "outfile: %s\n", optarg);
 				outfile = xstrdup(optarg);
 				break;
 			case 'e':
+				log_msg2(__LINE__, __FILE__, "executable name: %s\n", optarg);
 				exename = xstrdup(optarg);
 				break;
 			case 'p':
+				log_msg2(__LINE__, __FILE__, "pid: %d\n", atoi(optarg));
 				pid = atoi(optarg);
 				break;
-			case 'h':
-				opts.heuristics = 1;
-				break;
 			case 't':
+				log_msg2(__LINE__, __FILE__, "text segments: on\n");
 				opts.text_all = 1;
 				break;
 			default:
@@ -221,11 +226,10 @@ int main(int argc, char **argv)
 				exit(0);
 		}
 	}
-	
+
 	/*
 	 * Don't allow itself to core in the event of a bug.
 	 */
-	
 	if (setrlimit(RLIMIT_CORE, &limit_core) < 0) {
 		log_msg(__LINE__, "setrlimit %s", strerror(errno));
 		exit(-1);
@@ -235,11 +239,10 @@ int main(int argc, char **argv)
 	 * Prevents ecfs from coring itself
 	 */
 	prctl(PR_SET_DUMPABLE, 0);
-	
-#if DEBUG
-	log_msg(__LINE__, "options: text_all: %d heuristics: %d outfile: %s exename: %s pid: %d", 
-			opts.text_all, opts.heuristics, outfile, exename, pid);
-#endif
+
+	log_msg2(__LINE__, __FILE__, "options: text_all: %d outfile: %s exename: %s pid: %d", 
+			opts.text_all, outfile, exename, pid);
+
 	if (opts.text_all) {
 		/*
 		 * text_all requires alot more disk operations and 
@@ -297,14 +300,23 @@ int main(int argc, char **argv)
 	handle->procfs_size = snapshot_procfs(memdesc, &handle->procfs_tarball);
 	memdesc->fdinfo_size = get_fd_links(memdesc, &memdesc->fdinfo) * sizeof(fd_info_t);
 	memdesc->o_entry = get_original_ep(pid);
-	if (opts.text_all)
+	if (opts.text_all) {
+		/*
+		 * This makes sure that the full text segments of each shared library
+		 * are included in the file. This dramatically increases file size.
+		 */
 		create_shlib_text_mappings(memdesc);
-
+	}
 	/*
 	 * load the core file from stdin (Passed by the kernel via core_pattern)
 	 */
 	elfdesc = load_core_file_stdin(&corefile);
-	
+	/*
+	 * The following 3 assignments must be re-assigned during reload_core_file()
+	 */
+	elfdesc->arch = elfdesc->ehdr->e_machine == EM_X86_64 ? x64 : i386;
+	elfdesc->exe_path = xstrdup(memdesc->exe_path); /* not the best abstractions */
+	elfdesc->runtime_base = memdesc->text.base;
 #if DEBUG
 	log_msg(__LINE__, "Successfully read core from stdin and created temporary corefile path: %s", corefile);
 #endif
@@ -433,6 +445,7 @@ int main(int argc, char **argv)
 		log_msg(__LINE__, "calling lookup_lib_maps()");
 #endif
 		notedesc->lm_files = (struct lib_mappings *)heapAlloc(sizeof(struct lib_mappings));
+		memset(notedesc->lm_files, 0, sizeof(struct lib_mappings));
 		lookup_lib_maps(elfdesc, memdesc, notedesc->nt_files, notedesc->lm_files);
 	
 #if DEBUG
@@ -488,15 +501,19 @@ int main(int argc, char **argv)
 	 */
 	 if (!(handle->elfstat.personality & ELF_STATIC))
 		if (opts.heuristics) {
-#if DEBUG
-			log_msg(__LINE__, "calling mark_dll_injection()");
-#endif
-			mark_dll_injection(notedesc, memdesc, elfdesc);
+			elfdesc->exe_path = memdesc->exe_path;
+			log_msg2(__LINE__, __FILE__, "elfdesc->exe_path passed: %s\n", elfdesc->exe_path);
+			elfdesc->runtime_base = memdesc->text.base;
+			log_msg2(__LINE__, __FILE__, "elfdesc->runtime_base: %lx\n", elfdesc->runtime_base);
+			elfdesc->arch = elfdesc->ehdr->e_machine == EM_X86_64 ? x64 : i386;
+			log_msg2(__LINE__, __FILE__, "elfdesc->arch: %d\n", elfdesc->arch);
+			if (mark_dlopen_libs(notedesc, elfdesc) == false)
+				log_msg2(__LINE__, __FILE__, "non fatal: mark_dlopen_libs failed\n");
 		}
-	
+
 	memset(handle->arglist, 0xff, ELF_PRARGSZ);
 	memcpy(handle->arglist, (char *)notedesc->psinfo->pr_psargs, ELF_PRARGSZ);
-	
+
 	/*
 	 * Get ELF object mappings
 	 */

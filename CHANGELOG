@@ -1,4 +1,0 @@
-Unfortunately this CHANGELOG is very late to come into existence, but better late than never right?
-
--- FIXED TODO ITEM C.4 'make sure sections have proper sh_link value'. The latest binutils readelf comments a warning
-message about this.'

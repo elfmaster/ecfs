@@ -25,6 +25,7 @@
 #ifndef _ECFS_H
 #define _ECFS_H
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -49,6 +50,7 @@
 #include <sys/prctl.h>
 #include <sys/mount.h>
 #include <sys/socket.h>
+#include <sys/queue.h>
 #include <sys/wait.h>
 #include <math.h>
 #include "dwarf.h"
@@ -57,6 +59,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
+#include "../include/ldso_cache.h"
 
 #define CMDLINE_LEN 512
 
@@ -73,6 +77,8 @@
  */
 #define SHT_INJECTED 0x200000 
 #define SHT_PRELOADED 0x300000
+#define SHT_DLOPEN 0x400000
+
 #define HEAP 0
 #define STACK 1
 #define VDSO 2
@@ -257,14 +263,18 @@ struct nt_file_struct {
 	int page_size;
 };
 
+/*
+ * TODO, should be stored in linked list along with dlopen, needed, and shared object list.
+ */
 struct lib_mappings {
 	struct {
 		unsigned long addr;
 		unsigned long offset;
 		size_t size;
 		uint32_t flags; // PF_W|PF_R etc.
-		int injected; // to signify that the file was an injected dll
-		int preloaded; // to signify that the file was a preloaded dll
+		bool dlopen; // to signify it was dlopen'd with dlopen@DLFCN or was possibly injected
+		bool injected; // to signify that the file was an injected dll
+		bool preloaded; // to signify that the file was a preloaded dll
 		char name[MAX_LIB_NAME + 1];
 		char path[MAX_LIB_PATH + 1];
 	} libs[4096];
@@ -297,8 +307,25 @@ struct coredump_params {
 	unsigned long mm_flags;
 };
 
+typedef enum elf_arch {
+	i386,
+	x64,
+	unsupported
+} elf_arch_t;
+
+/*
+ * elfdesc use to only describe the new ecfs file
+ * being written. But it is as of recent also used to open other
+ * ELF object's in so_resolve.c code for parsing
+ * shared library deps. So it can be used to represent
+ * more than one ELF object and of multiple kinds.
+ * See so_resolve.c:ldso_elf_open_object()
+ */
 typedef struct elfdesc {
+	int fd;
 	uint8_t *mem;
+	size_t mmap_size;
+	elf_arch_t arch;
 	ElfW(Ehdr) * ehdr;
 	ElfW(Phdr) * phdr;
 	ElfW(Shdr) * shdr;
@@ -318,8 +345,11 @@ typedef struct elfdesc {
 	ElfW(Off) bssOffset;
 	ElfW(Off) interpOffset;
 	ElfW(Off) noteOffset;
+	ElfW(Addr) runtime_base; /* text segment at runtime */
 	char *StringTable;
-	char *path;
+	char *dynstr; /* Points to dynamic string table of original executable */
+	char *path;   /* path to ECFS file being written in tmp ramdisk at first */
+	char *exe_path; /* path to original executable */
 	size_t size;
 	size_t noteSize;
 	size_t gnu_noteSize;
@@ -334,8 +364,21 @@ typedef struct elfdesc {
 	size_t text_filesz;
 	int dynlinked;
 	int pie;
+	struct {
+		/*
+		 * This first list, shared_objects, contains the DT_NEEDED entries
+		 * for the base executable. Whereas the second list needed contains
+		 * every DT_NEEDED entry transitively accross all objects.
+		 */
+		LIST_HEAD(elf_shared_object_list, elf_shared_object_node) shared_objects;
+		LIST_HEAD(ldso_needed_list, elf_shared_object_node) needed; /* all .so deps */
+	} list;
 } elfdesc_t;
 
+/*
+ * TODO change int's in below struct to a single
+ * 64bit int for flags that denote each mapping type.
+ */
 typedef struct mappings {
 	uint8_t *mem;
 	uint8_t *text_image; // allocated mapping containing text segment (only if shlib)
@@ -476,19 +519,6 @@ typedef struct symentry {
 	
 } symentry_t;
 
-struct dlopen_libs {
-	char *libname;
-	char *libpath;
-	int count;
-};
-
-struct needed_libs {
-	char *libname; // just the name of the library
-	char *libpath; // path to a library 
-	char *master; // the library or executable that depends on libpath/libname
-	uint32_t count;
-};
-
 /*
  * These structs are used to store information about memory mappings
  * that contain ELF objects.
@@ -528,5 +558,12 @@ struct {
 
 ElfW(Off) get_internal_sh_offset(elfdesc_t *elfdesc, memdesc_t *memdesc, int type);
 ElfW(Addr) get_original_ep(int);
+
+typedef enum elf_iterator_res {
+	ELF_ITER_OK,
+	ELF_ITER_DONE,
+	ELF_ITER_ERROR,
+	ELF_ITER_NOTFOUND
+} elf_iterator_res_t;
 
 #endif

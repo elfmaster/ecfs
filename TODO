@@ -35,6 +35,12 @@ B.6. Add support for reconstruction .init_array and .fini_array sections
 B.7. Symbol resolution is currently done with linear lookups, instead we should
 switch to using the .gnu.hash.
 
+B.8. If .plt section isn't found we should not guess its size like we currently
+do by just giving a default value of 64 (Which is given for any sections we can't
+find the size of for one reason or another). Formula for calculating PLT size is:
+J (number of JUMP_SLOT relocations) * size of PLT entry size (Usually 16) + 3 reserved
+entries * size of PLT entry size.
+
 -- Easy
 
 C.1 Add feature to readecfs so that in the -g option it prints out the relocation

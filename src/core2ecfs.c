@@ -235,7 +235,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	}
 
 	/*
-	 *.note
+	 *.note.corefile (Original corefile notes, not exefile)
 	 */
 	shdr[scount].sh_type = SHT_NOTE;
 	shdr[scount].sh_offset = elfdesc->noteOffset;
@@ -247,8 +247,8 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	shdr[scount].sh_size = elfdesc->noteSize;
 	shdr[scount].sh_addralign = 4;
 	shdr[scount].sh_name = stoffset;
-	strcpy(&StringTable[stoffset], ".note");
-	stoffset += strlen(".note") + 1;
+	strcpy(&StringTable[stoffset], ".note.core");
+	stoffset += strlen(".note.core") + 1;
 	scount++;
 
 	if (dynamic) {
@@ -260,7 +260,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 		shdr[scount].sh_addr = smeta->hashVaddr;
 		shdr[scount].sh_flags = SHF_ALLOC;
 		shdr[scount].sh_info = 0;
-		shdr[scount].sh_link = 0;
+		shdr[scount].sh_link = scount + 1; /* References dynsym symbol table */
 		shdr[scount].sh_entsize = 0;
 		shdr[scount].sh_size = global_hacks.hash_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.hash_size;
 		shdr[scount].sh_addralign = 4;
@@ -333,7 +333,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 		shdr[scount].sh_offset = (__ELF_NATIVE_CLASS == 64) ? smeta->plt_relaOff : smeta->plt_relOff;
 		shdr[scount].sh_addr = (__ELF_NATIVE_CLASS == 64) ? smeta->plt_relaVaddr : smeta->plt_relVaddr;
 		shdr[scount].sh_flags = SHF_ALLOC;
-		shdr[scount].sh_info = 0;
+		shdr[scount].sh_info = scount + 2; /* NOTE: References .plt */
 		shdr[scount].sh_link = dynsym_index;
 		shdr[scount].sh_entsize = (__ELF_NATIVE_CLASS == 64) ? sizeof(Elf64_Rela) : sizeof(Elf32_Rel);
 		shdr[scount].sh_size = global_hacks.plt_rela_size <= 0 ? UNKNOWN_SHDR_SIZE : global_hacks.plt_rela_size;
@@ -710,14 +710,15 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	 * libc.so.data, .libc.so.relro, etc. (approx 3 mappings/sections for each lib)
 	 */
 		for (i = 0; i < notedesc->lm_files->libcount; i++) {
-			if (notedesc->lm_files->libs[i].preloaded) 
+			if (notedesc->lm_files->libs[i].preloaded) {
 				shdr[scount].sh_type = SHT_PRELOADED;
-			else
-			if (notedesc->lm_files->libs[i].injected)
+			} else if (notedesc->lm_files->libs[i].injected) {
 				shdr[scount].sh_type = SHT_INJECTED;
-			else
+			} else if (notedesc->lm_files->libs[i].dlopen) {
+				shdr[scount].sh_type = SHT_DLOPEN;
+			} else {
 				shdr[scount].sh_type = SHT_SHLIB;
-			//shdr[scount].sh_type = notedesc->lm_files->libs[i].injected ? SHT_INJECTED : SHT_SHLIB;
+			}
 			shdr[scount].sh_offset = notedesc->lm_files->libs[i].offset;
 			shdr[scount].sh_addr = notedesc->lm_files->libs[i].addr;
 			shdr[scount].sh_flags = SHF_ALLOC;
@@ -1072,11 +1073,11 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	fd = xopen(outfile, O_CREAT|O_TRUNC|O_RDWR);
 	chmod(outfile, S_IRWXU|S_IRWXG);
 	stat(elfdesc->path, &st); // stat the corefile
-	
+
 	ssize_t procfs_size = handle->procfs_size;
 	if (procfs_size < 0) 
 		log_msg(__LINE__, "ALERT: snapshotting procfs failed, section header .procfs.tgz will be empty");
-		
+
 	ecfs_file->prstatus_offset = st.st_size;
 	ecfs_file->prstatus_size = notedesc->thread_count * sizeof(struct elf_prstatus);
 	ecfs_file->fdinfo_offset = ecfs_file->prstatus_offset + notedesc->thread_count * sizeof(struct elf_prstatus);
@@ -1096,19 +1097,20 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	ecfs_file->procfs_offset = ecfs_file->fpregset_offset + ecfs_file->fpregset_size;
 	ecfs_file->procfs_size = (size_t)procfs_size;
 	ecfs_file->stb_offset = ecfs_file->procfs_offset + ecfs_file->procfs_size;
-	
+
 	/*
 	 * write original body of core file
 	 */	
 	/*
 	 * It is possible that a single write could be huge
 	 * i.e. larger than 2GB and will cause write to fail.
-	 * therefore lets do this in incremental writes.
+	 * therefore lets do this in incremental writes. Or
+	 * switch to IOV writes (i.e. writev). in the future.
 	 */	
 	const int CHUNK_SIZE = 0x100000;
 	size_t foffset = 0;
 	ssize_t len = st.st_size;
-	
+
 	do {
 		if (len < CHUNK_SIZE) {
 			if (write(fd, &elfdesc->mem[foffset], len) != len) {

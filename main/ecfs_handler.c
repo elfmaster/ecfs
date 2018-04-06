@@ -99,9 +99,8 @@ static int check_binary_arch(const char *path)
 
 int main(int argc, char **argv, char **envp)
 {
-	int c;
+	int c, i;
 	int pid = 0;
-	int heuristics = 0;
 	int text_all = 0;
 	char *outfile;
 	char *exename;
@@ -109,13 +108,12 @@ int main(int argc, char **argv, char **envp)
 	char *ecfs_worker;
 
 	if (argc < 2) {
-		fprintf(stdout, "Usage: %s [-peo]\n", argv[0]);
+		fprintf(stdout, "Usage: %s [-peoht]\n", argv[0]);
 		fprintf(stdout, "- To be used with /proc/sys/kernel/core_pattern\n");
 		fprintf(stdout, "[-p]   pid of process (Supplied by %%p format arg in core_pattern)\n");
 		fprintf(stdout, "[-e]   executable path (Supplied by %%e format arg in core_pattern)\n");
 		fprintf(stdout, "[-o]   output ecfs file\n\n");
 		fprintf(stdout, "[-t]	Write complete text image of all shlibs (vs. the default 4096 bytes)\n");
-		fprintf(stdout, "[-h]	Turn on heuristics for detecting .so injection attacks\n");
 		exit(0);
 	}
 	while ((c = getopt(argc, argv, "th:o:p:e:")) != -1) {
@@ -129,9 +127,6 @@ int main(int argc, char **argv, char **envp)
 			case 'p':
 				pid = atoi(optarg);
 				break;
-			case 'h':
-				heuristics = 1;
-				break;
 			case 't':
 				text_all = 1;
 				break;
@@ -140,15 +135,14 @@ int main(int argc, char **argv, char **envp)
 				exit(0);
 		}
 	}
-	
 	if (pid == 0 || exename == NULL || outfile == NULL) {
 		log_msg(__LINE__, "invalid command line args being used - pid: %d exename: %p outfile: %p", pid, exename, outfile);
 		exit(-1);
 	}
-	
+
 	exepath = alloca(512);
 	snprintf(exepath, 512, "/proc/%d/exe", pid);
-	
+
 	int arch = check_binary_arch(exepath);
 	if (arch == -1) {
 		log_msg(__LINE__, "FATAL: Could not detect if process was using 32bit or 64bit ELF, bailing out...");
@@ -168,7 +162,10 @@ int main(int argc, char **argv, char **envp)
 			ecfs_worker = strdup(ECFS_WORKER_64);
 			break;
 	}
-	
+
+	for (i = 0; i < argc; i++)
+		log_msg(__LINE__, "argv[%d]: %s\n", i, argv[i]);
+
 	load_ecfs_worker(argv, envp, ecfs_worker);
 	umount(ECFS_RAMDISK_DIR);
 	exit(0);

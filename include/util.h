@@ -62,6 +62,7 @@ void ecfs_print(char *fmt, ...);
 int octal2binary(int);
 int octal2decimal(int);
 void log_msg(unsigned int lineno, char *fmt, ...);
+void log_msg2(uint32_t lineno, char *, char *, ...);
 void ffperror(const char *s, int lineno);
 
 #endif
