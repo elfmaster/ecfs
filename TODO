@@ -7,6 +7,8 @@ injected in some way other than dlopen() and LD_PRELOAD.
 probably with mmap() or __libc_dlopen_mode() or ptrace
 shellcode. We need to switch over to some code that uses
 ld.so.cache for speed.
+Status: Completed, replaced heuristics.c with dlopen.c in
+commit: 0f8bcd7ef4869d12ba1b7c284ae80811765dc23c
 
 A.2. Currently in libecfs when retrieving the GOT info there
 are GOT entries that are filled with addresses other than
@@ -14,6 +16,7 @@ what we guessed should be there by looking at the PLT and
 symbol table. Even if there is no shared library injection
 we get mismatched addresses in our GOT info code in libecfs
 this must be fixed. 
+Status: Needs investigation
 
 A.3. Currently some injected objects (SHT_INJECTED) such as when
 an ET_REL has been found in the process. We create a section
@@ -21,25 +24,31 @@ header that only covers the text of that object, and not the
 data segment. This is especially important for injected executables
 or shared objects, since often we want to extract these for
 analysis after the fact.
+Status: Incomplete
 
 -- Medium issues
 
 B.4. Add code to readecfs so that it builds section headers on extracted
 objects 'with readecfs -O' option. 
+status incomplete
 
 B.5. Enhance SHT_INJECTION so that when it detects ELF objects (in core_accessors.c)
 that it also marks the data segment as INJECTED.
+status: incomplete
 
 B.6. Add support for reconstruction .init_array and .fini_array sections
+status: complete :)
 
 B.7. Symbol resolution is currently done with linear lookups, instead we should
 switch to using the .gnu.hash.
+status: incomplete
 
 B.8. If .plt section isn't found we should not guess its size like we currently
 do by just giving a default value of 64 (Which is given for any sections we can't
 find the size of for one reason or another). Formula for calculating PLT size is:
 J (number of JUMP_SLOT relocations) * size of PLT entry size (Usually 16) + 3 reserved
 entries * size of PLT entry size.
+status: incomplete
 
 -- Easy
 
