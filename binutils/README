@@ -1,0 +1,5 @@
+
+https://github.com/elfmaster/binutils.ecfs
+
+Is a modified binutils that makes only a few changes to readelf, so that the ECFS section types are recognized
+and displayed.
