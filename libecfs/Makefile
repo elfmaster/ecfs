@@ -1,27 +1,27 @@
 V = dev
 B = 64
 
-dev_CFLAGS = -DDEBUG -g -D_GNU_SOURCE -Wall -m${B}
+dev_CFLAGS = -fPIC -pie -DDEBUG -g -D_GNU_SOURCE -Wall -m${B}
 dev_LDFLAGS = -ldwarf -lelf
 dev_TGT = ${BINS}
 dev_CC = clang
 
-asan_CFLAGS = -ggdb -fsanitize=address -O0 -fno-omit-frame-pointer -m${B}
+asan_CFLAGS = -fPIC -pie -ggdb -fsanitize=address -O0 -fno-omit-frame-pointer -m${B}
 asan_LDFLAGS = -ldwarf -lelf
 asan_TGT = ${BINS}
 asan_CC = clang
 
-perf_CFLAGS = -g -O3 -fPIC -Wall -m${B}
+perf_CFLAGS = -fPIC -pie -g -O3 -fPIC -Wall -m${B}
 perf_LDFLAGS = -ldwarf -lelf
 perf_TGT = ${BINS}
 perf_CC = gcc
 
-prod_CFLAGS = -O3 -Wall -DNDEBUG -D_FORTIFY_SOURCE=2 -fPIC -m${B}
+prod_CFLAGS = -O3 -fPIC -pie -Wall -DNDEBUG -D_FORTIFY_SOURCE=2 -m${B}
 prod_LDFLAGS = -ldwarf -lelf -pie
 prod_TGT = ${BINS}
 prod_CC = gcc
 
-shared_CFLAGS = -fPIC -m${B}
+shared_CFLAGS = -fPIC -pie -m${B}
 shared_LDFLAGS = -shared -Wl,-soname,libecfsreader${B}.so.1 -lc -m${B}
 shared_TGT = ${BIN_DIR}/${V}/${B}/libecfsreader${B}.so.1
 shared_CC = gcc

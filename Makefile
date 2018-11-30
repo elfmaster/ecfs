@@ -1,27 +1,27 @@
-V = dev
+V = prod
 B = 64
 
-dev_CFLAGS = -DDEBUG -g -D_GNU_SOURCE -Wall -m${B}
+dev_CFLAGS = -fPIC -pie -DDEBUG -g -D_GNU_SOURCE -Wall -m${B}
 dev_LDFLAGS = -ldwarf -lelf -lm
 dev_TGT = ${BINS}
-dev_CC = clang
+dev_CC = gcc
 
-asan_CFLAGS = -ggdb -fsanitize=address -O0 -fno-omit-frame-pointer -m${B}
+asan_CFLAGS = -ggdb -fPIC -pie -fsanitize=address -O0 -fno-omit-frame-pointer -m${B}
 asan_LDFLAGS = -ldwarf -lelf -lm
 asan_TGT = ${BINS}
 asan_CC = clang
 
-perf_CFLAGS = -g -O3 -Wall -m${B}
+perf_CFLAGS = -fPIC -pie -g -O3 -Wall -m${B}
 perf_LDFLAGS = -ldwarf -lelf -lm
 perf_TGT = ${BINS}
 perf_CC = gcc
 
-prod_CFLAGS = -D_GNU_SOURCE -m${B}
+prod_CFLAGS = -fPIC -pie -D_GNU_SOURCE -m${B}
 prod_LDFLAGS = -ldwarf -lelf -lm
 prod_TGT = ${BINS}
 prod_CC = gcc
 
-shared_CFLAGS = -fPIC -m${B}
+shared_CFLAGS = -fPIC -pie -m${B}
 shared_LDFLAGS = -shared -Wl,-soname,libecfs${B}.so.1 -m${B}
 shared_TGT = ${BIN_DIR}/${V}/${B}/libecfs${B}.so.1
 shared_CC = gcc

@@ -206,7 +206,7 @@ int create_tmp_ramdisk(size_t gigs)
 
 	if (access(ECFS_RAMDISK_DIR, F_OK) != 0) {
 #if DEBUG
-		log_msg(__LINE__, "%s did not exist, so creating it.");
+		log_msg(__LINE__, "%s did not exist, so creating it.", ECFS_RAMDISK_DIR);
 #endif
 		mkdir(ECFS_RAMDISK_DIR, S_IRWXU|S_IRWXG);
 	}

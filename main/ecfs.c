@@ -314,7 +314,7 @@ int main(int argc, char **argv)
 	/*
 	 * The following 3 assignments must be re-assigned during reload_core_file()
 	 */
-	elfdesc->arch = elfdesc->ehdr->e_machine == EM_X86_64 ? x64 : i386;
+	elfdesc->arch = elfdesc->ehdr->e_machine == EM_X86_64 ? x64__ : i386__;
 	elfdesc->exe_path = xstrdup(memdesc->exe_path); /* not the best abstractions */
 	elfdesc->runtime_base = memdesc->text.base;
 #if DEBUG
@@ -505,7 +505,7 @@ int main(int argc, char **argv)
 			log_msg2(__LINE__, __FILE__, "elfdesc->exe_path passed: %s\n", elfdesc->exe_path);
 			elfdesc->runtime_base = memdesc->text.base;
 			log_msg2(__LINE__, __FILE__, "elfdesc->runtime_base: %lx\n", elfdesc->runtime_base);
-			elfdesc->arch = elfdesc->ehdr->e_machine == EM_X86_64 ? x64 : i386;
+			elfdesc->arch = elfdesc->ehdr->e_machine == EM_X86_64 ? x64__ : i386__;
 			log_msg2(__LINE__, __FILE__, "elfdesc->arch: %d\n", elfdesc->arch);
 			if (mark_dlopen_libs(notedesc, elfdesc) == false)
 				log_msg2(__LINE__, __FILE__, "non fatal: mark_dlopen_libs failed\n");

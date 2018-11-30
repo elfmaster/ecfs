@@ -159,10 +159,10 @@ static inline bool
 ldso_cache_check_flags(struct elf_shared_object_iterator *iter,
     uint32_t flags)
 {
-	if (iter->obj->arch == i386) {
+	if (iter->obj->arch == i386__) {
 		if (flags == 0x803)
 			return true;
-	} else if (iter->obj->arch == x64) {
+	} else if (iter->obj->arch == x64__) {
 		if (flags == 0x303) {
 			return true;
 		}

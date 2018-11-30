@@ -308,8 +308,8 @@ struct coredump_params {
 };
 
 typedef enum elf_arch {
-	i386,
-	x64,
+	i386__,
+	x64__,
 	unsupported
 } elf_arch_t;
 
