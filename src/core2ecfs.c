@@ -732,9 +732,11 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 			case PF_R|PF_X:
 				/* .text of library; i.e libc.so.text */
 				str = xfmtstrdup("%s.text", notedesc->lm_files->libs[i].name);
+				shdr[scount].sh_flags |= SHF_EXECINSTR;
 				break;
 			case PF_R|PF_W:
 				str = xfmtstrdup("%s.data", notedesc->lm_files->libs[i].name);
+				shdr[scount].sh_flags |= SHF_WRITE;
 				break;
 			case PF_R:
 				str = xfmtstrdup("%s.relro", notedesc->lm_files->libs[i].name);
