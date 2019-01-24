@@ -1238,6 +1238,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 		module.len = current->module_size;
 		module.base_vaddr = current->base_vaddr;
 		module.path_len = strlen(current->path);
+		log_msg(__LINE__, "sizeof module: %d\n", sizeof(module));
 		b += write(fd, &module, sizeof(module));
 		log_msg(__LINE__, "Writing path: %s\n", current->path);
 		b += write(fd, current->path, strlen(current->path) + 1);

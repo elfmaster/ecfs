@@ -301,7 +301,7 @@ struct shlib_module {
 	uint64_t base_vaddr;
 	uint64_t flags; /* SHT_DLOPEN | SHT_INJECTED | SHT_PRELOADED */
 	char path[0];
-};
+} __attribute__((packed));
 
 typedef struct notedesc {
 	ElfW(Nhdr) * notes;

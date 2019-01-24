@@ -8,7 +8,7 @@ ecfs_elf_t * ecfs_load_file(const char *path)
 	ElfW(Ehdr) *ehdr;
 	ElfW(Phdr) *phdr;
 	ElfW(Shdr) *shdr;
-	int fd, i;
+	int fd, i, j;
 	struct stat st;
 
 	fd = xopen(path, O_RDONLY);
@@ -124,15 +124,26 @@ ecfs_elf_t * ecfs_load_file(const char *path)
 	/*
 	 * Get module list
 	 */
+	printf("Iterating over module list\n");
 	for (i = 0; i < ehdr->e_shnum; i++) {
 		if (strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".modules") != 0)
 			continue;
-		struct shlib_module *m = (struct shlib_module *)&mem[shdr[i].sh_offset];
+		uint64_t *module_count = (uint64_t *)&mem[shdr[i].sh_offset];
+		struct shlib_module *m = (struct shlib_module *)&mem[shdr[i].sh_offset + sizeof(uint64_t)];
+		uint8_t *ptr;
+	
+		printf("module_count: %lu\n", *module_count);
+		for (j = 0; j < *module_count; j++) {
+			struct shlib_module_node *n = malloc(sizeof(*n));
 
-		SLIST_INSERT_HEAD(&ecfs->slists.modules, m, _linkage);
-		m += m + sizeof(*m) + m->path_len + 1;
+			memcpy(n, m, sizeof(*m));
+			SLIST_INSERT_HEAD(&ecfs->slists.modules, n, _linkage);
+			printf("Incrementing ptr by %d + (%s):%d bytes\n",
+			    sizeof(*m), m->path, m->path_len + 1);
+			ptr = (uint8_t *)m + sizeof(*m) + m->path_len + 1;
+			m = (struct shlib_module *)ptr;
+		}
 	}
-
 	/*
 	 * Get .personality info
 	 */

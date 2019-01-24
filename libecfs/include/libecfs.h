@@ -108,7 +108,7 @@ typedef struct elf_shlib_node {
 	uint64_t shlib_base;
 	uint64_t text_memsz;
 	uint64_t data_memsz;
-};
+} elf_shlib_node_t;
 
 typedef struct ecfs_elf {
 	uint8_t *mem;          /* raw memory pointer */

@@ -184,7 +184,7 @@ static bool dlopen_symbol_found(elfdesc_t *obj)
 		    "dlopen_symbol_found() failing for path: %s", exe_path);
 		return false;
 	}
-	
+
 	for (i = 0; i < symcount; i++) {
 		if (strcmp(&dynstr[symtab[i].st_name], "dlopen") == 0)
 			return true;
