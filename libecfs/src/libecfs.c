@@ -1,7 +1,7 @@
 #include "../include/libecfs.h"
 #include "../include/util.h"
 
-ecfs_elf_t * load_ecfs_file(const char *path)
+ecfs_elf_t * ecfs_load_file(const char *path)
 {
 	ecfs_elf_t *ecfs = (ecfs_elf_t *)heapAlloc(sizeof(ecfs_elf_t));
 	uint8_t *mem;
@@ -122,6 +122,18 @@ ecfs_elf_t * load_ecfs_file(const char *path)
 	}
 
 	/*
+	 * Get module list
+	 */
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".modules") != 0)
+			continue;
+		struct shlib_module *m = (struct shlib_module *)&mem[shdr[i].sh_offset];
+
+		SLIST_INSERT_HEAD(&ecfs->slists.modules, m, _linkage);
+		m += m + sizeof(*m) + m->path_len + 1;
+	}
+
+	/*
 	 * Get .personality info
 	 */
 	for (i = 0; i < ehdr->e_shnum; i++) {
@@ -165,13 +177,13 @@ fail:
 	return NULL;
 }	
 
-int unload_ecfs_file(ecfs_elf_t *desc)
+int ecfs_unload_file(ecfs_elf_t *desc)
 {
 	return munmap(desc->mem, desc->filesize);
 }
 
 
-int get_fd_info(ecfs_elf_t *desc, struct fdinfo **fdinfo)
+int ecfs_fd_info(ecfs_elf_t *desc, struct fdinfo **fdinfo)
 {
 	char *StringTable = desc->shstrtab;
 	ElfW(Shdr) *shdr = desc->shdr;
@@ -186,7 +198,7 @@ int get_fd_info(ecfs_elf_t *desc, struct fdinfo **fdinfo)
 	return -1;
 }
 
-int get_prstatus_structs(ecfs_elf_t *desc, struct elf_prstatus **prstatus)
+int ecfs_prstatus_structs(ecfs_elf_t *desc, struct elf_prstatus **prstatus)
 {
 	char *StringTable = desc->shstrtab;
 	ElfW(Shdr) *shdr = desc->shdr;
@@ -201,7 +213,7 @@ int get_prstatus_structs(ecfs_elf_t *desc, struct elf_prstatus **prstatus)
 	return -1;
 }
 
-int get_thread_count(ecfs_elf_t *desc)
+int ecfs_thread_count(ecfs_elf_t *desc)
 {
 	char *StringTable = desc->shstrtab;
 	ElfW(Shdr) *shdr = desc->shdr;
@@ -214,7 +226,7 @@ int get_thread_count(ecfs_elf_t *desc)
 	return -1;
 }
 		
-char * get_exe_path(ecfs_elf_t *desc)
+char * ecfs_exe_path(ecfs_elf_t *desc)
 {
 	char *StringTable = desc->shstrtab;
 	ElfW(Shdr) *shdr = desc->shdr;
@@ -232,7 +244,7 @@ char * get_exe_path(ecfs_elf_t *desc)
 }
 
 
-int get_dynamic_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
+int ecfs_dynamic_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
 {
 	int i, j;
 	ElfW(Ehdr) *ehdr = desc->ehdr;
@@ -261,7 +273,7 @@ int get_dynamic_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
 
 
 
-int get_siginfo(ecfs_elf_t *desc, siginfo_t *siginfo)
+int ecfs_siginfo(ecfs_elf_t *desc, siginfo_t *siginfo)
 {
 	char *StringTable = desc->shstrtab;
 	ElfW(Shdr) *shdr = desc->shdr;
@@ -277,7 +289,7 @@ int get_siginfo(ecfs_elf_t *desc, siginfo_t *siginfo)
 	return -1;
 }
 
-ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr, uint64_t *addr) 
+ssize_t ecfs_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr, uint64_t *addr) 
 {
 	char *StringTable = desc->shstrtab;
 	ElfW(Shdr) *shdr = desc->shdr;
@@ -295,7 +307,7 @@ ssize_t get_stack_ptr(ecfs_elf_t *desc, uint8_t **ptr, uint64_t *addr)
 	return -1;
 }
 
-ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr, uint64_t *addr)
+ssize_t ecfs_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr, uint64_t *addr)
 {
 	char *StringTable = desc->shstrtab;
 	ElfW(Shdr) *shdr = desc->shdr;
@@ -314,7 +326,7 @@ ssize_t get_heap_ptr(ecfs_elf_t *desc, uint8_t **ptr, uint64_t *addr)
 }
 
 
-int get_local_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
+int ecfs_local_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
 {
 	int i, j;
 	ElfW(Ehdr) *ehdr = desc->ehdr;
@@ -342,7 +354,7 @@ int get_local_symbols(ecfs_elf_t *desc, ecfs_sym_t **syms)
 }
 						
 
-ssize_t get_ptr_for_va(ecfs_elf_t *desc, unsigned long vaddr, uint8_t **ptr)
+ssize_t ecfs_ptr_for_va(ecfs_elf_t *desc, unsigned long vaddr, uint8_t **ptr)
 {
 	ElfW(Ehdr) *ehdr = desc->ehdr;
 	ElfW(Phdr) *phdr = desc->phdr;
@@ -362,9 +374,9 @@ ssize_t get_ptr_for_va(ecfs_elf_t *desc, unsigned long vaddr, uint8_t **ptr)
 }
 
 /*
- * i.e. len = get_section_pointer(desc, ".bss", &ptr);
+ * i.e. len = ecfs_section_pointer(desc, ".bss", &ptr);
  */
-ssize_t get_section_pointer(ecfs_elf_t *desc, const char *name, uint8_t **ptr)
+ssize_t ecfs_section_pointer(ecfs_elf_t *desc, const char *name, uint8_t **ptr)
 {
 	char *StringTable = desc->shstrtab;
 	ElfW(Shdr) *shdr = desc->shdr;
@@ -383,9 +395,9 @@ ssize_t get_section_pointer(ecfs_elf_t *desc, const char *name, uint8_t **ptr)
 }
 
 /*
- * i.e len = get_section_size(desc, ".bss");
+ * i.e len = ecfs_section_size(desc, ".bss");
  */
-ssize_t get_section_size(ecfs_elf_t *desc, const char *name)
+ssize_t ecfs_section_size(ecfs_elf_t *desc, const char *name)
 {
 	char *StringTable = desc->shstrtab;
 	ElfW(Shdr) *shdr = desc->shdr;
@@ -401,7 +413,7 @@ ssize_t get_section_size(ecfs_elf_t *desc, const char *name)
 	return -1;
 }
 
-unsigned long get_section_va(ecfs_elf_t *desc, const char *name)
+unsigned long ecfs_section_va(ecfs_elf_t *desc, const char *name)
 {
 	char *StringTable = desc->shstrtab;
 	ElfW(Shdr) *shdr = desc->shdr;
@@ -419,37 +431,37 @@ unsigned long get_section_va(ecfs_elf_t *desc, const char *name)
 
 
 
-unsigned long get_text_va(ecfs_elf_t *desc)
+unsigned long ecfs_text_va(ecfs_elf_t *desc)
 {
 	return desc->textVaddr;
 }
 
-unsigned long get_data_va(ecfs_elf_t *desc)
+unsigned long ecfs_data_va(ecfs_elf_t *desc)
 {
 	return desc->dataVaddr;
 }
 
-size_t get_text_size(ecfs_elf_t *desc)
+size_t ecfs_text_size(ecfs_elf_t *desc)
 {
 	return desc->textSize;
 }
 
-size_t get_data_size(ecfs_elf_t *desc)
+size_t ecfs_data_size(ecfs_elf_t *desc)
 {
 	return desc->dataSize;
 }
 
-unsigned long get_plt_va(ecfs_elf_t *desc)
+unsigned long ecfs_plt_va(ecfs_elf_t *desc)
 {
 	return desc->pltVaddr;
 }
 
-unsigned long get_plt_size(ecfs_elf_t *desc)
+unsigned long ecfs_plt_size(ecfs_elf_t *desc)
 {
 	return desc->pltSize;
 }
 
-int get_auxiliary_vector32(ecfs_elf_t *desc, Elf32_auxv_t **auxv)
+int ecfs_auxiliary_vector32(ecfs_elf_t *desc, Elf32_auxv_t **auxv)
 {
 	ElfW(Ehdr) *ehdr = desc->ehdr;
 	ElfW(Shdr) *shdr = desc->shdr;
@@ -466,7 +478,7 @@ int get_auxiliary_vector32(ecfs_elf_t *desc, Elf32_auxv_t **auxv)
 	return ac;
 }
 
-int get_auxiliary_vector64(ecfs_elf_t *desc, Elf64_auxv_t **auxv)
+int ecfs_auxiliary_vector64(ecfs_elf_t *desc, Elf64_auxv_t **auxv)
 {
 	ElfW(Ehdr) *ehdr = desc->ehdr;
 	ElfW(Shdr) *shdr = desc->shdr;
@@ -483,7 +495,7 @@ int get_auxiliary_vector64(ecfs_elf_t *desc, Elf64_auxv_t **auxv)
 	return ac;
 }
 	
-int get_shlib_mapping_names(ecfs_elf_t *desc, char ***shlvec)
+int ecfs_shlib_mapping_names(ecfs_elf_t *desc, char ***shlvec)
 {
 	int i, count, c;	
 	char *shstrtab = desc->shstrtab;
@@ -513,7 +525,7 @@ int get_shlib_mapping_names(ecfs_elf_t *desc, char ***shlvec)
 		unsigned long shl_entry_va; // the shared library address the GOT should point to if it has been resolved
 } pltgot_info_t;
 */
-ssize_t get_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo)
+ssize_t ecfs_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo)
 {	
 	int i;
 	unsigned long *GOT = NULL;
@@ -522,9 +534,9 @@ ssize_t get_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo)
 	ElfW(Addr) pltVaddr;
 	size_t pltSize;
 	
-	if ((pltVaddr = get_plt_va(desc)) == 0)
+	if ((pltVaddr = ecfs_plt_va(desc)) == 0)
 		return -1;
-	if ((pltSize = get_plt_size(desc)) == 0)
+	if ((pltSize = ecfs_plt_size(desc)) == 0)
 		return -1;
 	if (desc->plt_rela_count == 0 || desc->plt_rela == NULL || symtab == NULL)
 		return -1;
@@ -537,18 +549,17 @@ ssize_t get_pltgot_info(ecfs_elf_t *desc, pltgot_info_t **pginfo)
 		(*pginfo)[i].got_entry_va = (unsigned long)GOT[i];
 		 sym = (ElfW(Sym) *)&symtab[ELF64_R_SYM(desc->plt_rela[i].r_info)];
 		(*pginfo)[i].shl_entry_va = sym->st_value;
-		 // the + 6 is because it must point to the push instruction in the plt entry
-		(*pginfo)[i].plt_entry_va = (pltVaddr + 6); // + (desc->pie ? desc->textVaddr : 0); 
+		(*pginfo)[i].plt_entry_va = (pltVaddr); // + (desc->pie ? desc->textVaddr : 0); 
 		pltVaddr += 16;
 	}
 	return i;
 }
 
-unsigned long get_fault_location(ecfs_elf_t *desc)
+unsigned long ecfs_fault_location(ecfs_elf_t *desc)
 {
 	siginfo_t siginfo;
 	
-	if (get_siginfo(desc, &siginfo) < 0)
+	if (ecfs_siginfo(desc, &siginfo) < 0)
 		return 0;
 
 	return (unsigned long)siginfo.si_addr;
@@ -557,7 +568,7 @@ unsigned long get_fault_location(ecfs_elf_t *desc)
 /*
  * Returns argc and allocated and fills argv
  */
-int get_arg_list(ecfs_elf_t *desc, char ***argv)
+int ecfs_arg_list(ecfs_elf_t *desc, char ***argv)
 {
 	int i, argc, c;
 	ElfW(Ehdr) *ehdr = desc->ehdr;
@@ -584,7 +595,7 @@ int get_arg_list(ecfs_elf_t *desc, char ***argv)
 	return -1;
 }
 
-char * get_section_name_by_addr(ecfs_elf_t *desc, unsigned long addr)
+char * ecfs_section_name_by_addr(ecfs_elf_t *desc, unsigned long addr)
 {
 	ElfW(Ehdr) *ehdr = desc->ehdr;
 	ElfW(Shdr) *shdr = desc->shdr;
@@ -615,3 +626,14 @@ ecfs_phdr_iterator_next(ecfs_phdr_iter_t *iter, struct elf_phdr *entry)
 	return ECFS_ITER_OK;
 }
 
+/*
+ * How many shared objects (injected, dlopen, ldpreload'd or otherwise)
+ * are in the process. Each shared object will have multiple entries, one
+ * for each segment, but we only count 1 module per shared library name.
+ */
+bool
+ecfs_shlib_iterator_init(ecfs_elf_t *obj, ecfs_shlib_iter_t *iter)
+{
+
+	return true;
+}

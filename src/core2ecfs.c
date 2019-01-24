@@ -419,7 +419,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	 * containing only the functions of the program.
 	 */
 	shdr[scount].sh_type = SHT_PROGBITS;
-	shdr[scount].sh_offset = elfdesc->textOffset + global_hacks.text_vaddr - elfdesc->textVaddr;     
+	shdr[scount].sh_offset = elfdesc->textOffset + global_hacks.text_vaddr - elfdesc->textVaddr;	 
 	shdr[scount].sh_addr = global_hacks.text_vaddr;
 	shdr[scount].sh_size = global_hacks.text_size;
 	shdr[scount].sh_link = 0;
@@ -454,7 +454,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 		 */
 		shdr[scount].sh_type = SHT_PROGBITS;
 		shdr[scount].sh_offset = elfdesc->ehframeOffset;
-		shdr[scount].sh_addr = elfdesc->ehframe_Vaddr;    
+		shdr[scount].sh_addr = elfdesc->ehframe_Vaddr;	  
 		shdr[scount].sh_flags = SHF_ALLOC|SHF_EXECINSTR;
 		shdr[scount].sh_info = 0;
 		shdr[scount].sh_link = 0;
@@ -906,6 +906,22 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	scount++;
 
 	/*
+	 * .modules
+	 */
+	shdr[scount].sh_type = SHT_LOUSER;
+	shdr[scount].sh_offset = ecfs_file->modules_offset;
+	shdr[scount].sh_addr = 0;
+	shdr[scount].sh_flags = 0;
+	shdr[scount].sh_info = 0;
+	shdr[scount].sh_entsize = 1;
+	shdr[scount].sh_size = ecfs_file->modules_size;
+	shdr[scount].sh_addralign = 0x1;
+	shdr[scount].sh_name = stoffset;
+	strcpy(&StringTable[stoffset], ".modules");
+	stoffset += strlen(".modules") + 1;
+	scount++;
+
+	/*
 	 * .stack
 	 */
 	shdr[scount].sh_type = SHT_PROGBITS; // we change this to progbits cuz we want to be able to see data
@@ -921,7 +937,6 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	strcpy(&StringTable[stoffset], ".stack");
 	stoffset += strlen(".stack") + 1;
 	scount++;
-
 	/*
 	 * .vdso
 	 */
@@ -1045,7 +1060,7 @@ static int build_section_headers(int fd, const char *outfile, handle_t *handle, 
 	ehdr->e_shentsize = sizeof(ElfW(Shdr));
 	ehdr->e_shnum = scount;
 	ehdr->e_type = ET_NONE;
-	
+
 	msync(mem, 4096, MS_SYNC);
 	munmap(mem, 4096);
 
@@ -1068,6 +1083,9 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	uint8_t *mem = elfdesc->mem;
 	ecfs_file_t *ecfs_file = heapAlloc(sizeof(ecfs_file_t));
 	int fd, ret;
+	bool module_cache_fail = false, found_base = false;
+	struct hsearch_data module_cache;
+	struct shlib_module module;
 
 #if DEBUG
 	log_msg(__LINE__, "core2ecfs() processing outfile: %s", outfile);
@@ -1098,7 +1116,14 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	ecfs_file->fpregset_size = notedesc->thread_count * sizeof(elf_fpregset_t);
 	ecfs_file->procfs_offset = ecfs_file->fpregset_offset + ecfs_file->fpregset_size;
 	ecfs_file->procfs_size = (size_t)procfs_size;
-	ecfs_file->stb_offset = ecfs_file->procfs_offset + ecfs_file->procfs_size;
+	ecfs_file->modules_offset = ecfs_file->procfs_offset + ecfs_file->procfs_size;
+	log_msg(__LINE__, "module count: %lu\n", notedesc->lm_files->module_count);
+	ecfs_file->modules_size = notedesc->lm_files->module_count * sizeof(struct shlib_module);
+	log_msg(__LINE__, "modules_size: %lu\n", ecfs_file->modules_size);
+	ecfs_file->modules_size += sizeof(uint64_t); /* First part of section contains the number of entries */
+	ecfs_file->modules_size += notedesc->lm_files->total_string_byte_len;
+	log_msg(__LINE__, "TOTAL module_size: %lu\n", ecfs_file->modules_size);
+	ecfs_file->stb_offset = ecfs_file->modules_offset + ecfs_file->modules_size;
 
 	/*
 	 * write original body of core file
@@ -1142,7 +1167,6 @@ int core2ecfs(const char *outfile, handle_t *handle)
 			exit_failure(-1);
 		}
 	}
-	
 	/*
 	 * write fdinfo structs
 	 */
@@ -1161,7 +1185,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 	 * write auxv data
 	 */
 	if( write(fd, notedesc->auxv, notedesc->auxv_size) == -1) {
-			log_msg(__LINE__, "write %s", strerror(errno));
+		log_msg(__LINE__, "write %s", strerror(errno));
 	}
 	
 	/*
@@ -1194,7 +1218,7 @@ int core2ecfs(const char *outfile, handle_t *handle)
 			log_msg(__LINE__, "write %s", strerror(errno));
 		}
 	}
-	
+
 	/* 
 	 * write .procfs.tgz
 	 */
@@ -1204,13 +1228,30 @@ int core2ecfs(const char *outfile, handle_t *handle)
 		}
 	}
 
+	struct module_node *current;
+	ssize_t b = 0;
+
+	b += write(fd, &notedesc->lm_files->module_count, sizeof(uint64_t));
+	LIST_FOREACH(current, &elfdesc->list.modules, _linkage) {
+		log_msg(__LINE__, "Writing out module from: %s at base: %#lx\n",
+		    current->path, current->base_vaddr);
+		module.len = current->module_size;
+		module.base_vaddr = current->base_vaddr;
+		module.path_len = strlen(current->path);
+		b += write(fd, &module, sizeof(module));
+		log_msg(__LINE__, "Writing path: %s\n", current->path);
+		b += write(fd, current->path, strlen(current->path) + 1);
+		memset(&module, 0, sizeof(module));
+	}
+	log_msg(__LINE__,
+	    ".modules section written: %ld bytes\n", b);
 	/*
 	 * Build section header table
 	 */
 	int shnum = build_section_headers(fd, outfile, handle, ecfs_file);
-	
+
 	close(fd);
-	
+
 	/*
 	 * Now remap our new file to make further edits.
 	 */

@@ -66,6 +66,8 @@
 
 #define ECFS_EXCEPTION 0x13 // to be returned in case of strange exceptions
 
+#define MAX_MODULE_COUNT 4096
+
 /*
  * Used for creating file i/o ramdisk
  */
@@ -238,6 +240,7 @@ typedef struct ecfs_file_fmt {
 	loff_t fpregset_offset;
 	loff_t xstate_offset;
 	loff_t procfs_offset;
+	loff_t modules_offset;
 	size_t prstatus_size;
 	size_t prpsinfo_size;
 	size_t fdinfo_size;
@@ -249,6 +252,7 @@ typedef struct ecfs_file_fmt {
 	size_t fpregset_size;
 	size_t xstate_size;
 	size_t procfs_size;
+	size_t modules_size;
 	int thread_count;
 } ecfs_file_t;
 
@@ -278,7 +282,25 @@ struct lib_mappings {
 		char name[MAX_LIB_NAME + 1];
 		char path[MAX_LIB_PATH + 1];
 	} libs[4096];
-	int libcount;
+	uint64_t libcount;
+	uint64_t module_count;
+	size_t total_string_byte_len;
+};
+
+/*
+ * We create a section of type .shlib_modules
+ * which is very similar to notes NT_FILES, but
+ * without having t parse the note segment.
+ *
+ * for (i = 0; i < shlib_count; i++)
+ *     struct shlib_module *next = cur + sizeof(struct shlib_module) + cur->path_len + 1;
+ */
+struct shlib_module {
+	uint32_t path_len;
+	uint32_t len; /* Size of text + data in memory combined */
+	uint64_t base_vaddr;
+	uint64_t flags; /* SHT_DLOPEN | SHT_INJECTED | SHT_PRELOADED */
+	char path[0];
 };
 
 typedef struct notedesc {
@@ -312,6 +334,13 @@ typedef enum elf_arch {
 	x64__,
 	unsupported
 } elf_arch_t;
+
+typedef struct module_node {
+	char *path;
+	size_t module_size;
+	uint64_t base_vaddr;
+	LIST_ENTRY(module_node) _linkage;
+} module_node_t;
 
 /*
  * elfdesc use to only describe the new ecfs file
@@ -372,6 +401,7 @@ typedef struct elfdesc {
 		 */
 		LIST_HEAD(elf_shared_object_list, elf_shared_object_node) shared_objects;
 		LIST_HEAD(ldso_needed_list, elf_shared_object_node) needed; /* all .so deps */
+		LIST_HEAD(module_list, module_node) modules;
 	} list;
 } elfdesc_t;
 

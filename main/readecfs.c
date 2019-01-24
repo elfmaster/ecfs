@@ -53,7 +53,7 @@ static char * lookup_dsym(unsigned long addr, ecfs_elf_t *desc)
 	ecfs_sym_t *syms;
 	char *symname = "<unknown>";
 
-	ret = get_dynamic_symbols(desc, &syms);
+	ret = ecfs_dynamic_symbols(desc, &syms);
 	for (i = 0; i < ret; i++)
 		if (syms[i].symval == addr) {
 			symname = strdup(&desc->dynstr[syms[i].nameoffset]);
@@ -202,13 +202,13 @@ usage:
 		}
 	}
 
-	desc = load_ecfs_file(argv[2]);
+	desc = ecfs_load_file(argv[2]);
 	if (desc == NULL) {
 		printf("Unable to load ecfs file: %s (Is it an ecfs file?)\n", argv[2]);
 		exit(-1);
 	}
 	
-	path = get_exe_path(desc);
+	path = ecfs_exe_path(desc);
 	if (path == NULL) {
 		printf("Unable to retrieve executable path (is this an ecfs file?)\n");
 		exit(-1);
@@ -218,7 +218,7 @@ usage:
 	printf("- Executable path (.exepath): %s\n", path);
 	printf("- Command line: ");
 	char **argvec;
-	int argcount = get_arg_list(desc, &argvec);
+	int argcount = ecfs_arg_list(desc, &argvec);
 	for (i = 0; i < argcount; i++) 
 		printf("%s ", argvec[i]);
 	printf("\n");
@@ -234,16 +234,16 @@ usage:
 	}
 		
 	if (opts.ecfs_stuff || opts.all) {
-		unsigned long fault = get_fault_location(desc);
+		unsigned long fault = ecfs_fault_location(desc);
 		printf("- Fault location: 0x%lx\n", fault);
 	}
 
 	if (opts.ecfs_stuff || opts.all) {
-		ret = get_thread_count(desc);
+		ret = ecfs_thread_count(desc);
 		printf("- Thread count (.prstatus): %d\n", ret);
 	
 		printf("- Thread info (.prstatus)\n");
-		ret = get_prstatus_structs(desc, &prstatus);
+		ret = ecfs_prstatus_structs(desc, &prstatus);
 		for (i = 0; i < ret; i++) 
 			printf("\t[thread[%d] pid: %d\n", i + 1, prstatus[i].pr_pid);
 		printf("\n");
@@ -252,11 +252,11 @@ usage:
 			print_registers(&prstatus[i].pr_reg);
 			printf("\n");
 		}
-		ret = get_siginfo(desc, &siginfo);
+		ret = ecfs_siginfo(desc, &siginfo);
 		printf("- Exited on signal (.siginfo): %d\n", siginfo.si_signo);
 
 
-		ret = get_fd_info(desc, &fdinfo);
+		ret = ecfs_fd_info(desc, &fdinfo);
 		printf("- files/pipes/sockets (.fdinfo):\n");
 		for (i = 0; i < ret; i++) {
 			printf("\t[fd: %d:%d] perms: %#lx path: %s\n", fdinfo[i].fd, (int)fdinfo[i].pos,
@@ -285,7 +285,7 @@ usage:
 	if (opts.libnames || opts.ecfs_stuff || opts.all) {
 
 		char **shlib_names;
-		ret = get_shlib_mapping_names(desc, &shlib_names);
+		ret = ecfs_shlib_mapping_names(desc, &shlib_names);
 		printf("- Printing shared library mappings:\n");
 		for (i = 0; i < ret; i++) 
 			printf("shlib:\t%s\n", shlib_names[i]);
@@ -293,12 +293,12 @@ usage:
 	}
 
 	if (opts.ecfs_stuff || opts.all || opts.symbols) {
-		ret = get_dynamic_symbols(desc, &dsyms);
+		ret = ecfs_dynamic_symbols(desc, &dsyms);
 		printf("- Dynamic Symbol section -\n");
 		for (i = 0; i < ret; i++)
 			printf(".dynsym:\t%s -\t %lx\n", &desc->dynstr[dsyms[i].nameoffset], dsyms[i].symval);
 		printf("\n");
-			ret = get_local_symbols(desc, &lsyms);
+			ret = ecfs_local_symbols(desc, &lsyms);
 		printf("- Symbol Table section -\n");
 		for (i = 0; i < ret; i++)
 			printf(".symtab:\t %s -\t %lx\n", &desc->strtab[lsyms[i].nameoffset], lsyms[i].symval);
@@ -308,7 +308,7 @@ usage:
 		pltgot_info_t *pltgot;
 		if (!(desc->elfstats->personality & ELF_STATIC)) {
 			printf("- Printing out GOT/PLT characteristics (pltgot_info_t):\n");
-			ret = get_pltgot_info(desc, &pltgot);
+			ret = ecfs_pltgot_info(desc, &pltgot);
 			printf("gotsite            gotvalue          gotshlib          pltval              symbol\n");
 			for (i = 0; i < ret; i++) 
 				printf("0x%-16lx 0x%-16lx 0x%-16lx 0x%-16lx %s\n", pltgot[i].got_site, pltgot[i].got_entry_va, 
@@ -318,7 +318,7 @@ usage:
 	}
 	
 	if (opts.auxv || opts.ecfs_stuff || opts.all) {
-		int ac = get_auxiliary_vector64(desc, &auxv);
+		int ac = ecfs_auxiliary_vector64(desc, &auxv);
 		printf("- Printing auxiliary vector (.auxilliary):\n");
 		for (i = 0; i < ac && auxv[i].a_type != AT_NULL; i++) {
 			switch(auxv[i].a_type) {
@@ -401,7 +401,7 @@ usage:
 	if (opts.raw) {
 		uint8_t *ptr;
 		ssize_t section_size;
-		section_size = get_section_pointer(desc, argv[3], &ptr);
+		section_size = ecfs_section_pointer(desc, argv[3], &ptr);
 		if (section_size < 0) {
 			printf("Unable to load section named: '%s'\n", argv[3]);
 			goto done;
@@ -417,7 +417,7 @@ usage:
 	if (opts.procfs) {
 		printf("\n[+] Extracting .procfs.tgz into %s\n", argv[3]);
 		char *tarcmd;
-		ssize_t section_size = get_section_pointer(desc, ".procfs.tgz", &ptr);
+		ssize_t section_size = ecfs_section_pointer(desc, ".procfs.tgz", &ptr);
 		if (section_size < 0) {
 			printf("[!] Cannot locate section .procfs.tgz\n");
 			goto done;
@@ -439,7 +439,7 @@ usage:
 		printf("\n[+] Copying section data from '%s' into output file '%s'\n", argv[3], argv[4]);
 		section_name = argv[3];
 		outfile = argv[4];
-		ssize_t section_size = get_section_pointer(desc, section_name, &ptr);
+		ssize_t section_size = ecfs_section_pointer(desc, section_name, &ptr);
 		if (section_size < 0) {
 			printf("[!] Cannot locate section %s\n", section_name);
 			goto done;
@@ -460,5 +460,5 @@ usage:
 				
 done:
 	printf("\n");
-	unload_ecfs_file(desc);
+	ecfs_unload_file(desc);
 }

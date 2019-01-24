@@ -47,11 +47,22 @@ static ElfW(Off) get_mapping_offset(ElfW(Addr) addr, elfdesc_t *elfdesc)
 	return 0;
 }
 
+/*
+ * This code is incredibly ugly and poorly written. As I come back
+ * to add features to ECFS, I see that it really needs a proper
+ * re-factor. It was written quickly within a limited time frame
+ * and did not use well thought out data structures.
+ */
 void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_file_struct *fmaps, struct lib_mappings *lm)
 {
-	int i, j;
+	int i, j, count = 0;
 	char *p, *tmp = alloca(256);
+	size_t module_size = 0;
+	uint64_t base_vaddr = ~0;
+
 	memset(lm, 0, sizeof(struct lib_mappings));
+
+	LIST_INIT(&elfdesc->list.modules);
 
 	for (i = 0; i < fmaps->fcount; i++) {
 #if 0
@@ -76,9 +87,43 @@ void lookup_lib_maps(elfdesc_t *elfdesc, memdesc_t *memdesc, struct nt_file_stru
 		lm->libs[lm->libcount].size = fmaps->files[i].size;
 		lm->libs[lm->libcount].flags = get_mapping_flags(lm->libs[lm->libcount].addr, memdesc);
 		lm->libs[lm->libcount].offset = get_mapping_offset(lm->libs[lm->libcount].addr, elfdesc);
+		module_size += lm->libs[lm->libcount].size;
+		if (base_vaddr == ~0) {
+			log_msg(__LINE__, "Setting base_vaddr to #%lx\n",
+			    lm->libs[lm->libcount].addr);
+			base_vaddr = lm->libs[lm->libcount].addr;
+		}
+		if (lm->libcount > 0) {
+			log_msg(__LINE__, "lm->libcount = %d Comparing %s and %s\n", lm->libcount,
+		    	    lm->libs[lm->libcount].path, lm->libs[lm->libcount - 1].path);
+		}
+		if ((lm->libcount > 0 && (strcmp(lm->libs[lm->libcount].path,
+		    lm->libs[lm->libcount - 1].path) != 0)) || i == fmaps->fcount - 1) {
+			/*
+			 * We are at a new shared libary path representing a new group of mappings.
+			 */
+			struct module_node *module = malloc(sizeof(*module));
+
+			module->path = lm->libs[lm->libcount - 1].path;
+			module->module_size = module_size;
+			module->base_vaddr = base_vaddr;
+			module_size = 0;
+			base_vaddr = ~0; /* reinitialize to ~0 */
+
+			log_msg(__LINE__, "Inserting module: %s size: %lu base vaddr: %#lx\n",
+			    module->path, module->module_size, module->base_vaddr);
+			lm->module_count++; /* Increment the amount of unique modules vs.
+					     * libcount which denotes the amount of memory
+					     * mappings, i.e. there might be 3 or 4 mappings
+					     * for libc.so alone. But we only want to increment
+					     * once for each module.
+					     */
+			lm->total_string_byte_len += strlen(lm->libs[lm->libcount - 1].path) + 1;
+			LIST_INSERT_HEAD(&elfdesc->list.modules, module, _linkage);
+		}
+		log_msg(__LINE__, "total_string_byte_len: %lu\n", lm->total_string_byte_len);
 		lm->libcount++;
 	}
-		
 }
 
 int get_maps(pid_t pid, mappings_t *maps, const char *path)

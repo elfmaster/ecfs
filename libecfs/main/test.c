@@ -16,21 +16,21 @@ int main(int argc, char **argv)
 	siginfo_t siginfo;
 	Elf64_auxv_t *auxv;
 	
-	desc = load_ecfs_file(argv[1]);
-	path = get_exe_path(desc);
+	desc = ecfs_load_file(argv[1]);
+	path = ecfs_exe_path(desc);
 	printf("executable: %s\n", path);
 	
-	ret = get_thread_count(desc);
+	ret = ecfs_thread_count(desc);
 	printf("# of threads: %d\n", ret);
 	
-	ret = get_siginfo(desc, &siginfo);
+	ret = ecfs_siginfo(desc, &siginfo);
 	printf("Exited on signal %d\n", siginfo.si_signo);
 	
-	ret = get_prstatus_structs(desc, &prstatus);
+	ret = ecfs_prstatus_structs(desc, &prstatus);
 	for (i = 0; i < ret; i++) 
 		printf("(thread %d) pid: %d\n", i + 1, prstatus[i].pr_pid);
 
-	ret = get_fd_info(desc, &fdinfo);
+	ret = ecfs_fd_info(desc, &fdinfo);
 	for (i = 0; i < ret; i++) {
 		printf("fd: %d path: %s\n", fdinfo[i].fd, fdinfo[i].path);
 		if (fdinfo[i].net) {
@@ -40,21 +40,21 @@ int main(int argc, char **argv)
 		}
 	}
 
-	ret = get_dynamic_symbols(desc, &dsyms);
+	ret = ecfs_dynamic_symbols(desc, &dsyms);
 	for (i = 0; i < ret; i++)
 		printf("dynamic symbol: %s\n", &desc->dynstr[dsyms[i].nameoffset]);
 	
-	ret = get_local_symbols(desc, &lsyms);
+	ret = ecfs_local_symbols(desc, &lsyms);
 	for (i = 0; i < ret; i++)
 		printf("local symbol: %s\n", &desc->strtab[lsyms[i].nameoffset]);
 	
 	pltgot_info_t *pltgot;
-	ret = get_pltgot_info(desc, &pltgot);
+	ret = ecfs_pltgot_info(desc, &pltgot);
 	for (i = 0; i < ret; i++) 
 		printf("gotsite: %lx gotvalue: %lx gotshlib: %lx pltval: %lx\n", pltgot[i].got_site, pltgot[i].got_entry_va, 
 						pltgot[i].shl_entry_va, pltgot[i].plt_entry_va);
 
-	int ac = get_auxiliary_vector64(desc, &auxv);
+	int ac = ecfs_auxiliary_vector64(desc, &auxv);
 	printf("Printing some of AUXV which has %d elements\n", ac);
 	for (i = 0; i < ac && auxv[i].a_type != AT_NULL; i++) {
 		switch(auxv[i].a_type) {
