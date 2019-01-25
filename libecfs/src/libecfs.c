@@ -124,7 +124,6 @@ ecfs_elf_t * ecfs_load_file(const char *path)
 	/*
 	 * Get module list
 	 */
-	printf("Iterating over module list\n");
 	for (i = 0; i < ehdr->e_shnum; i++) {
 		if (strcmp(&ecfs->shstrtab[shdr[i].sh_name], ".modules") != 0)
 			continue;
@@ -132,7 +131,6 @@ ecfs_elf_t * ecfs_load_file(const char *path)
 		struct shlib_module *m = (struct shlib_module *)&mem[shdr[i].sh_offset + sizeof(uint64_t)];
 		uint8_t *ptr;
 	
-		printf("module_count: %lu\n", *module_count);
 		for (j = 0; j < *module_count; j++) {
 			struct shlib_module_node *n = malloc(sizeof(*n));
 
@@ -145,10 +143,7 @@ ecfs_elf_t * ecfs_load_file(const char *path)
 			 * shlib_module struct uses a 'char path[0]'
 			 */
 			memcpy(n, m, sizeof(*m) - sizeof(uintptr_t));
-			printf("base_vaddr: %#lx path: %s\n", n->base_vaddr,  n->path);
 			SLIST_INSERT_HEAD(&ecfs->slists.modules, n, _linkage);
-			printf("Incrementing ptr by %d + (%s):%d bytes\n",
-			    sizeof(*m), m->path, m->path_len + 1);
 			ptr = (uint8_t *)m + sizeof(*m) + m->path_len + 1;
 			m = (struct shlib_module *)ptr;
 		}
@@ -626,6 +621,23 @@ char * ecfs_section_name_by_addr(ecfs_elf_t *desc, unsigned long addr)
 		if (shdr[i].sh_addr == addr)
 			return &shstrtab[shdr[i].sh_name];
 	return NULL;
+}
+
+bool
+ecfs_module_count(ecfs_elf_t *obj, uint64_t *modcount)
+{
+	ElfW(Ehdr) *ehdr = obj->ehdr;
+	ElfW(Shdr) *shdr = obj->shdr;
+	char *shstrtab = obj->shstrtab;
+	int i;
+
+	for (i = 0; i < ehdr->e_shnum; i++) {
+		if (strcmp(&shstrtab[shdr[i].sh_name], ".modules") == 0) {
+			*modcount = *(uint64_t *)&obj->mem[shdr[i].sh_offset];
+			return true;
+		}
+	}
+	return false;
 }
 
 void ecfs_phdr_iterator_init(ecfs_elf_t *obj, ecfs_phdr_iter_t *iter)

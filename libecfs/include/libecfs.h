@@ -221,6 +221,7 @@ void ecfs_phdr_iterator_init(ecfs_elf_t *, ecfs_phdr_iter_t *);
 ecfs_iter_t ecfs_phdr_iterator_next(ecfs_phdr_iter_t *, elf_phdr_t *);
 void ecfs_module_iterator_init(ecfs_elf_t *, ecfs_module_iter_t *);
 ecfs_iter_t ecfs_module_iterator_next(ecfs_module_iter_t *, struct shlib_module *);
+bool ecfs_module_count(ecfs_elf_t *, uint64_t *);
 #ifdef __cplusplus
 }
 #endif
