@@ -85,7 +85,7 @@ struct shlib_module_node {
 	uint32_t len;
 	uint64_t base_vaddr;
 	uint64_t flags;
-	char path[0];
+	char *path;
 	SLIST_ENTRY(shlib_module_node) _linkage;
 };
 
@@ -154,10 +154,10 @@ typedef struct ecfs_phdr_iter {
         ecfs_elf_t *obj;
 } ecfs_phdr_iter_t;
 
-typedef struct ecfs_shlib_iter {
-	uint32_t index;
+typedef struct ecfs_module_iter {
+	struct shlib_module_node *current;
 	ecfs_elf_t *obj;
-} ecfs_shlib_iter_t;
+} ecfs_module_iter_t;
 
 #define MAX_SYM_LEN 255
 
@@ -219,6 +219,8 @@ unsigned long ecfs_section_va(ecfs_elf_t *desc, const char *name);
 char * ecfs_section_name_by_addr(ecfs_elf_t *desc, unsigned long addr);
 void ecfs_phdr_iterator_init(ecfs_elf_t *, ecfs_phdr_iter_t *);
 ecfs_iter_t ecfs_phdr_iterator_next(ecfs_phdr_iter_t *, elf_phdr_t *);
+void ecfs_module_iterator_init(ecfs_elf_t *, ecfs_module_iter_t *);
+ecfs_iter_t ecfs_module_iterator_next(ecfs_module_iter_t *, struct shlib_module *);
 #ifdef __cplusplus
 }
 #endif

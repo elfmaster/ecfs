@@ -136,7 +136,16 @@ ecfs_elf_t * ecfs_load_file(const char *path)
 		for (j = 0; j < *module_count; j++) {
 			struct shlib_module_node *n = malloc(sizeof(*n));
 
-			memcpy(n, m, sizeof(*m));
+			n->path = xstrdup(m->path);
+			/*
+			 * note: We don't want to overwrite n->path
+			 * so we subtract sizeof(uintptr_t) in the
+			 * memcpy. The shlib_module_node uses an actual
+			 * pointer that is heap allocated, whereas the
+			 * shlib_module struct uses a 'char path[0]'
+			 */
+			memcpy(n, m, sizeof(*m) - sizeof(uintptr_t));
+			printf("base_vaddr: %#lx path: %s\n", n->base_vaddr,  n->path);
 			SLIST_INSERT_HEAD(&ecfs->slists.modules, n, _linkage);
 			printf("Incrementing ptr by %d + (%s):%d bytes\n",
 			    sizeof(*m), m->path, m->path_len + 1);
@@ -638,13 +647,26 @@ ecfs_phdr_iterator_next(ecfs_phdr_iter_t *iter, struct elf_phdr *entry)
 }
 
 /*
- * How many shared objects (injected, dlopen, ldpreload'd or otherwise)
- * are in the process. Each shared object will have multiple entries, one
- * for each segment, but we only count 1 module per shared library name.
+ * How many shared object modules are in the process? This does not
+ * return the entry for each mapping, but instead just gives the path
+ * of the module, its size, and base address in memory.
  */
-bool
-ecfs_shlib_iterator_init(ecfs_elf_t *obj, ecfs_shlib_iter_t *iter)
+void
+ecfs_module_iterator_init(ecfs_elf_t *obj, ecfs_module_iter_t *iter)
 {
 
-	return true;
+	iter->current = SLIST_FIRST(&obj->slists.modules);
+	iter->obj = obj;
+	return;
+}
+
+ecfs_iter_t
+ecfs_module_iterator_next(ecfs_module_iter_t *iter, struct shlib_module *entry)
+{
+
+	if (iter->current == NULL)
+		return ECFS_ITER_DONE;
+	memcpy(entry, iter->current, sizeof(*entry));
+	iter->current = SLIST_NEXT(iter->current, _linkage);
+	return ECFS_ITER_OK;
 }

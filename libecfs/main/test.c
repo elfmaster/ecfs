@@ -15,7 +15,10 @@ int main(int argc, char **argv)
 	char *path;
 	siginfo_t siginfo;
 	Elf64_auxv_t *auxv;
-	
+	ecfs_module_iter_t iter;
+	ecfs_iter_t ires;
+	struct shlib_module entry;
+
 	desc = ecfs_load_file(argv[1]);
 	path = ecfs_exe_path(desc);
 	printf("executable: %s\n", path);
@@ -25,7 +28,13 @@ int main(int argc, char **argv)
 	
 	ret = ecfs_siginfo(desc, &siginfo);
 	printf("Exited on signal %d\n", siginfo.si_signo);
-	
+
+	printf("Loaded modules:\n");
+	ecfs_module_iterator_init(desc, &iter);
+	while (ecfs_module_iterator_next(&iter, &entry) == ECFS_ITER_OK) {
+		printf("%#lx - %#lx: %s\n", entry.base_vaddr, entry.base_vaddr + entry.len, entry.path);
+	}
+
 	ret = ecfs_prstatus_structs(desc, &prstatus);
 	for (i = 0; i < ret; i++) 
 		printf("(thread %d) pid: %d\n", i + 1, prstatus[i].pr_pid);
